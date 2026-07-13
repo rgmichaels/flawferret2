@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
@@ -11,3 +11,94 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export type { Job, Prisma, Worker } from "@prisma/client";
+
+export type ClaimedJob = Awaited<ReturnType<typeof claimNextQueuedJob>>;
+
+const priorityRankSql = Prisma.sql`
+  CASE priority
+    WHEN 'URGENT' THEN 4
+    WHEN 'HIGH' THEN 3
+    WHEN 'NORMAL' THEN 2
+    WHEN 'LOW' THEN 1
+    ELSE 0
+  END
+`;
+
+export const heartbeatWorker = async ({
+  workerId,
+  hostname,
+  version,
+  currentJob = null,
+  status = "IDLE",
+}: {
+  workerId: string;
+  hostname: string;
+  version: string;
+  currentJob?: string | null;
+  status?: "IDLE" | "BUSY" | "OFFLINE" | "ERROR";
+}) =>
+  prisma.worker.upsert({
+    where: {
+      id: workerId,
+    },
+    update: {
+      currentJob,
+      hostname,
+      lastHeartbeat: new Date(),
+      status,
+      version,
+    },
+    create: {
+      id: workerId,
+      currentJob,
+      hostname,
+      status,
+      version,
+    },
+  });
+
+export const claimNextQueuedJob = async (workerId: string) =>
+  prisma.$transaction(async (tx) => {
+    const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM jobs
+      WHERE status = 'QUEUED'
+      ORDER BY ${priorityRankSql} DESC, created_at ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+
+    const candidate = candidates[0];
+
+    if (!candidate) {
+      return null;
+    }
+
+    return tx.job.update({
+      where: {
+        id: candidate.id,
+      },
+      data: {
+        claimedAt: new Date(),
+        claimedBy: workerId,
+        status: "CLAIMED",
+      },
+    });
+  });
+
+export const markJobRunning = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      status: "RUNNING",
+    },
+  });
