@@ -14,6 +14,7 @@ coverage/
 
 tmp/
 temp/
+output/
 
 apps/web/.next/
 packages/db/generated/
