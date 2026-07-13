@@ -1,11 +1,12 @@
 import cors from "@fastify/cors";
-import { prisma } from "@flawferret2/db";
+import { appendJobEvent, prisma } from "@flawferret2/db";
 import {
   createJobRequestSchema,
+  type JobEventResponse,
   type JobResponse,
 } from "@flawferret2/job-schemas";
 import Fastify, { type FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { config } from "./config.js";
 
 const toJobResponse = (job: {
@@ -30,6 +31,26 @@ const toJobResponse = (job: {
   completedAt: job.completedAt?.toISOString() ?? null,
   createdAt: job.createdAt.toISOString(),
   updatedAt: job.updatedAt.toISOString(),
+});
+
+const toJobEventResponse = (event: {
+  id: string;
+  jobId: string;
+  eventType: JobEventResponse["eventType"];
+  message: string;
+  metadata: unknown;
+  createdAt: Date;
+}): JobEventResponse => ({
+  id: event.id,
+  jobId: event.jobId,
+  eventType: event.eventType,
+  message: event.message,
+  metadata: event.metadata ?? null,
+  createdAt: event.createdAt.toISOString(),
+});
+
+const jobParamsSchema = z.object({
+  id: z.string().uuid(),
 });
 
 export const buildServer = async (): Promise<FastifyInstance> => {
@@ -78,6 +99,16 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       },
     });
 
+    await appendJobEvent({
+      jobId: job.id,
+      eventType: "JOB_CREATED",
+      message: "Job was queued from the web interface.",
+      metadata: {
+        jobType: body.jobType,
+        priority: body.priority,
+      },
+    });
+
     return reply.status(201).send(toJobResponse(job));
   });
 
@@ -90,6 +121,40 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return jobs.map(toJobResponse);
+  });
+
+  server.get("/jobs/:id", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+
+    const job = await prisma.job.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    return toJobResponse(job);
+  });
+
+  server.get("/jobs/:id/events", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+
+    const events = await prisma.jobEvent.findMany({
+      where: {
+        jobId: params.id,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    return events.map(toJobEventResponse);
   });
 
   return server;

@@ -208,7 +208,7 @@ export default async function Home() {
                     {jobs.map((job) => (
                       <tr key={job.id}>
                         <td>
-                          <a href={`#${job.id}`}>{shortId(job.id)}</a>
+                          <a href={`/jobs/${job.id}`}>{shortId(job.id)}</a>
                           <span>{job.payload.featureArea}</span>
                         </td>
                         <td>
