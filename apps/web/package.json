@@ -1,0 +1,13 @@
+{
+  "name": "@flawferret2/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"web build not implemented yet\"",
+    "check": "pnpm typecheck",
+    "dev": "echo \"web dev not implemented yet\"",
+    "lint": "echo \"web lint not implemented yet\"",
+    "test": "echo \"web test not implemented yet\"",
+    "typecheck": "echo \"web typecheck not implemented yet\""
+  }
+}

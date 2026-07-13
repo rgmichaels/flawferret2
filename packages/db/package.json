@@ -1,0 +1,12 @@
+{
+  "name": "@flawferret2/db",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"db build not implemented yet\"",
+    "check": "pnpm typecheck",
+    "lint": "echo \"db lint not implemented yet\"",
+    "test": "echo \"db test not implemented yet\"",
+    "typecheck": "echo \"db typecheck not implemented yet\""
+  }
+}

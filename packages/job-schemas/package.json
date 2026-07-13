@@ -1,0 +1,12 @@
+{
+  "name": "@flawferret2/job-schemas",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"job-schemas build not implemented yet\"",
+    "check": "pnpm typecheck",
+    "lint": "echo \"job-schemas lint not implemented yet\"",
+    "test": "echo \"job-schemas test not implemented yet\"",
+    "typecheck": "echo \"job-schemas typecheck not implemented yet\""
+  }
+}

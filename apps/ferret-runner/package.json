@@ -1,0 +1,13 @@
+{
+  "name": "@flawferret2/ferret-runner",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"ferret-runner build not implemented yet\"",
+    "check": "pnpm typecheck",
+    "dev": "echo \"ferret-runner dev not implemented yet\"",
+    "lint": "echo \"ferret-runner lint not implemented yet\"",
+    "test": "echo \"ferret-runner test not implemented yet\"",
+    "typecheck": "echo \"ferret-runner typecheck not implemented yet\""
+  }
+}
