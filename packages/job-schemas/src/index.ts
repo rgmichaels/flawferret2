@@ -17,6 +17,14 @@ export const jobStatusSchema = z.enum([
 
 export const prioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
 
+export const jobEventTypeSchema = z.enum([
+  "JOB_CREATED",
+  "JOB_CLAIMED",
+  "JOB_RUNNING",
+  "WORKER_SIMULATED_WORK_COMPLETE",
+  "JOB_RESET",
+]);
+
 export const addPlaywrightTestPayloadSchema = z.object({
   repository: z.string().trim().min(1, "Repository is required"),
   branch: z.string().trim().min(1, "Branch is required"),
@@ -46,9 +54,20 @@ export const jobResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const jobEventResponseSchema = z.object({
+  id: z.string(),
+  jobId: z.string(),
+  eventType: jobEventTypeSchema,
+  message: z.string(),
+  metadata: z.unknown().nullable(),
+  createdAt: z.string(),
+});
+
 export type JobType = z.infer<typeof jobTypeSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type JobPriority = z.infer<typeof prioritySchema>;
+export type JobEventType = z.infer<typeof jobEventTypeSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
+export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;

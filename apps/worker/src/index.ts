@@ -1,4 +1,5 @@
 import {
+  appendJobEvent,
   claimNextQueuedJob,
   heartbeatWorker,
   markJobRunning,
@@ -75,6 +76,16 @@ while (!shouldStop) {
     continue;
   }
 
+  await appendJobEvent({
+    jobId: claimedJob.id,
+    eventType: "JOB_CLAIMED",
+    message: "Worker claimed the next queued job.",
+    metadata: {
+      hostname: workerHostname,
+      workerId,
+    },
+  });
+
   await heartbeatWorker({
     workerId,
     hostname: workerHostname,
@@ -88,6 +99,16 @@ while (!shouldStop) {
     workerId,
   });
 
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "JOB_RUNNING",
+    message: "Worker marked the job as running.",
+    metadata: {
+      hostname: workerHostname,
+      workerId,
+    },
+  });
+
   log("Claimed job", {
     job: runningJob,
   });
@@ -96,5 +117,15 @@ while (!shouldStop) {
 
   log("Simulated worker pass complete", {
     jobId: runningJob.id,
+  });
+
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "WORKER_SIMULATED_WORK_COMPLETE",
+    message: "Worker completed the Milestone 2 simulated work pass.",
+    metadata: {
+      simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
+      workerId,
+    },
   });
 }

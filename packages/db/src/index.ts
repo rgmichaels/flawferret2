@@ -14,6 +14,31 @@ export type { Job, Prisma, Worker } from "@prisma/client";
 
 export type ClaimedJob = Awaited<ReturnType<typeof claimNextQueuedJob>>;
 
+export const appendJobEvent = async ({
+  jobId,
+  eventType,
+  message,
+  metadata,
+}: {
+  jobId: string;
+  eventType:
+    | "JOB_CREATED"
+    | "JOB_CLAIMED"
+    | "JOB_RUNNING"
+    | "WORKER_SIMULATED_WORK_COMPLETE"
+    | "JOB_RESET";
+  message: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
+  prisma.jobEvent.create({
+    data: {
+      jobId,
+      eventType,
+      message,
+      metadata,
+    },
+  });
+
 const priorityRankSql = Prisma.sql`
   CASE priority
     WHEN 'URGENT' THEN 4
