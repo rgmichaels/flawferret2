@@ -1,13 +1,27 @@
 {
   "name": "@flawferret2/api",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "build": "echo \"api build not implemented yet\"",
+    "build": "tsc --noEmit",
     "check": "pnpm typecheck",
-    "dev": "echo \"api dev not implemented yet\"",
-    "lint": "echo \"api lint not implemented yet\"",
-    "test": "echo \"api test not implemented yet\"",
-    "typecheck": "echo \"api typecheck not implemented yet\""
+    "dev": "tsx watch src/index.ts",
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@flawferret2/db": "workspace:*",
+    "@flawferret2/job-schemas": "workspace:*",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.10.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3"
   }
 }

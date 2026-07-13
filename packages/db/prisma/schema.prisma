@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobType {
+  ADD_PLAYWRIGHT_TEST
+}
+
+enum JobStatus {
+  DRAFT
+  QUEUED
+  CLAIMED
+  RUNNING
+  VALIDATING
+  REVIEW
+  COMPLETED
+  FAILED
+  BLOCKED
+  RETRY
+}
+
+enum JobPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum WorkerStatus {
+  IDLE
+  BUSY
+  OFFLINE
+  ERROR
+}
+
+model Job {
+  id          String      @id @default(uuid()) @db.Uuid
+  jobType     JobType     @map("job_type")
+  status      JobStatus   @default(QUEUED)
+  priority    JobPriority @default(NORMAL)
+  payload     Json
+  claimedBy   String?     @map("claimed_by")
+  claimedAt   DateTime?   @map("claimed_at")
+  completedAt DateTime?   @map("completed_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([status, priority, createdAt])
+  @@map("jobs")
+}
+
+model Worker {
+  id            String       @id @default(uuid()) @db.Uuid
+  hostname      String
+  status        WorkerStatus @default(IDLE)
+  currentJob    String?      @map("current_job")
+  lastHeartbeat DateTime     @default(now()) @map("last_heartbeat")
+  version       String
+
+  @@index([status])
+  @@map("workers")
+}

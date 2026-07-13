@@ -1,12 +1,22 @@
 {
   "name": "@flawferret2/job-schemas",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "build": "echo \"job-schemas build not implemented yet\"",
+    "build": "tsc --noEmit",
     "check": "pnpm typecheck",
-    "lint": "echo \"job-schemas lint not implemented yet\"",
+    "lint": "tsc --noEmit",
     "test": "echo \"job-schemas test not implemented yet\"",
-    "typecheck": "echo \"job-schemas typecheck not implemented yet\""
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

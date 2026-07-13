@@ -4,6 +4,51 @@ FlawFerret2 is an AI-powered QA orchestration platform for turning captured brow
 
 The original FlawFerret browser extension remains the capture interface. FlawFerret2 is the command center: it stores jobs, coordinates workers, invokes Codex, validates results with Playwright, and opens GitHub pull requests for human review.
 
+## Milestone 1
+
+Milestone 1 proves browser -> API -> database:
+
+- Fastify server
+- Prisma
+- Neon PostgreSQL connection via `DATABASE_URL`
+- `jobs` table
+- `workers` table
+- `GET /health`
+- `POST /jobs`
+- `GET /jobs`
+
+No worker, Codex, Playwright, or GitHub pull request automation is implemented in Milestone 1.
+
+## Running Locally
+
+1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres connection string.
+2. Install dependencies:
+
+```bash
+pnpm install
+```
+
+3. Generate Prisma Client:
+
+```bash
+pnpm --filter @flawferret2/db db:generate
+```
+
+4. Run database migrations:
+
+```bash
+pnpm --filter @flawferret2/db db:migrate
+```
+
+5. Start the API and web app:
+
+```bash
+pnpm --filter @flawferret2/api dev
+pnpm --filter @flawferret2/web dev
+```
+
+The API defaults to `http://localhost:4000`. The web app defaults to `http://localhost:3000`.
+
 ## v0.1 Goal
 
 The first complete workflow is `ADD_PLAYWRIGHT_TEST`:
