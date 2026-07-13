@@ -9,7 +9,11 @@ coverage/
 !.env.example
 
 *.log
+*.tsbuildinfo
 .DS_Store
 
 tmp/
 temp/
+
+apps/web/.next/
+packages/db/generated/

@@ -1,12 +1,29 @@
 {
   "name": "@flawferret2/db",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
-    "build": "echo \"db build not implemented yet\"",
+    "build": "prisma generate --schema prisma/schema.prisma && tsc --noEmit",
     "check": "pnpm typecheck",
-    "lint": "echo \"db lint not implemented yet\"",
+    "db:generate": "prisma generate --schema prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "db:studio": "prisma studio --schema prisma/schema.prisma",
+    "db:validate": "prisma validate --schema prisma/schema.prisma",
+    "lint": "tsc --noEmit",
     "test": "echo \"db test not implemented yet\"",
-    "typecheck": "echo \"db typecheck not implemented yet\""
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "dotenv": "^17.4.2",
+    "prisma": "^7.8.0",
+    "typescript": "^5.9.3"
   }
 }
