@@ -67,8 +67,15 @@ export default async function Home() {
         <h2>Queue Job</h2>
         <form action={queueJob} className="job-form">
           <label>
-            Repository
-            <input name="repository" placeholder="rgmichaels/example-app" required />
+            Test Suite Repository
+            <input
+              name="repository"
+              placeholder="rgmichaels/playwright-tests"
+              required
+            />
+            <span className="field-hint">
+              GitHub owner/name for the repo FlawFerret2 should eventually modify.
+            </span>
           </label>
           <label>
             Branch
