@@ -19,6 +19,18 @@ Milestone 1 proves browser -> API -> database:
 
 No worker, Codex, Playwright, or GitHub pull request automation is implemented in Milestone 1.
 
+## Milestone 2
+
+Milestone 2 proves database queue -> worker claim -> worker status:
+
+- `apps/worker`
+- Worker registration and heartbeat in the `workers` table
+- Atomic queued-job claim with PostgreSQL row locking
+- Claimed jobs move from `QUEUED` to `CLAIMED`, then `RUNNING`
+- The worker logs the claimed job and sleeps to simulate work
+
+No Codex, Playwright, or GitHub pull request automation is implemented in Milestone 2.
+
 ## Running Locally
 
 1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres connection string.
@@ -45,6 +57,12 @@ pnpm --filter @flawferret2/db db:migrate
 ```bash
 pnpm --filter @flawferret2/api dev
 pnpm --filter @flawferret2/web dev
+```
+
+6. Start the worker when you want to claim queued jobs:
+
+```bash
+pnpm --filter @flawferret2/worker dev
 ```
 
 The API defaults to `http://localhost:4000`. The web app defaults to `http://localhost:3000`.
