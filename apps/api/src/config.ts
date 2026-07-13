@@ -1,4 +1,10 @@
+import { config as loadEnv } from "dotenv";
+import { resolve } from "node:path";
 import { z } from "zod";
+
+loadEnv({
+  path: resolve(process.cwd(), "../../.env"),
+});
 
 const envSchema = z.object({
   API_HOST: z.string().default("0.0.0.0"),
