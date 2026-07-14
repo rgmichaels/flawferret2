@@ -47,6 +47,26 @@ const formatEventType = (value: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
 
+const getJobRepositoryName = (job: JobResponse) => {
+  if (job.repository) {
+    return `${job.repository.owner}/${job.repository.name}`;
+  }
+
+  if ("repository" in job.payload) {
+    return job.payload.repository;
+  }
+
+  return "Unregistered repository";
+};
+
+const getJobTargetBranch = (job: JobResponse) => {
+  if ("targetBranch" in job.payload) {
+    return job.payload.targetBranch;
+  }
+
+  return job.payload.branch;
+};
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -90,11 +110,11 @@ export default async function JobDetailPage({
           <dl>
             <div>
               <dt>Repository</dt>
-              <dd>{job.payload.repository}</dd>
+              <dd>{getJobRepositoryName(job)}</dd>
             </div>
             <div>
-              <dt>Branch</dt>
-              <dd>{job.payload.branch}</dd>
+              <dt>Target Branch</dt>
+              <dd>{getJobTargetBranch(job)}</dd>
             </div>
             <div>
               <dt>Priority</dt>
