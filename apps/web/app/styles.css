@@ -244,6 +244,11 @@ button {
   grid-template-columns: minmax(0, 1fr) 360px;
 }
 
+.side-stack {
+  display: grid;
+  gap: 20px;
+}
+
 .panel {
   background: #ffffff;
   border: 1px solid #dce3ee;
@@ -406,6 +411,43 @@ td span {
   top: 20px;
 }
 
+.repository-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.repository-list li {
+  border-bottom: 1px solid #edf1f6;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px 20px;
+}
+
+.repository-list a {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.repository-list span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.repository-form {
+  border-top: 1px solid #e6ebf3;
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
 .job-form {
   display: grid;
   gap: 14px;
@@ -435,6 +477,12 @@ textarea {
   color: #172033;
   padding: 10px 12px;
   width: 100%;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 textarea {

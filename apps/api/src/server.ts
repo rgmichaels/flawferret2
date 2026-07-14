@@ -2,8 +2,10 @@ import cors from "@fastify/cors";
 import { appendJobEvent, prisma } from "@flawferret2/db";
 import {
   createJobRequestSchema,
+  createRepositoryRequestSchema,
   type JobEventResponse,
   type JobResponse,
+  type RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -15,6 +17,7 @@ const toJobResponse = (job: {
   status: JobResponse["status"];
   priority: JobResponse["priority"];
   payload: unknown;
+  repository: RepositoryResponse | null;
   claimedBy: string | null;
   claimedAt: Date | null;
   completedAt: Date | null;
@@ -26,12 +29,65 @@ const toJobResponse = (job: {
   status: job.status,
   priority: job.priority,
   payload: job.payload as JobResponse["payload"],
+  repository: job.repository,
   claimedBy: job.claimedBy,
   claimedAt: job.claimedAt?.toISOString() ?? null,
   completedAt: job.completedAt?.toISOString() ?? null,
   createdAt: job.createdAt.toISOString(),
   updatedAt: job.updatedAt.toISOString(),
 });
+
+const toRepositoryResponse = (repository: {
+  id: string;
+  provider: RepositoryResponse["provider"];
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  cloneUrl: string;
+  webUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): RepositoryResponse => ({
+  id: repository.id,
+  provider: repository.provider,
+  owner: repository.owner,
+  name: repository.name,
+  defaultBranch: repository.defaultBranch,
+  cloneUrl: repository.cloneUrl,
+  webUrl: repository.webUrl,
+  createdAt: repository.createdAt.toISOString(),
+  updatedAt: repository.updatedAt.toISOString(),
+});
+
+const toJobResponseWithRepository = (job: {
+  id: string;
+  jobType: JobResponse["jobType"];
+  status: JobResponse["status"];
+  priority: JobResponse["priority"];
+  payload: unknown;
+  repository:
+    | ({
+        id: string;
+        provider: RepositoryResponse["provider"];
+        owner: string;
+        name: string;
+        defaultBranch: string;
+        cloneUrl: string;
+        webUrl: string;
+        createdAt: Date;
+        updatedAt: Date;
+      })
+    | null;
+  claimedBy: string | null;
+  claimedAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): JobResponse =>
+  toJobResponse({
+    ...job,
+    repository: job.repository ? toRepositoryResponse(job.repository) : null,
+  });
 
 const toJobEventResponse = (event: {
   id: string;
@@ -52,6 +108,16 @@ const toJobEventResponse = (event: {
 const jobParamsSchema = z.object({
   id: z.string().uuid(),
 });
+
+const repositoryParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const githubRepositoryUrl = ({ owner, name }: { owner: string; name: string }) =>
+  `https://github.com/${owner}/${name}`;
+
+const githubCloneUrl = ({ owner, name }: { owner: string; name: string }) =>
+  `${githubRepositoryUrl({ owner, name })}.git`;
 
 export const buildServer = async (): Promise<FastifyInstance> => {
   const server = Fastify({
@@ -87,15 +153,97 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     };
   });
 
+  server.get("/repositories", async () => {
+    const repositories = await prisma.repository.findMany({
+      orderBy: [
+        {
+          owner: "asc",
+        },
+        {
+          name: "asc",
+        },
+      ],
+    });
+
+    return repositories.map(toRepositoryResponse);
+  });
+
+  server.post("/repositories", async (request, reply) => {
+    const body = createRepositoryRequestSchema.parse(request.body);
+    const cloneUrl = githubCloneUrl(body);
+    const webUrl = githubRepositoryUrl(body);
+
+    const repository = await prisma.repository.upsert({
+      where: {
+        provider_owner_name: {
+          provider: body.provider,
+          owner: body.owner,
+          name: body.name,
+        },
+      },
+      create: {
+        provider: body.provider,
+        owner: body.owner,
+        name: body.name,
+        defaultBranch: body.defaultBranch,
+        cloneUrl,
+        webUrl,
+      },
+      update: {
+        defaultBranch: body.defaultBranch,
+        cloneUrl,
+        webUrl,
+      },
+    });
+
+    return reply.status(201).send(toRepositoryResponse(repository));
+  });
+
+  server.get("/repositories/:id", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    return toRepositoryResponse(repository);
+  });
+
   server.post("/jobs", async (request, reply) => {
     const body = createJobRequestSchema.parse(request.body);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: body.payload.repositoryId,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(400).send({
+        error: "ValidationError",
+        message: "Repository must be registered before a job can be queued.",
+      });
+    }
 
     const job = await prisma.job.create({
       data: {
         jobType: body.jobType,
         status: "QUEUED",
         priority: body.priority,
+        repositoryId: repository.id,
         payload: body.payload,
+      },
+      include: {
+        repository: true,
       },
     });
 
@@ -106,27 +254,35 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       metadata: {
         jobType: body.jobType,
         priority: body.priority,
+        repository: `${repository.owner}/${repository.name}`,
+        targetBranch: body.payload.targetBranch,
       },
     });
 
-    return reply.status(201).send(toJobResponse(job));
+    return reply.status(201).send(toJobResponseWithRepository(job));
   });
 
   server.get("/jobs", async () => {
     const jobs = await prisma.job.findMany({
+      include: {
+        repository: true,
+      },
       orderBy: {
         createdAt: "desc",
       },
       take: 100,
     });
 
-    return jobs.map(toJobResponse);
+    return jobs.map(toJobResponseWithRepository);
   });
 
   server.get("/jobs/:id", async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
 
     const job = await prisma.job.findUnique({
+      include: {
+        repository: true,
+      },
       where: {
         id: params.id,
       },
@@ -139,7 +295,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
-    return toJobResponse(job);
+    return toJobResponseWithRepository(job);
   });
 
   server.get("/jobs/:id/events", async (request, reply) => {

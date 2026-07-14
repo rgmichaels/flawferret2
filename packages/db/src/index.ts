@@ -10,7 +10,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
-export type { Job, Prisma, Worker } from "@prisma/client";
+export type { Job, Prisma, Repository, Worker } from "@prisma/client";
 
 export type ClaimedJob = Awaited<ReturnType<typeof claimNextQueuedJob>>;
 
@@ -108,6 +108,9 @@ export const claimNextQueuedJob = async (workerId: string) =>
         claimedBy: workerId,
         status: "CLAIMED",
       },
+      include: {
+        repository: true,
+      },
     });
   });
 
@@ -125,5 +128,8 @@ export const markJobRunning = async ({
     data: {
       claimedBy: workerId,
       status: "RUNNING",
+    },
+    include: {
+      repository: true,
     },
   });

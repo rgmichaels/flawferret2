@@ -1,4 +1,4 @@
-import type { JobResponse, JobStatus } from "@flawferret2/job-schemas";
+import type { JobResponse, JobStatus, RepositoryResponse } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -32,6 +32,52 @@ async function getJobs(): Promise<JobResponse[]> {
   }
 }
 
+async function getRepositories(): Promise<RepositoryResponse[]> {
+  try {
+    const response = await fetch(`${apiUrl}/repositories`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<RepositoryResponse[]>;
+  } catch {
+    return [];
+  }
+}
+
+async function registerRepository(formData: FormData) {
+  "use server";
+
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const [owner, name, ...extraParts] = fullName.split("/");
+
+  if (!owner || !name || extraParts.length > 0) {
+    throw new Error("Repository must use owner/name format.");
+  }
+
+  const response = await fetch(`${apiUrl}/repositories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider: "GITHUB",
+      owner,
+      name,
+      defaultBranch: formData.get("defaultBranch"),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to register repository.");
+  }
+
+  revalidatePath("/");
+}
+
 async function queueJob(formData: FormData) {
   "use server";
 
@@ -44,8 +90,8 @@ async function queueJob(formData: FormData) {
       jobType: "ADD_PLAYWRIGHT_TEST",
       priority: formData.get("priority"),
       payload: {
-        repository: formData.get("repository"),
-        branch: formData.get("branch"),
+        repositoryId: formData.get("repositoryId"),
+        targetBranch: formData.get("targetBranch"),
         featureArea: formData.get("featureArea"),
         goal: formData.get("goal"),
         acceptanceCriteria: formData.get("acceptanceCriteria"),
@@ -92,8 +138,31 @@ const formatRelativeTime = (value: string) => {
 
 const shortId = (id: string) => `#${id.slice(0, 8)}`;
 
+const repositoryLabel = (repository: RepositoryResponse) =>
+  `${repository.owner}/${repository.name}`;
+
+const getJobRepositoryName = (job: JobResponse) => {
+  if (job.repository) {
+    return repositoryLabel(job.repository);
+  }
+
+  if ("repository" in job.payload) {
+    return job.payload.repository;
+  }
+
+  return "Unregistered repository";
+};
+
+const getJobTargetBranch = (job: JobResponse) => {
+  if ("targetBranch" in job.payload) {
+    return job.payload.targetBranch;
+  }
+
+  return job.payload.branch;
+};
+
 export default async function Home() {
-  const jobs = await getJobs();
+  const [jobs, repositories] = await Promise.all([getJobs(), getRepositories()]);
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
   const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
   const reviewCount = countByStatus(jobs, ["REVIEW"]);
@@ -119,6 +188,9 @@ export default async function Home() {
           <a className="nav-item" href="#jobs">
             Jobs
           </a>
+          <a className="nav-item" href="#repositories">
+            Repositories
+          </a>
           <a className="nav-item" href="#workers">
             Workers
           </a>
@@ -137,14 +209,16 @@ export default async function Home() {
             <strong>System Status</strong>
           </div>
           <p>API and Neon connected</p>
-          <small>{jobs.length} jobs tracked</small>
+          <small>
+            {jobs.length} jobs / {repositories.length} repos
+          </small>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Milestone 2.5</p>
+            <p className="eyebrow">Milestone 3</p>
             <h1>Dashboard</h1>
           </div>
           <a className="primary-link" href="#new-job">
@@ -212,8 +286,8 @@ export default async function Home() {
                           <span>{job.payload.featureArea}</span>
                         </td>
                         <td>
-                          <strong>{job.payload.repository}</strong>
-                          <span>{job.payload.branch}</span>
+                          <strong>{getJobRepositoryName(job)}</strong>
+                          <span>{getJobTargetBranch(job)}</span>
                         </td>
                         <td>
                           <span className={`status-pill ${job.status.toLowerCase()}`}>
@@ -230,71 +304,113 @@ export default async function Home() {
             )}
           </section>
 
-          <section className="panel form-panel" id="new-job">
-            <div className="panel-header compact">
-              <div>
-                <h2>Create New Job</h2>
-                <p>Queue an Add Playwright Test request.</p>
+          <div className="side-stack">
+            <section className="panel repositories-panel" id="repositories">
+              <div className="panel-header compact">
+                <div>
+                  <h2>Repositories</h2>
+                  <p>Register GitHub repos for future runner checkout.</p>
+                </div>
+                <span>{repositories.length} total</span>
               </div>
-            </div>
-            <form action={queueJob} className="job-form">
-              <label>
-                Test Suite Repository
-                <input
-                  name="repository"
-                  placeholder="rgmichaels/playwright-tests"
-                  required
-                />
-                <span className="field-hint">
-                  GitHub owner/name for the repo FlawFerret2 should eventually modify.
-                </span>
-              </label>
-              <label>
-                Branch
-                <input name="branch" defaultValue="main" required />
-              </label>
-              <label>
-                Feature Area
-                <input name="featureArea" placeholder="Login flow" required />
-              </label>
-              <label>
-                Goal
-                <textarea
-                  name="goal"
-                  placeholder="Verify login fails with an invalid password..."
-                  required
-                />
-              </label>
-              <label>
-                Acceptance Criteria
-                <textarea
-                  name="acceptanceCriteria"
-                  placeholder="The test should verify the error message..."
-                  required
-                />
-              </label>
-              <label>
-                Priority
-                <select name="priority" defaultValue="NORMAL">
-                  <option value="LOW">Low</option>
-                  <option value="NORMAL">Normal</option>
-                  <option value="HIGH">High</option>
-                  <option value="URGENT">Urgent</option>
-                </select>
-              </label>
-              <div className="toggles">
+
+              {repositories.length === 0 ? (
+                <p className="empty">No repositories registered yet.</p>
+              ) : (
+                <ul className="repository-list">
+                  {repositories.map((repository) => (
+                    <li key={repository.id}>
+                      <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
+                      <span>{repository.defaultBranch}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <form action={registerRepository} className="repository-form">
                 <label>
-                  <input name="runAffectedTests" type="checkbox" defaultChecked />
-                  Run affected tests only
+                  GitHub Repository
+                  <input name="fullName" placeholder="rgmichaels/playwright-tests" required />
                 </label>
                 <label>
-                  <input name="createDraftPr" type="checkbox" defaultChecked />
-                  Create draft PR
+                  Default Branch
+                  <input name="defaultBranch" defaultValue="main" required />
                 </label>
+                <button type="submit">Register Repository</button>
+              </form>
+            </section>
+
+            <section className="panel form-panel" id="new-job">
+              <div className="panel-header compact">
+                <div>
+                  <h2>Create New Job</h2>
+                  <p>Queue an Add Playwright Test request.</p>
+                </div>
               </div>
-              <button type="submit">Queue Job</button>
-            </form>
-          </section>
+              <form action={queueJob} className="job-form">
+                <label>
+                  Test Suite Repository
+                  <select name="repositoryId" required disabled={repositories.length === 0}>
+                    <option value="">Select repository</option>
+                    {repositories.map((repository) => (
+                      <option key={repository.id} value={repository.id}>
+                        {repositoryLabel(repository)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="field-hint">
+                    Register a repository before queueing work for ferret-runner.
+                  </span>
+                </label>
+                <label>
+                  Target Branch
+                  <input name="targetBranch" defaultValue="main" required />
+                </label>
+                <label>
+                  Feature Area
+                  <input name="featureArea" placeholder="Login flow" required />
+                </label>
+                <label>
+                  Goal
+                  <textarea
+                    name="goal"
+                    placeholder="Verify login fails with an invalid password..."
+                    required
+                  />
+                </label>
+                <label>
+                  Acceptance Criteria
+                  <textarea
+                    name="acceptanceCriteria"
+                    placeholder="The test should verify the error message..."
+                    required
+                  />
+                </label>
+                <label>
+                  Priority
+                  <select name="priority" defaultValue="NORMAL">
+                    <option value="LOW">Low</option>
+                    <option value="NORMAL">Normal</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
+                  </select>
+                </label>
+                <div className="toggles">
+                  <label>
+                    <input name="runAffectedTests" type="checkbox" defaultChecked />
+                    Run affected tests only
+                  </label>
+                  <label>
+                    <input name="createDraftPr" type="checkbox" defaultChecked />
+                    Create draft PR
+                  </label>
+                </div>
+                <button type="submit" disabled={repositories.length === 0}>
+                  Queue Job
+                </button>
+              </form>
+            </section>
+          </div>
         </div>
 
         <section className="panel worker-strip" id="workers">

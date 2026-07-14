@@ -82,6 +82,9 @@ while (!shouldStop) {
     message: "Worker claimed the next queued job.",
     metadata: {
       hostname: workerHostname,
+      repository: claimedJob.repository
+        ? `${claimedJob.repository.owner}/${claimedJob.repository.name}`
+        : null,
       workerId,
     },
   });
@@ -105,6 +108,9 @@ while (!shouldStop) {
     message: "Worker marked the job as running.",
     metadata: {
       hostname: workerHostname,
+      repository: runningJob.repository
+        ? `${runningJob.repository.owner}/${runningJob.repository.name}`
+        : null,
       workerId,
     },
   });
