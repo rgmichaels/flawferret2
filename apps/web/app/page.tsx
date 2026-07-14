@@ -422,14 +422,14 @@ export default async function Home() {
           </section>
 
           <div className="side-stack">
-            <section className="panel repositories-panel" id="repositories">
-              <div className="panel-header compact">
+            <details className="panel collapsible-panel repositories-panel" id="repositories">
+              <summary className="panel-header compact collapsible-summary">
                 <div>
                   <h2>Repositories</h2>
                   <p>Register GitHub repos for future runner checkout.</p>
                 </div>
                 <span>{repositories.length} total</span>
-              </div>
+              </summary>
 
               {repositories.length === 0 ? (
                 <p className="empty">No repositories registered yet.</p>
@@ -455,15 +455,15 @@ export default async function Home() {
                 </label>
                 <button type="submit">Register Repository</button>
               </form>
-            </section>
+            </details>
 
-            <section className="panel form-panel" id="new-job">
-              <div className="panel-header compact">
+            <details className="panel collapsible-panel form-panel" id="new-job">
+              <summary className="panel-header compact collapsible-summary">
                 <div>
                   <h2>Create New Job</h2>
                   <p>Queue an Add Playwright Test request.</p>
                 </div>
-              </div>
+              </summary>
               <form action={queueJob} className="job-form">
                 <label>
                   Test Suite Repository
@@ -529,7 +529,7 @@ export default async function Home() {
                   Queue Job
                 </button>
               </form>
-            </section>
+            </details>
           </div>
         </div>
       </section>
