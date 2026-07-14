@@ -22,6 +22,7 @@ enum JobStatus {
   FAILED
   BLOCKED
   RETRY
+  CANCELED
 }
 
 enum JobPriority {
@@ -59,6 +60,7 @@ enum JobEventType {
   RUN_STARTED
   WORKER_SIMULATED_WORK_COMPLETE
   JOB_RESET
+  JOB_CANCELED
 }
 
 model QueueControl {

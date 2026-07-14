@@ -159,6 +159,13 @@ const jobParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const includeCanceledQuerySchema = z.object({
+  includeCanceled: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+});
+
 const repositoryParamsSchema = z.object({
   id: z.string().uuid(),
 });
@@ -336,8 +343,16 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toJobResponseWithRepository(job));
   });
 
-  server.get("/jobs", async () => {
+  server.get("/jobs", async (request) => {
+    const query = includeCanceledQuerySchema.parse(request.query);
     const jobs = await prisma.job.findMany({
+      where: query.includeCanceled
+        ? undefined
+        : {
+            status: {
+              not: "CANCELED",
+            },
+          },
       include: {
         repository: true,
         runs: {
@@ -354,6 +369,78 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return jobs.map(toJobResponseWithRepository);
+  });
+
+  server.post("/jobs/:id/cancel", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+
+    const job = await prisma.job.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    const cancelableStatuses = ["DRAFT", "QUEUED", "RETRY"] as const;
+
+    if (!cancelableStatuses.includes(job.status as (typeof cancelableStatuses)[number])) {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only draft, queued, or retry jobs can be canceled.",
+      });
+    }
+
+    const cancelResult = await prisma.job.updateMany({
+      where: {
+        id: params.id,
+        status: {
+          in: [...cancelableStatuses],
+        },
+      },
+      data: {
+        completedAt: new Date(),
+        status: "CANCELED",
+      },
+    });
+
+    if (cancelResult.count === 0) {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only draft, queued, or retry jobs can be canceled.",
+      });
+    }
+
+    const canceledJob = await prisma.job.findUniqueOrThrow({
+      where: {
+        id: params.id,
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    await appendJobEvent({
+      jobId: canceledJob.id,
+      eventType: "JOB_CANCELED",
+      message: "Job was removed from the active queue.",
+      metadata: {
+        previousStatus: job.status,
+      },
+    });
+
+    return toJobResponseWithRepository(canceledJob);
   });
 
   server.get("/jobs/:id", async (request, reply) => {

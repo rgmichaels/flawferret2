@@ -1,6 +1,7 @@
 import type {
   JobEventResponse,
   JobResponse,
+  JobStatus,
   RunResponse,
   RunStatus,
 } from "@flawferret2/job-schemas";
@@ -78,6 +79,20 @@ const runStatusLabels: Record<RunStatus, string> = {
   VALIDATING: "Validating",
 };
 
+const jobStatusLabels: Record<JobStatus, string> = {
+  BLOCKED: "Blocked",
+  CANCELED: "Canceled",
+  CLAIMED: "Claimed",
+  COMPLETED: "Completed",
+  DRAFT: "Draft",
+  FAILED: "Failed",
+  QUEUED: "Queued",
+  RETRY: "Retry",
+  REVIEW: "Review",
+  RUNNING: "Running",
+  VALIDATING: "Validating",
+};
+
 const getJobRepositoryName = (job: JobResponse) => {
   if (job.repository) {
     return `${job.repository.owner}/${job.repository.name}`;
@@ -136,7 +151,9 @@ export default async function JobDetailPage({
           <h1>{job.payload.featureArea}</h1>
           <p>{job.payload.goal}</p>
         </div>
-        <span className={`status-pill ${job.status.toLowerCase()}`}>{job.status}</span>
+        <span className={`status-pill ${job.status.toLowerCase()}`}>
+          {jobStatusLabels[job.status]}
+        </span>
       </header>
 
       <div className="detail-grid">

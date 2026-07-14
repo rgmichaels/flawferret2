@@ -30,7 +30,8 @@ export const appendJobEvent = async ({
     | "JOB_RUNNING"
     | "RUN_STARTED"
     | "WORKER_SIMULATED_WORK_COMPLETE"
-    | "JOB_RESET";
+    | "JOB_RESET"
+    | "JOB_CANCELED";
   message: string;
   metadata?: Prisma.InputJsonValue;
 }) =>

@@ -13,6 +13,7 @@ export const jobStatusSchema = z.enum([
   "FAILED",
   "BLOCKED",
   "RETRY",
+  "CANCELED",
 ]);
 
 export const prioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
@@ -36,6 +37,7 @@ export const jobEventTypeSchema = z.enum([
   "RUN_STARTED",
   "WORKER_SIMULATED_WORK_COMPLETE",
   "JOB_RESET",
+  "JOB_CANCELED",
 ]);
 
 export const createRepositoryRequestSchema = z.object({
