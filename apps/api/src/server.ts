@@ -1,10 +1,11 @@
 import cors from "@fastify/cors";
-import { appendJobEvent, prisma } from "@flawferret2/db";
+import { appendJobEvent, getQueueControl, pauseQueue, prisma, resumeQueue } from "@flawferret2/db";
 import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
   type JobEventResponse,
   type JobResponse,
+  type QueueControlResponse,
   type RepositoryResponse,
   type RunResponse,
 } from "@flawferret2/job-schemas";
@@ -38,6 +39,18 @@ const toJobResponse = (job: {
   completedAt: job.completedAt?.toISOString() ?? null,
   createdAt: job.createdAt.toISOString(),
   updatedAt: job.updatedAt.toISOString(),
+});
+
+const toQueueControlResponse = (queueControl: {
+  paused: boolean;
+  pausedAt: Date | null;
+  resumedAt: Date | null;
+  updatedAt: Date;
+}): QueueControlResponse => ({
+  paused: queueControl.paused,
+  pausedAt: queueControl.pausedAt?.toISOString() ?? null,
+  resumedAt: queueControl.resumedAt?.toISOString() ?? null,
+  updatedAt: queueControl.updatedAt.toISOString(),
 });
 
 const toRunResponse = (run: {
@@ -188,6 +201,24 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       ok: true,
       service: "flawferret2-api",
     };
+  });
+
+  server.get("/queue", async () => {
+    const queueControl = await getQueueControl();
+
+    return toQueueControlResponse(queueControl);
+  });
+
+  server.post("/queue/pause", async () => {
+    const queueControl = await pauseQueue();
+
+    return toQueueControlResponse(queueControl);
+  });
+
+  server.post("/queue/resume", async () => {
+    const queueControl = await resumeQueue();
+
+    return toQueueControlResponse(queueControl);
   });
 
   server.get("/repositories", async () => {
