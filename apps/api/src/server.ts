@@ -83,6 +83,7 @@ const toRepositoryResponse = (repository: {
   defaultBranch: string;
   cloneUrl: string;
   webUrl: string;
+  localPath: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): RepositoryResponse => ({
@@ -93,6 +94,7 @@ const toRepositoryResponse = (repository: {
   defaultBranch: repository.defaultBranch,
   cloneUrl: repository.cloneUrl,
   webUrl: repository.webUrl,
+  localPath: repository.localPath,
   createdAt: repository.createdAt.toISOString(),
   updatedAt: repository.updatedAt.toISOString(),
 });
@@ -112,6 +114,7 @@ const toJobResponseWithRepository = (job: {
         defaultBranch: string;
         cloneUrl: string;
         webUrl: string;
+        localPath: string | null;
         createdAt: Date;
         updatedAt: Date;
       })
@@ -263,11 +266,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         defaultBranch: body.defaultBranch,
         cloneUrl,
         webUrl,
+        localPath: body.localPath,
       },
       update: {
         defaultBranch: body.defaultBranch,
         cloneUrl,
         webUrl,
+        localPath: body.localPath,
       },
     });
 

@@ -61,6 +61,9 @@ enum JobEventType {
   WORKER_SIMULATED_WORK_COMPLETE
   JOB_RESET
   JOB_CANCELED
+  REPOSITORY_CHECKOUT_VALIDATION_STARTED
+  REPOSITORY_CHECKOUT_VALIDATED
+  JOB_BLOCKED
 }
 
 model QueueControl {
@@ -81,6 +84,7 @@ model Repository {
   defaultBranch String             @default("main") @map("default_branch")
   cloneUrl      String             @map("clone_url")
   webUrl        String             @map("web_url")
+  localPath     String?            @map("local_path")
   createdAt     DateTime           @default(now()) @map("created_at")
   updatedAt     DateTime           @updatedAt @map("updated_at")
   jobs          Job[]

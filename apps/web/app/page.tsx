@@ -117,6 +117,7 @@ async function registerRepository(formData: FormData) {
       owner,
       name,
       defaultBranch: formData.get("defaultBranch"),
+      localPath: formData.get("localPath"),
     }),
   });
 
@@ -487,7 +488,10 @@ export default async function Home({
                 <ul className="repository-list">
                   {repositories.map((repository) => (
                     <li key={repository.id}>
-                      <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
+                      <div>
+                        <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
+                        <code>{repository.localPath ?? "No local checkout configured"}</code>
+                      </div>
                       <span>{repository.defaultBranch}</span>
                     </li>
                   ))}
@@ -502,6 +506,14 @@ export default async function Home({
                 <label>
                   Default Branch
                   <input name="defaultBranch" defaultValue="main" required />
+                </label>
+                <label>
+                  Local Checkout Path
+                  <input
+                    name="localPath"
+                    placeholder="/Users/robertmichaels/Documents/code/playwright-tests"
+                    required
+                  />
                 </label>
                 <button type="submit">Register Repository</button>
               </form>

@@ -38,6 +38,9 @@ export const jobEventTypeSchema = z.enum([
   "WORKER_SIMULATED_WORK_COMPLETE",
   "JOB_RESET",
   "JOB_CANCELED",
+  "REPOSITORY_CHECKOUT_VALIDATION_STARTED",
+  "REPOSITORY_CHECKOUT_VALIDATED",
+  "JOB_BLOCKED",
 ]);
 
 export const createRepositoryRequestSchema = z.object({
@@ -53,6 +56,7 @@ export const createRepositoryRequestSchema = z.object({
     .min(1, "Repository name is required")
     .regex(/^[A-Za-z0-9_.-]+$/, "Repository name must not include slashes or spaces"),
   defaultBranch: z.string().trim().min(1, "Default branch is required").default("main"),
+  localPath: z.string().trim().min(1, "Local checkout path is required"),
 });
 
 export const repositoryResponseSchema = z.object({
@@ -63,6 +67,7 @@ export const repositoryResponseSchema = z.object({
   defaultBranch: z.string(),
   cloneUrl: z.string(),
   webUrl: z.string(),
+  localPath: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

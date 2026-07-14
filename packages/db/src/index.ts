@@ -31,7 +31,10 @@ export const appendJobEvent = async ({
     | "RUN_STARTED"
     | "WORKER_SIMULATED_WORK_COMPLETE"
     | "JOB_RESET"
-    | "JOB_CANCELED";
+    | "JOB_CANCELED"
+    | "REPOSITORY_CHECKOUT_VALIDATION_STARTED"
+    | "REPOSITORY_CHECKOUT_VALIDATED"
+    | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
 }) =>
@@ -205,6 +208,27 @@ export const markJobRunning = async ({
     data: {
       claimedBy: workerId,
       status: "RUNNING",
+    },
+    include: {
+      repository: true,
+    },
+  });
+
+export const markJobBlocked = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      completedAt: new Date(),
+      status: "BLOCKED",
     },
     include: {
       repository: true,
