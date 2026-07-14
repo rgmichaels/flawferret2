@@ -6,6 +6,7 @@ import {
   type JobEventResponse,
   type JobResponse,
   type RepositoryResponse,
+  type RunResponse,
 } from "@flawferret2/job-schemas";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -18,6 +19,7 @@ const toJobResponse = (job: {
   priority: JobResponse["priority"];
   payload: unknown;
   repository: RepositoryResponse | null;
+  latestRun: RunResponse | null;
   claimedBy: string | null;
   claimedAt: Date | null;
   completedAt: Date | null;
@@ -30,11 +32,34 @@ const toJobResponse = (job: {
   priority: job.priority,
   payload: job.payload as JobResponse["payload"],
   repository: job.repository,
+  latestRun: job.latestRun,
   claimedBy: job.claimedBy,
   claimedAt: job.claimedAt?.toISOString() ?? null,
   completedAt: job.completedAt?.toISOString() ?? null,
   createdAt: job.createdAt.toISOString(),
   updatedAt: job.updatedAt.toISOString(),
+});
+
+const toRunResponse = (run: {
+  id: string;
+  jobId: string;
+  status: RunResponse["status"];
+  workerId: string | null;
+  startedAt: Date;
+  completedAt: Date | null;
+  metadata: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): RunResponse => ({
+  id: run.id,
+  jobId: run.jobId,
+  status: run.status,
+  workerId: run.workerId,
+  startedAt: run.startedAt.toISOString(),
+  completedAt: run.completedAt?.toISOString() ?? null,
+  metadata: run.metadata ?? null,
+  createdAt: run.createdAt.toISOString(),
+  updatedAt: run.updatedAt.toISOString(),
 });
 
 const toRepositoryResponse = (repository: {
@@ -78,6 +103,17 @@ const toJobResponseWithRepository = (job: {
         updatedAt: Date;
       })
     | null;
+  runs: Array<{
+    id: string;
+    jobId: string;
+    status: RunResponse["status"];
+    workerId: string | null;
+    startedAt: Date;
+    completedAt: Date | null;
+    metadata: unknown;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
   claimedBy: string | null;
   claimedAt: Date | null;
   completedAt: Date | null;
@@ -86,6 +122,7 @@ const toJobResponseWithRepository = (job: {
 }): JobResponse =>
   toJobResponse({
     ...job,
+    latestRun: job.runs[0] ? toRunResponse(job.runs[0]) : null,
     repository: job.repository ? toRepositoryResponse(job.repository) : null,
   });
 
@@ -244,6 +281,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       },
       include: {
         repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
       },
     });
 
@@ -266,6 +309,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const jobs = await prisma.job.findMany({
       include: {
         repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -282,6 +331,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const job = await prisma.job.findUnique({
       include: {
         repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
       },
       where: {
         id: params.id,
@@ -311,6 +366,21 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return events.map(toJobEventResponse);
+  });
+
+  server.get("/jobs/:id/runs", async (request) => {
+    const params = jobParamsSchema.parse(request.params);
+
+    const runs = await prisma.run.findMany({
+      where: {
+        jobId: params.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return runs.map(toRunResponse);
   });
 
   return server;

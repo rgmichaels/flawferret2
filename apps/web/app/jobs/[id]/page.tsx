@@ -1,4 +1,9 @@
-import type { JobEventResponse, JobResponse } from "@flawferret2/job-schemas";
+import type {
+  JobEventResponse,
+  JobResponse,
+  RunResponse,
+  RunStatus,
+} from "@flawferret2/job-schemas";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -34,6 +39,22 @@ async function getJobEvents(id: string): Promise<JobEventResponse[]> {
   }
 }
 
+async function getJobRuns(id: string): Promise<RunResponse[]> {
+  try {
+    const response = await fetch(`${apiUrl}/jobs/${id}/runs`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<RunResponse[]>;
+  } catch {
+    return [];
+  }
+}
+
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
@@ -46,6 +67,16 @@ const formatEventType = (value: string) =>
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const runStatusLabels: Record<RunStatus, string> = {
+  CODEX_RUNNING: "Codex Running",
+  FAILED: "Failed",
+  PR_CREATED: "PR Created",
+  PUSHING: "Pushing",
+  STARTED: "Started",
+  SUCCEEDED: "Succeeded",
+  VALIDATING: "Validating",
+};
 
 const getJobRepositoryName = (job: JobResponse) => {
   if (job.repository) {
@@ -73,7 +104,11 @@ export default async function JobDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, events] = await Promise.all([getJob(id), getJobEvents(id)]);
+  const [job, events, runs] = await Promise.all([
+    getJob(id),
+    getJobEvents(id),
+    getJobRuns(id),
+  ]);
 
   if (!job) {
     return (
@@ -129,6 +164,28 @@ export default async function JobDetailPage({
               <dd>{job.payload.acceptanceCriteria}</dd>
             </div>
           </dl>
+        </section>
+
+        <section className="panel detail-card">
+          <h2>Runs</h2>
+          {runs.length === 0 ? (
+            <p className="empty compact-empty">No execution runs have started yet.</p>
+          ) : (
+            <ol className="run-list">
+              {runs.map((run) => (
+                <li key={run.id}>
+                  <div>
+                    <span className={`run-pill ${run.status.toLowerCase()}`}>
+                      {runStatusLabels[run.status]}
+                    </span>
+                    <code>#{run.id.slice(0, 8)}</code>
+                  </div>
+                  <time dateTime={run.startedAt}>Started {formatDateTime(run.startedAt)}</time>
+                  {run.workerId ? <small>Worker {run.workerId}</small> : null}
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
 
         <section className="panel detail-card">

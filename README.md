@@ -44,6 +44,19 @@ Milestone 3 introduces repository registry state for future runner checkout:
 
 No repository cloning, Codex invocation, Playwright validation, or pull request automation is implemented in Milestone 3.
 
+## Milestone 4
+
+Milestone 4 separates job requests from execution attempts:
+
+- `runs` table
+- `RunStatus` lifecycle enum
+- `GET /jobs/:id/runs`
+- Latest run status in the dashboard
+- Run history on the job detail page
+- `ferret-runner` creates a `STARTED` run when work begins
+
+No repository checkout, Codex invocation, Playwright validation, or pull request automation is implemented in Milestone 4.
+
 ## Running Locally
 
 1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres connection string.

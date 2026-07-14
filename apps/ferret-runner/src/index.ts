@@ -1,8 +1,10 @@
 import {
   appendJobEvent,
   claimNextQueuedJob,
+  createJobRun,
   heartbeatWorker,
   markJobRunning,
+  markSimulatedWorkSucceeded,
   prisma,
 } from "@flawferret2/db";
 import { randomUUID } from "node:crypto";
@@ -102,6 +104,28 @@ while (!shouldStop) {
     workerId,
   });
 
+  const run = await createJobRun({
+    jobId: runningJob.id,
+    workerId,
+    metadata: {
+      hostname: workerHostname,
+      repository: runningJob.repository
+        ? `${runningJob.repository.owner}/${runningJob.repository.name}`
+        : null,
+    },
+  });
+
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "RUN_STARTED",
+    message: "ferret-runner started a new execution run.",
+    metadata: {
+      runId: run.id,
+      status: run.status,
+      workerId,
+    },
+  });
+
   await appendJobEvent({
     jobId: runningJob.id,
     eventType: "JOB_RUNNING",
@@ -111,25 +135,36 @@ while (!shouldStop) {
       repository: runningJob.repository
         ? `${runningJob.repository.owner}/${runningJob.repository.name}`
         : null,
+      runId: run.id,
       workerId,
     },
   });
 
   log("Claimed job", {
     job: runningJob,
+    run,
   });
 
   await sleep(config.WORKER_SIMULATED_WORK_MS);
 
-  log("Simulated worker pass complete", {
+  const completed = await markSimulatedWorkSucceeded({
     jobId: runningJob.id,
+    runId: run.id,
+  });
+
+  log("Simulated worker pass complete", {
+    jobId: completed.job.id,
+    runId: completed.run.id,
   });
 
   await appendJobEvent({
-    jobId: runningJob.id,
+    jobId: completed.job.id,
     eventType: "WORKER_SIMULATED_WORK_COMPLETE",
     message: "Worker completed the Milestone 2 simulated work pass.",
     metadata: {
+      jobStatus: completed.job.status,
+      runId: completed.run.id,
+      runStatus: completed.run.status,
       simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
       workerId,
     },
