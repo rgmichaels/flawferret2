@@ -12,7 +12,10 @@ if (process.env.NODE_ENV !== "production") {
 
 export type { Job, Prisma, Repository, Run, Worker } from "@prisma/client";
 
-export type ClaimedJob = Awaited<ReturnType<typeof claimNextQueuedJob>>;
+export type ClaimNextQueuedJobResult = Awaited<ReturnType<typeof claimNextQueuedJob>>;
+export type ClaimedJob = NonNullable<ClaimNextQueuedJobResult["job"]>;
+
+export const DEFAULT_QUEUE_CONTROL_ID = "default";
 
 export const appendJobEvent = async ({
   jobId,
@@ -83,8 +86,72 @@ export const heartbeatWorker = async ({
     },
   });
 
+export const getQueueControl = async () =>
+  prisma.queueControl.upsert({
+    where: {
+      id: DEFAULT_QUEUE_CONTROL_ID,
+    },
+    update: {},
+    create: {
+      id: DEFAULT_QUEUE_CONTROL_ID,
+      paused: false,
+      resumedAt: new Date(),
+    },
+  });
+
+export const pauseQueue = async () =>
+  prisma.queueControl.upsert({
+    where: {
+      id: DEFAULT_QUEUE_CONTROL_ID,
+    },
+    update: {
+      paused: true,
+      pausedAt: new Date(),
+    },
+    create: {
+      id: DEFAULT_QUEUE_CONTROL_ID,
+      paused: true,
+      pausedAt: new Date(),
+    },
+  });
+
+export const resumeQueue = async () =>
+  prisma.queueControl.upsert({
+    where: {
+      id: DEFAULT_QUEUE_CONTROL_ID,
+    },
+    update: {
+      paused: false,
+      resumedAt: new Date(),
+    },
+    create: {
+      id: DEFAULT_QUEUE_CONTROL_ID,
+      paused: false,
+      resumedAt: new Date(),
+    },
+  });
+
 export const claimNextQueuedJob = async (workerId: string) =>
   prisma.$transaction(async (tx) => {
+    const queueControl = await tx.queueControl.upsert({
+      where: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+      },
+      update: {},
+      create: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+        paused: false,
+        resumedAt: new Date(),
+      },
+    });
+
+    if (queueControl.paused) {
+      return {
+        job: null,
+        queuePaused: true,
+      };
+    }
+
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id
       FROM jobs
@@ -97,10 +164,13 @@ export const claimNextQueuedJob = async (workerId: string) =>
     const candidate = candidates[0];
 
     if (!candidate) {
-      return null;
+      return {
+        job: null,
+        queuePaused: false,
+      };
     }
 
-    return tx.job.update({
+    const job = await tx.job.update({
       where: {
         id: candidate.id,
       },
@@ -113,6 +183,11 @@ export const claimNextQueuedJob = async (workerId: string) =>
         repository: true,
       },
     });
+
+    return {
+      job,
+      queuePaused: false,
+    };
   });
 
 export const markJobRunning = async ({

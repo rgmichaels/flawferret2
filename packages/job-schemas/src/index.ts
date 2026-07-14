@@ -65,6 +65,13 @@ export const repositoryResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const queueControlResponseSchema = z.object({
+  paused: z.boolean(),
+  pausedAt: z.string().nullable(),
+  resumedAt: z.string().nullable(),
+  updatedAt: z.string(),
+});
+
 export const runResponseSchema = z.object({
   id: z.string(),
   jobId: z.string(),
@@ -140,6 +147,7 @@ export type RunStatus = z.infer<typeof runStatusSchema>;
 export type JobEventType = z.infer<typeof jobEventTypeSchema>;
 export type CreateRepositoryRequest = z.infer<typeof createRepositoryRequestSchema>;
 export type RepositoryResponse = z.infer<typeof repositoryResponseSchema>;
+export type QueueControlResponse = z.infer<typeof queueControlResponseSchema>;
 export type RunResponse = z.infer<typeof runResponseSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;

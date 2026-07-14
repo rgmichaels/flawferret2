@@ -1,6 +1,7 @@
 import type {
   JobResponse,
   JobStatus,
+  QueueControlResponse,
   RepositoryResponse,
   RunStatus,
 } from "@flawferret2/job-schemas";
@@ -63,6 +64,32 @@ async function getRepositories(): Promise<RepositoryResponse[]> {
   }
 }
 
+async function getQueueControl(): Promise<QueueControlResponse> {
+  try {
+    const response = await fetch(`${apiUrl}/queue`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        paused: false,
+        pausedAt: null,
+        resumedAt: null,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    return response.json() as Promise<QueueControlResponse>;
+  } catch {
+    return {
+      paused: false,
+      pausedAt: null,
+      resumedAt: null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+}
+
 async function registerRepository(formData: FormData) {
   "use server";
 
@@ -88,6 +115,34 @@ async function registerRepository(formData: FormData) {
 
   if (!response.ok) {
     throw new Error("Unable to register repository.");
+  }
+
+  revalidatePath("/");
+}
+
+async function pauseQueueAction() {
+  "use server";
+
+  const response = await fetch(`${apiUrl}/queue/pause`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to pause queue.");
+  }
+
+  revalidatePath("/");
+}
+
+async function resumeQueueAction() {
+  "use server";
+
+  const response = await fetch(`${apiUrl}/queue/resume`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to resume queue.");
   }
 
   revalidatePath("/");
@@ -179,13 +234,20 @@ const getJobTargetBranch = (job: JobResponse) => {
 const getLatestRunLabel = (job: JobResponse) =>
   job.latestRun ? runStatusLabels[job.latestRun.status] : "No run";
 
+const getRunnerStateLabel = (runningJobs: number) => (runningJobs > 0 ? "Active" : "Idle");
+
 export default async function Home() {
-  const [jobs, repositories] = await Promise.all([getJobs(), getRepositories()]);
+  const [jobs, repositories, queueControl] = await Promise.all([
+    getJobs(),
+    getRepositories(),
+    getQueueControl(),
+  ]);
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
   const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
   const reviewCount = countByStatus(jobs, ["REVIEW"]);
   const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
   const completedCount = countByStatus(jobs, ["COMPLETED"]);
+  const runnerState = getRunnerStateLabel(runningCount);
 
   return (
     <main className="app-shell">
@@ -209,9 +271,6 @@ export default async function Home() {
           <a className="nav-item" href="#repositories">
             Repositories
           </a>
-          <a className="nav-item" href="#workers">
-            Workers
-          </a>
         </nav>
 
         <nav className="nav-section" aria-label="Create">
@@ -222,14 +281,44 @@ export default async function Home() {
         </nav>
 
         <div className="system-card">
-          <div>
+          <div className="system-card-title">
             <span className="status-dot" />
             <strong>System Status</strong>
           </div>
-          <p>API and Neon connected</p>
-          <small>
-            {jobs.length} jobs / {repositories.length} repos
-          </small>
+          <dl className="system-status-list">
+            <div>
+              <dt>API / DB</dt>
+              <dd className="positive">Connected</dd>
+            </div>
+            <div>
+              <dt>ferret-runner</dt>
+              <dd>{runnerState}</dd>
+            </div>
+            <div>
+              <dt>Queue</dt>
+              <dd className={queueControl.paused ? "warning" : "positive"}>
+                {queueControl.paused ? "Paused" : "Active"}
+              </dd>
+            </div>
+            <div>
+              <dt>Active Jobs</dt>
+              <dd>{runningCount}</dd>
+            </div>
+            <div>
+              <dt>Tracked</dt>
+              <dd>
+                {jobs.length} jobs / {repositories.length} repos
+              </dd>
+            </div>
+          </dl>
+          <form
+            action={queueControl.paused ? resumeQueueAction : pauseQueueAction}
+            className="queue-control-form"
+          >
+            <button type="submit" className={queueControl.paused ? "resume-button" : "pause-button"}>
+              {queueControl.paused ? "Resume Queue" : "Pause Queue"}
+            </button>
+          </form>
         </div>
       </aside>
 
@@ -390,6 +479,9 @@ export default async function Home() {
                     Register a repository before queueing work for ferret-runner.
                   </span>
                 </label>
+                {queueControl.paused ? (
+                  <p className="queue-paused-note">Queue is paused. Resume it before adding work.</p>
+                ) : null}
                 <label>
                   Target Branch
                   <input name="targetBranch" defaultValue="main" required />
@@ -433,25 +525,13 @@ export default async function Home() {
                     Create draft PR
                   </label>
                 </div>
-                <button type="submit" disabled={repositories.length === 0}>
+                <button type="submit" disabled={repositories.length === 0 || queueControl.paused}>
                   Queue Job
                 </button>
               </form>
             </section>
           </div>
         </div>
-
-        <section className="panel worker-strip" id="workers">
-          <div>
-            <h2>ferret-runner Status</h2>
-            <p>Milestone 2 runner instances claim queued jobs and simulate work.</p>
-          </div>
-          <div className="worker-summary">
-            <span>{runningCount > 0 ? "Active" : "Idle"}</span>
-            <strong>{runningCount}</strong>
-            <small>jobs currently claimed or running</small>
-          </div>
-        </section>
       </section>
     </main>
   );

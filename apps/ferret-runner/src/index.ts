@@ -70,13 +70,21 @@ while (!shouldStop) {
     version: config.WORKER_VERSION,
   });
 
-  const claimedJob = await claimNextQueuedJob(workerId);
+  const claimResult = await claimNextQueuedJob(workerId);
 
-  if (!claimedJob) {
+  if (claimResult.queuePaused) {
+    log("Queue is paused; skipping claim");
+    await sleep(config.WORKER_POLL_INTERVAL_MS);
+    continue;
+  }
+
+  if (!claimResult.job) {
     log("No queued jobs found");
     await sleep(config.WORKER_POLL_INTERVAL_MS);
     continue;
   }
+
+  const claimedJob = claimResult.job;
 
   await appendJobEvent({
     jobId: claimedJob.id,
