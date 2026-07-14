@@ -602,10 +602,22 @@ td span {
   padding: 14px 20px;
 }
 
+.repository-list div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .repository-list a {
   color: #172033;
   font-size: 13px;
   font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.repository-list code {
+  color: #667085;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 

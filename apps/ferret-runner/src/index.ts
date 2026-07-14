@@ -3,6 +3,7 @@ import {
   claimNextQueuedJob,
   createJobRun,
   heartbeatWorker,
+  markJobBlocked,
   markJobRunning,
   markSimulatedWorkSucceeded,
   prisma,
@@ -10,6 +11,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { config } from "./config.js";
+import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
 
 const workerId = config.WORKER_ID ?? randomUUID();
@@ -28,6 +30,26 @@ const log = (message: string, metadata?: Record<string, unknown>) => {
   };
 
   console.log(JSON.stringify(entry));
+};
+
+const getTargetBranch = (payload: unknown) => {
+  if (payload && typeof payload === "object" && "targetBranch" in payload) {
+    const targetBranch = (payload as { targetBranch?: unknown }).targetBranch;
+
+    if (typeof targetBranch === "string" && targetBranch.length > 0) {
+      return targetBranch;
+    }
+  }
+
+  if (payload && typeof payload === "object" && "branch" in payload) {
+    const branch = (payload as { branch?: unknown }).branch;
+
+    if (typeof branch === "string" && branch.length > 0) {
+      return branch;
+    }
+  }
+
+  return "main";
 };
 
 const shutdown = async () => {
@@ -107,6 +129,72 @@ while (!shouldStop) {
     version: config.WORKER_VERSION,
   });
 
+  await appendJobEvent({
+    jobId: claimedJob.id,
+    eventType: "REPOSITORY_CHECKOUT_VALIDATION_STARTED",
+    message: "ferret-runner is validating the configured local checkout.",
+    metadata: {
+      repository: claimedJob.repository
+        ? `${claimedJob.repository.owner}/${claimedJob.repository.name}`
+        : null,
+      targetBranch: getTargetBranch(claimedJob.payload),
+      workerId,
+    },
+  });
+
+  const checkoutValidation = claimedJob.repository
+    ? await validateRepositoryCheckout({
+        repository: claimedJob.repository,
+        targetBranch: getTargetBranch(claimedJob.payload),
+      })
+    : {
+        ok: false as const,
+        message: "Job has no registered repository.",
+        metadata: {
+          jobId: claimedJob.id,
+        },
+      };
+
+  if (!checkoutValidation.ok) {
+    const blockedJob = await markJobBlocked({
+      jobId: claimedJob.id,
+      workerId,
+    });
+
+    await appendJobEvent({
+      jobId: blockedJob.id,
+      eventType: "JOB_BLOCKED",
+      message: checkoutValidation.message,
+      metadata: {
+        ...checkoutValidation.metadata,
+        workerId,
+      },
+    });
+
+    log("Blocked job during local checkout validation", {
+      jobId: blockedJob.id,
+      reason: checkoutValidation.message,
+    });
+
+    await heartbeatWorker({
+      workerId,
+      hostname: workerHostname,
+      status: "IDLE",
+      version: config.WORKER_VERSION,
+    });
+    continue;
+  }
+
+  await appendJobEvent({
+    jobId: claimedJob.id,
+    eventType: "REPOSITORY_CHECKOUT_VALIDATED",
+    message: "Configured local checkout is valid.",
+    metadata: {
+      ...checkoutValidation.metadata,
+      workerId,
+    },
+  });
+
   const runningJob = await markJobRunning({
     jobId: claimedJob.id,
     workerId,
@@ -117,9 +205,11 @@ while (!shouldStop) {
     workerId,
     metadata: {
       hostname: workerHostname,
+      localPath: checkoutValidation.metadata.localPath,
       repository: runningJob.repository
         ? `${runningJob.repository.owner}/${runningJob.repository.name}`
         : null,
+      targetBranch: getTargetBranch(runningJob.payload),
     },
   });
 
