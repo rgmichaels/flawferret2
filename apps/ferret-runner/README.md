@@ -1,8 +1,8 @@
-# FlawFerret2 Worker
+# FlawFerret2 ferret-runner
 
-Milestone 2 worker for proving queue processing.
+Milestone 2 service for proving queue processing.
 
-The worker:
+`ferret-runner`:
 
 1. Registers or heartbeats itself in the `workers` table.
 2. Atomically claims the oldest highest-priority `QUEUED` job.
@@ -16,7 +16,7 @@ It does not invoke Codex, run Playwright, create branches, commit changes, push 
 ## Run
 
 ```bash
-pnpm --filter @flawferret2/worker dev
+pnpm --filter @flawferret2/ferret-runner dev
 ```
 
 Optional environment variables:
