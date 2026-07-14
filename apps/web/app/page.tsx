@@ -299,8 +299,8 @@ export default async function Home() {
 
         <section className="panel worker-strip" id="workers">
           <div>
-            <h2>Worker Status</h2>
-            <p>Milestone 2 workers claim queued jobs and simulate work.</p>
+            <h2>ferret-runner Status</h2>
+            <p>Milestone 2 runner instances claim queued jobs and simulate work.</p>
           </div>
           <div className="worker-summary">
             <span>{runningCount > 0 ? "Active" : "Idle"}</span>

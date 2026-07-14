@@ -46,6 +46,31 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  apps/ferret-runner:
+    dependencies:
+      '@flawferret2/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@flawferret2/job-schemas':
+        specifier: workspace:*
+        version: link:../../packages/job-schemas
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.1.1
+      tsx:
+        specifier: ^4.23.0
+        version: 4.23.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   apps/web:
     dependencies:
       '@flawferret2/job-schemas':
@@ -73,31 +98,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  apps/worker:
-    dependencies:
-      '@flawferret2/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@flawferret2/job-schemas':
-        specifier: workspace:*
-        version: link:../../packages/job-schemas
-      dotenv:
-        specifier: ^17.4.2
-        version: 17.4.2
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.1
-        version: 26.1.1
-      tsx:
-        specifier: ^4.23.0
-        version: 4.23.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

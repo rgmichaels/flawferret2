@@ -1,5 +1,5 @@
 {
-  "name": "@flawferret2/worker",
+  "name": "@flawferret2/ferret-runner",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -8,7 +8,7 @@
     "check": "pnpm typecheck",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit",
-    "test": "echo \"worker test not implemented yet\"",
+    "test": "echo \"ferret-runner test not implemented yet\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

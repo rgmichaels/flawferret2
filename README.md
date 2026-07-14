@@ -21,13 +21,13 @@ No worker, Codex, Playwright, or GitHub pull request automation is implemented i
 
 ## Milestone 2
 
-Milestone 2 proves database queue -> worker claim -> worker status:
+Milestone 2 proves database queue -> `ferret-runner` claim -> worker status:
 
-- `apps/worker`
+- `apps/ferret-runner`
 - Worker registration and heartbeat in the `workers` table
 - Atomic queued-job claim with PostgreSQL row locking
 - Claimed jobs move from `QUEUED` to `CLAIMED`, then `RUNNING`
-- The worker logs the claimed job and sleeps to simulate work
+- `ferret-runner` logs the claimed job and sleeps to simulate work
 
 No Codex, Playwright, or GitHub pull request automation is implemented in Milestone 2.
 
@@ -59,10 +59,10 @@ pnpm --filter @flawferret2/api dev
 pnpm --filter @flawferret2/web dev
 ```
 
-6. Start the worker when you want to claim queued jobs:
+6. Start `ferret-runner` when you want to claim queued jobs:
 
 ```bash
-pnpm --filter @flawferret2/worker dev
+pnpm --filter @flawferret2/ferret-runner dev
 ```
 
 The API defaults to `http://localhost:4000`. The web app defaults to `http://localhost:3000`.
