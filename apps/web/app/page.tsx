@@ -11,6 +11,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 const statusLabels: Record<JobStatus, string> = {
   BLOCKED: "Blocked",
+  CANCELED: "Canceled",
   CLAIMED: "Claimed",
   COMPLETED: "Completed",
   DRAFT: "Draft",
@@ -32,9 +33,15 @@ const runStatusLabels: Record<RunStatus, string> = {
   VALIDATING: "Validating",
 };
 
-async function getJobs(): Promise<JobResponse[]> {
+async function getJobs(includeCanceled = false): Promise<JobResponse[]> {
   try {
-    const response = await fetch(`${apiUrl}/jobs`, {
+    const jobsUrl = new URL(`${apiUrl}/jobs`);
+
+    if (includeCanceled) {
+      jobsUrl.searchParams.set("includeCanceled", "true");
+    }
+
+    const response = await fetch(jobsUrl, {
       cache: "no-store",
     });
 
@@ -178,6 +185,21 @@ async function queueJob(formData: FormData) {
   revalidatePath("/");
 }
 
+async function cancelJob(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to remove job.");
+  }
+
+  revalidatePath("/");
+}
+
 const countByStatus = (jobs: JobResponse[], statuses: JobStatus[]) =>
   jobs.filter((job) => statuses.includes(job.status)).length;
 
@@ -236,9 +258,18 @@ const getLatestRunLabel = (job: JobResponse) =>
 
 const getRunnerStateLabel = (runningJobs: number) => (runningJobs > 0 ? "Active" : "Idle");
 
-export default async function Home() {
+const canCancelJob = (job: JobResponse) =>
+  job.status === "DRAFT" || job.status === "QUEUED" || job.status === "RETRY";
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ includeCanceled?: string }>;
+}) {
+  const { includeCanceled: includeCanceledParam } = await searchParams;
+  const includeCanceled = includeCanceledParam === "true";
   const [jobs, repositories, queueControl] = await Promise.all([
-    getJobs(),
+    getJobs(includeCanceled),
     getRepositories(),
     getQueueControl(),
   ]);
@@ -368,7 +399,15 @@ export default async function Home() {
                 <h2>Recent Jobs</h2>
                 <p>Stored orchestration work from the job queue.</p>
               </div>
-              <span>{jobs.length} total</span>
+              <div className="panel-actions">
+                <a
+                  className={includeCanceled ? "filter-toggle active" : "filter-toggle"}
+                  href={includeCanceled ? "/" : "/?includeCanceled=true"}
+                >
+                  {includeCanceled ? "Hide canceled" : "Show canceled"}
+                </a>
+                <span>{jobs.length} total</span>
+              </div>
             </div>
 
             {jobs.length === 0 ? (
@@ -384,6 +423,7 @@ export default async function Home() {
                       <th>Run</th>
                       <th>Priority</th>
                       <th>Updated</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -413,6 +453,16 @@ export default async function Home() {
                         </td>
                         <td>{job.priority}</td>
                         <td>{formatRelativeTime(job.updatedAt)}</td>
+                        <td>
+                          {canCancelJob(job) ? (
+                            <form action={cancelJob} className="inline-job-action">
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <button type="submit">Remove</button>
+                            </form>
+                          ) : (
+                            <span className="muted-action">Locked</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
