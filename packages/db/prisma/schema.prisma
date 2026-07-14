@@ -42,10 +42,21 @@ enum RepositoryProvider {
   GITHUB
 }
 
+enum RunStatus {
+  STARTED
+  CODEX_RUNNING
+  VALIDATING
+  PUSHING
+  PR_CREATED
+  SUCCEEDED
+  FAILED
+}
+
 enum JobEventType {
   JOB_CREATED
   JOB_CLAIMED
   JOB_RUNNING
+  RUN_STARTED
   WORKER_SIMULATED_WORK_COMPLETE
   JOB_RESET
 }
@@ -80,10 +91,29 @@ model Job {
   updatedAt   DateTime    @updatedAt @map("updated_at")
   events      JobEvent[]
   repository  Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  runs        Run[]
 
   @@index([status, priority, createdAt])
   @@index([repositoryId])
   @@map("jobs")
+}
+
+model Run {
+  id          String    @id @default(uuid()) @db.Uuid
+  jobId       String    @map("job_id") @db.Uuid
+  status      RunStatus @default(STARTED)
+  workerId    String?   @map("worker_id")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@index([status])
+  @@map("runs")
 }
 
 model JobEvent {

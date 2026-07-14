@@ -292,27 +292,32 @@ table {
 
 th:nth-child(1),
 td:nth-child(1) {
-  width: 24%;
+  width: 22%;
 }
 
 th:nth-child(2),
 td:nth-child(2) {
-  width: 32%;
+  width: 29%;
 }
 
 th:nth-child(3),
 td:nth-child(3) {
-  width: 16%;
+  width: 14%;
 }
 
 th:nth-child(4),
 td:nth-child(4) {
-  width: 14%;
+  width: 13%;
 }
 
 th:nth-child(5),
 td:nth-child(5) {
-  width: 14%;
+  width: 10%;
+}
+
+th:nth-child(6),
+td:nth-child(6) {
+  width: 12%;
 }
 
 th,
@@ -336,7 +341,8 @@ td {
 }
 
 td:nth-child(4),
-td:nth-child(5) {
+td:nth-child(5),
+td:nth-child(6) {
   white-space: nowrap;
 }
 
@@ -404,6 +410,39 @@ td span {
 .status-pill.draft {
   background: #f1f5f9;
   color: #475569;
+}
+
+.run-pill {
+  border-radius: 999px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.run-pill.none {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.run-pill.started,
+.run-pill.codex_running,
+.run-pill.validating,
+.run-pill.pushing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.run-pill.pr_created,
+.run-pill.succeeded {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.run-pill.failed {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .form-panel {
@@ -610,6 +649,40 @@ textarea {
   color: #172033;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.run-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.run-list li {
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.run-list div {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.run-list code {
+  color: #475569;
+  font-size: 12px;
+}
+
+.run-list time,
+.run-list small {
+  color: #667085;
+  font-size: 12px;
 }
 
 .timeline {

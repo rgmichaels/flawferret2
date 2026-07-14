@@ -19,10 +19,21 @@ export const prioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
 
 export const repositoryProviderSchema = z.enum(["GITHUB"]);
 
+export const runStatusSchema = z.enum([
+  "STARTED",
+  "CODEX_RUNNING",
+  "VALIDATING",
+  "PUSHING",
+  "PR_CREATED",
+  "SUCCEEDED",
+  "FAILED",
+]);
+
 export const jobEventTypeSchema = z.enum([
   "JOB_CREATED",
   "JOB_CLAIMED",
   "JOB_RUNNING",
+  "RUN_STARTED",
   "WORKER_SIMULATED_WORK_COMPLETE",
   "JOB_RESET",
 ]);
@@ -50,6 +61,18 @@ export const repositoryResponseSchema = z.object({
   defaultBranch: z.string(),
   cloneUrl: z.string(),
   webUrl: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const runResponseSchema = z.object({
+  id: z.string(),
+  jobId: z.string(),
+  status: runStatusSchema,
+  workerId: z.string().nullable(),
+  startedAt: z.string(),
+  completedAt: z.string().nullable(),
+  metadata: z.unknown().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -92,6 +115,7 @@ export const jobResponseSchema = z.object({
   priority: prioritySchema,
   payload: addPlaywrightTestPayloadSchema,
   repository: repositoryResponseSchema.nullable(),
+  latestRun: runResponseSchema.nullable(),
   claimedBy: z.string().nullable(),
   claimedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
@@ -112,9 +136,11 @@ export type JobType = z.infer<typeof jobTypeSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type JobPriority = z.infer<typeof prioritySchema>;
 export type RepositoryProvider = z.infer<typeof repositoryProviderSchema>;
+export type RunStatus = z.infer<typeof runStatusSchema>;
 export type JobEventType = z.infer<typeof jobEventTypeSchema>;
 export type CreateRepositoryRequest = z.infer<typeof createRepositoryRequestSchema>;
 export type RepositoryResponse = z.infer<typeof repositoryResponseSchema>;
+export type RunResponse = z.infer<typeof runResponseSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;

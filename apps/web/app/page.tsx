@@ -1,4 +1,9 @@
-import type { JobResponse, JobStatus, RepositoryResponse } from "@flawferret2/job-schemas";
+import type {
+  JobResponse,
+  JobStatus,
+  RepositoryResponse,
+  RunStatus,
+} from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -13,6 +18,16 @@ const statusLabels: Record<JobStatus, string> = {
   RETRY: "Retry",
   REVIEW: "Review",
   RUNNING: "Running",
+  VALIDATING: "Validating",
+};
+
+const runStatusLabels: Record<RunStatus, string> = {
+  CODEX_RUNNING: "Codex",
+  FAILED: "Failed",
+  PR_CREATED: "PR Created",
+  PUSHING: "Pushing",
+  STARTED: "Started",
+  SUCCEEDED: "Succeeded",
   VALIDATING: "Validating",
 };
 
@@ -161,6 +176,9 @@ const getJobTargetBranch = (job: JobResponse) => {
   return job.payload.branch;
 };
 
+const getLatestRunLabel = (job: JobResponse) =>
+  job.latestRun ? runStatusLabels[job.latestRun.status] : "No run";
+
 export default async function Home() {
   const [jobs, repositories] = await Promise.all([getJobs(), getRepositories()]);
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
@@ -274,6 +292,7 @@ export default async function Home() {
                       <th>Job</th>
                       <th>Repository</th>
                       <th>Status</th>
+                      <th>Run</th>
                       <th>Priority</th>
                       <th>Updated</th>
                     </tr>
@@ -292,6 +311,15 @@ export default async function Home() {
                         <td>
                           <span className={`status-pill ${job.status.toLowerCase()}`}>
                             {statusLabels[job.status]}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`run-pill ${
+                              job.latestRun ? job.latestRun.status.toLowerCase() : "none"
+                            }`}
+                          >
+                            {getLatestRunLabel(job)}
                           </span>
                         </td>
                         <td>{job.priority}</td>
