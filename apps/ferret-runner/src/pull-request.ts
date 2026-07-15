@@ -9,6 +9,8 @@ export type DraftPullRequestResult =
       ok: true;
       metadata: {
         baseBranch: string;
+        commitSha: string;
+        commitMessage: string;
         headBranch: string;
         prUrl: string;
         pushed: true;
@@ -19,6 +21,8 @@ export type DraftPullRequestResult =
       message: string;
       metadata: {
         baseBranch: string | null;
+        commitMessage: string | null;
+        commitSha: string | null;
         error?: string;
         headBranch: string | null;
         prUrl: null;
@@ -78,6 +82,16 @@ const buildPullRequestTitle = (job: ClaimedReviewJob) => {
   return `Add Playwright coverage for job ${job.id.slice(0, 8)}`;
 };
 
+const buildCommitMessage = (job: ClaimedReviewJob) => {
+  const featureArea = getPayloadValue(job.payload, "featureArea");
+
+  if (featureArea) {
+    return `Add Playwright coverage for ${featureArea}`;
+  }
+
+  return `Add Playwright coverage for job ${job.id.slice(0, 8)}`;
+};
+
 const buildPullRequestBody = (job: ClaimedReviewJob, runMetadata: unknown) => {
   const changedFiles = getChangedFiles(runMetadata);
   const codex = getMetadataRecord(getMetadataRecord(runMetadata).codex);
@@ -119,6 +133,7 @@ export const createDraftPullRequest = async ({
     getPayloadValue(job.payload, "branch") ||
     "main";
   const headBranch = getMetadataString(runMetadata, "workBranch");
+  const commitMessage = buildCommitMessage(job);
 
   if (!headBranch) {
     return {
@@ -126,6 +141,8 @@ export const createDraftPullRequest = async ({
       message: "Draft PR creation failed because the generated work branch is missing.",
       metadata: {
         baseBranch,
+        commitMessage,
+        commitSha: null,
         headBranch,
         prUrl: null,
         pushed: false,
@@ -134,8 +151,30 @@ export const createDraftPullRequest = async ({
   }
 
   let pushed = false;
+  let commitSha: string | null = null;
 
   try {
+    const status = await runCommand("git", ["status", "--porcelain"], localPath);
+
+    if (status.length === 0) {
+      return {
+        ok: false,
+        message: "Draft PR creation failed because there are no generated changes to commit.",
+        metadata: {
+          baseBranch,
+          commitMessage,
+          commitSha,
+          headBranch,
+          prUrl: null,
+          pushed,
+        },
+      };
+    }
+
+    await runCommand("git", ["add", "--all"], localPath);
+    await runCommand("git", ["commit", "-m", commitMessage], localPath);
+    commitSha = await runCommand("git", ["rev-parse", "HEAD"], localPath);
+
     await runCommand("git", ["push", "-u", "origin", headBranch], localPath);
     pushed = true;
 
@@ -161,6 +200,8 @@ export const createDraftPullRequest = async ({
       ok: true,
       metadata: {
         baseBranch,
+        commitMessage,
+        commitSha,
         headBranch,
         prUrl,
         pushed,
@@ -172,6 +213,8 @@ export const createDraftPullRequest = async ({
       message: "Draft PR creation failed.",
       metadata: {
         baseBranch,
+        commitMessage,
+        commitSha,
         error: error instanceof Error ? error.message : String(error),
         headBranch,
         prUrl: null,

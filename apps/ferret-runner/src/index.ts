@@ -895,6 +895,19 @@ while (!shouldStop) {
 
       await appendJobEvent({
         jobId: reviewJob.id,
+        eventType: "WORK_BRANCH_COMMITTED",
+        message: "ferret-runner committed generated changes on the work branch.",
+        metadata: {
+          commitMessage: pullRequestResult.metadata.commitMessage,
+          commitSha: pullRequestResult.metadata.commitSha,
+          headBranch: pullRequestResult.metadata.headBranch,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: reviewJob.id,
         eventType: "WORK_BRANCH_PUSHED",
         message: "ferret-runner pushed the generated work branch.",
         metadata: {

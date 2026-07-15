@@ -54,6 +54,7 @@ export const appendJobEvent = async ({
     | "VALIDATION_COMPLETED"
     | "VALIDATION_FAILED"
     | "PR_CREATION_STARTED"
+    | "WORK_BRANCH_COMMITTED"
     | "WORK_BRANCH_PUSHED"
     | "PR_CREATED"
     | "PR_CREATION_FAILED"

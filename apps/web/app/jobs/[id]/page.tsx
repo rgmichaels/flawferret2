@@ -475,6 +475,12 @@ export default async function JobDetailPage({
                   </dd>
                 </div>
                 <div>
+                  <dt>Commit</dt>
+                  <dd>
+                    <code>{getMetadataString(pullRequestMetadata, "commitSha") ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+                <div>
                   <dt>URL</dt>
                   <dd>
                     {prUrl && isWebUrl(prUrl) ? (
