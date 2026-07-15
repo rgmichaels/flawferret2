@@ -54,6 +54,16 @@ const getPayloadValue = (payload: unknown, key: string) => {
   return typeof value === "string" ? value : "";
 };
 
+const getPayloadBoolean = (payload: unknown, key: string, fallback: boolean) => {
+  if (!payload || typeof payload !== "object" || !(key in payload)) {
+    return fallback;
+  }
+
+  const value = (payload as Record<string, unknown>)[key];
+
+  return typeof value === "boolean" ? value : fallback;
+};
+
 const sanitizePathPart = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, "-");
 
 const textFromUnknown = (value: unknown): string | null => {
@@ -124,6 +134,7 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     getPayloadValue(job.payload, "targetBranch") ||
     getPayloadValue(job.payload, "branch") ||
     "main";
+  const runAffectedTests = getPayloadBoolean(job.payload, "runAffectedTests", true);
 
   return [
     "You are working on a FlawFerret2 ADD_PLAYWRIGHT_TEST job.",
@@ -139,12 +150,15 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     `- Feature area: ${getPayloadValue(job.payload, "featureArea")}`,
     `- Goal: ${getPayloadValue(job.payload, "goal")}`,
     `- Acceptance criteria: ${getPayloadValue(job.payload, "acceptanceCriteria")}`,
+    `- Test scope: ${runAffectedTests ? "run affected tests only" : "run the smallest useful verification"}`,
     "",
     "Instructions:",
     "- Add or update the minimal Playwright test coverage needed for the request.",
     "- Keep changes narrowly scoped.",
     "- Do not push branches or create pull requests.",
-    "- Run only the smallest relevant local checks you need.",
+    runAffectedTests
+      ? "- Run only tests directly affected by the requested coverage."
+      : "- Run the smallest useful verification that gives confidence in the change.",
     "- Leave a concise summary of changed files and verification performed.",
   ].join("\n");
 };
