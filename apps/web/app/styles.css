@@ -423,12 +423,12 @@ table {
 
 th:nth-child(1),
 td:nth-child(1) {
-  width: 20%;
+  width: 18%;
 }
 
 th:nth-child(2),
 td:nth-child(2) {
-  width: 25%;
+  width: 21%;
 }
 
 th:nth-child(3),
@@ -438,21 +438,26 @@ td:nth-child(3) {
 
 th:nth-child(4),
 td:nth-child(4) {
-  width: 12%;
+  width: 10%;
 }
 
 th:nth-child(5),
 td:nth-child(5) {
-  width: 9%;
+  width: 8%;
 }
 
 th:nth-child(6),
 td:nth-child(6) {
-  width: 11%;
+  width: 10%;
 }
 
 th:nth-child(7),
 td:nth-child(7) {
+  width: 10%;
+}
+
+th:nth-child(8),
+td:nth-child(8) {
   width: 10%;
 }
 
@@ -479,7 +484,8 @@ td {
 td:nth-child(4),
 td:nth-child(5),
 td:nth-child(6),
-td:nth-child(7) {
+td:nth-child(7),
+td:nth-child(8) {
   white-space: nowrap;
 }
 
@@ -620,6 +626,20 @@ td span {
   color: #94a3b8;
   font-size: 12px;
   font-weight: 800;
+}
+
+.artifact-link {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: inline-block;
+  font-size: 12px;
+  margin-bottom: 0;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.artifact-link:hover {
+  border-color: #2563eb;
 }
 
 .form-panel {
