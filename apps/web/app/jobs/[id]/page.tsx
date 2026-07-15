@@ -227,6 +227,14 @@ const getLastEventMessage = (events: JobEventResponse[], eventTypes: string[]) =
 
 const isWebUrl = (value: string) => value.startsWith("https://") || value.startsWith("http://");
 
+type PipelineStageState = "blocked" | "complete" | "current" | "skipped" | "waiting";
+
+type PipelineStage = {
+  description: string;
+  label: string;
+  state: PipelineStageState;
+};
+
 const canRequeueJob = (status: JobStatus) =>
   status === "BLOCKED" || status === "FAILED" || status === "RETRY";
 
@@ -237,6 +245,128 @@ const canRetryCurrentStage = (job: JobResponse, latestRun: RunResponse | null) =
     job.status === "RETRY" ||
     job.status === "REVIEW" ||
     job.status === "PR_APPROVED");
+
+const terminalAttentionStatuses: JobStatus[] = ["BLOCKED", "FAILED", "RETRY", "CANCELED"];
+
+const getCreateDraftPr = (validationMetadata: Record<string, unknown>) =>
+  getMetadataBoolean(validationMetadata, "createDraftPr") !== false;
+
+const buildPipelineStages = ({
+  job,
+  latestRun,
+  prUrl,
+  validationMetadata,
+}: {
+  job: JobResponse;
+  latestRun: RunResponse | null;
+  prUrl: string | null;
+  validationMetadata: Record<string, unknown>;
+}): PipelineStage[] => {
+  const shouldCreateDraftPr = getCreateDraftPr(validationMetadata);
+  const hasRun = Boolean(latestRun);
+  const hasValidation = Object.keys(validationMetadata).length > 0;
+  const hasAttentionStatus = terminalAttentionStatuses.includes(job.status);
+  const codexDone =
+    hasValidation ||
+    job.status === "VALIDATING" ||
+    job.status === "REVIEW" ||
+    job.status === "PR_APPROVED" ||
+    job.status === "COMPLETED";
+  const validationDone =
+    job.status === "COMPLETED" || (hasValidation && job.status === "REVIEW");
+
+  return [
+    {
+      description:
+        job.status === "QUEUED" || job.status === "DRAFT"
+          ? "Waiting for runner pickup."
+          : "Job request is stored.",
+      label: "Queue",
+      state:
+        job.status === "DRAFT" || job.status === "QUEUED"
+          ? "current"
+          : hasAttentionStatus && !hasRun
+            ? "blocked"
+            : "complete",
+    },
+    {
+      description: hasRun ? "Local checkout and work branch are prepared." : "Runner prepares repo.",
+      label: "Workspace",
+      state:
+        hasRun || codexDone
+          ? "complete"
+          : job.status === "CLAIMED" || job.status === "RUNNING"
+            ? "current"
+            : hasAttentionStatus
+              ? "blocked"
+              : "waiting",
+    },
+    {
+      description:
+        job.status === "READY_FOR_CODEX"
+          ? "Manual approval required before model spend."
+          : job.status === "CODEX_APPROVED"
+            ? "Approved; runner will invoke Codex."
+          : codexDone
+            ? "Generated changes are ready."
+            : "Codex will add the requested test coverage.",
+      label: "Codex",
+      state: codexDone
+        ? "complete"
+        : job.status === "READY_FOR_CODEX" ||
+            job.status === "CODEX_APPROVED" ||
+            latestRun?.status === "CODEX_RUNNING"
+          ? "current"
+          : hasAttentionStatus && hasRun
+            ? "blocked"
+            : "waiting",
+    },
+    {
+      description: validationDone
+        ? "Generated work has validation metadata."
+        : "Runner checks the generated changes.",
+      label: "Validation",
+      state: validationDone
+        ? "complete"
+        : job.status === "VALIDATING" || latestRun?.status === "VALIDATING"
+          ? "current"
+          : hasAttentionStatus && codexDone
+            ? "blocked"
+            : "waiting",
+    },
+    {
+      description: shouldCreateDraftPr
+        ? prUrl
+          ? "Draft pull request is available."
+          : job.status === "PR_APPROVED"
+            ? "Approved; runner will push the branch and create the PR."
+            : job.status === "COMPLETED"
+              ? "Pipeline completed."
+              : "Manual approval required before branch push and PR creation."
+        : "Draft PR creation was not requested.",
+      label: "Draft PR",
+      state: !shouldCreateDraftPr
+        ? "skipped"
+        : prUrl || job.status === "COMPLETED"
+          ? "complete"
+          : job.status === "REVIEW" || job.status === "PR_APPROVED" || latestRun?.status === "PUSHING"
+            ? "current"
+            : hasAttentionStatus && validationDone
+              ? "blocked"
+              : "waiting",
+    },
+    {
+      description: job.status === "COMPLETED" ? "Pipeline finished." : "Final state is pending.",
+      label: "Done",
+      state:
+        job.status === "COMPLETED"
+          ? "complete"
+          : hasAttentionStatus
+            ? "blocked"
+            : "waiting",
+    },
+  ];
+};
 
 export default async function JobDetailPage({
   params,
@@ -277,6 +407,12 @@ export default async function JobDetailPage({
     "PR_CREATION_FAILED",
   ]);
   const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
+  const pipelineStages = buildPipelineStages({
+    job,
+    latestRun,
+    prUrl,
+    validationMetadata,
+  });
 
   return (
     <main className="detail-shell">
@@ -324,6 +460,19 @@ export default async function JobDetailPage({
           </span>
         </div>
       </header>
+
+      <section className="panel stage-tracker" aria-label="Job pipeline stages">
+        {pipelineStages.map((stage, index) => (
+          <article className={`stage-card ${stage.state}`} key={stage.label}>
+            <span>{index + 1}</span>
+            <div>
+              <strong>{stage.label}</strong>
+              <p>{stage.description}</p>
+            </div>
+            <small>{stage.state}</small>
+          </article>
+        ))}
+      </section>
 
       <div className="detail-grid">
         <section className="panel detail-card">
