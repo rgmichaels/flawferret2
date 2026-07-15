@@ -533,6 +533,7 @@ export default async function JobDetailPage({
               ? "Codex approvals can invoke the configured model command."
               : "Codex approvals record invocation plans without calling the model."}
           </p>
+          <code>FERRET_RUNNER_ENABLE_CODEX={codexEnabled ? "true" : "false"}</code>
         </div>
         <div>
           <span className={prCreationEnabled ? "mode-live" : "mode-dry-run"}>Draft PR</span>
@@ -542,6 +543,7 @@ export default async function JobDetailPage({
               ? "Draft PR approvals can push branches and create GitHub PRs."
               : "Draft PR approvals will not push branches or create GitHub PRs."}
           </p>
+          <code>FERRET_RUNNER_ENABLE_PR_CREATION={prCreationEnabled ? "true" : "false"}</code>
         </div>
       </section>
 
