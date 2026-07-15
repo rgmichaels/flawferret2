@@ -5,14 +5,17 @@ import {
   heartbeatWorker,
   markJobBlocked,
   markJobRunning,
+  markRunFailed,
   markSimulatedWorkSucceeded,
   prisma,
+  updateRunMetadata,
 } from "@flawferret2/db";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { config } from "./config.js";
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
+import { prepareWorkBranch } from "./work-branch.js";
 
 const workerId = config.WORKER_ID ?? randomUUID();
 const workerHostname = hostname();
@@ -200,17 +203,21 @@ while (!shouldStop) {
     workerId,
   });
 
+  const runMetadata = {
+    checkoutBranchRef: checkoutValidation.metadata.branchRef,
+    hostname: workerHostname,
+    localPath: checkoutValidation.metadata.localPath,
+    remoteUrl: checkoutValidation.metadata.remoteUrl,
+    repository: runningJob.repository
+      ? `${runningJob.repository.owner}/${runningJob.repository.name}`
+      : null,
+    targetBranch: getTargetBranch(runningJob.payload),
+  };
+
   const run = await createJobRun({
     jobId: runningJob.id,
     workerId,
-    metadata: {
-      hostname: workerHostname,
-      localPath: checkoutValidation.metadata.localPath,
-      repository: runningJob.repository
-        ? `${runningJob.repository.owner}/${runningJob.repository.name}`
-        : null,
-      targetBranch: getTargetBranch(runningJob.payload),
-    },
+    metadata: runMetadata,
   });
 
   await appendJobEvent({
@@ -220,6 +227,95 @@ while (!shouldStop) {
     metadata: {
       runId: run.id,
       status: run.status,
+      workerId,
+    },
+  });
+
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "WORK_BRANCH_PREPARATION_STARTED",
+    message: "ferret-runner is preparing a generated work branch.",
+    metadata: {
+      localPath: checkoutValidation.metadata.localPath,
+      runId: run.id,
+      targetBranch: getTargetBranch(runningJob.payload),
+      workerId,
+    },
+  });
+
+  const workBranchPreparation = await prepareWorkBranch({
+    jobId: runningJob.id,
+    localPath: checkoutValidation.metadata.localPath,
+    targetBranch: getTargetBranch(runningJob.payload),
+  });
+
+  if (!workBranchPreparation.ok) {
+    await markRunFailed({
+      runId: run.id,
+    });
+
+    const blockedJob = await markJobBlocked({
+      jobId: runningJob.id,
+      workerId,
+    });
+
+    await appendJobEvent({
+      jobId: blockedJob.id,
+      eventType: "JOB_BLOCKED",
+      message: workBranchPreparation.message,
+      metadata: {
+        ...workBranchPreparation.metadata,
+        runId: run.id,
+        workerId,
+      },
+    });
+
+    log("Blocked job during work branch preparation", {
+      jobId: blockedJob.id,
+      reason: workBranchPreparation.message,
+      runId: run.id,
+    });
+
+    await heartbeatWorker({
+      workerId,
+      hostname: workerHostname,
+      status: "IDLE",
+      version: config.WORKER_VERSION,
+    });
+    continue;
+  }
+
+  await updateRunMetadata({
+    runId: run.id,
+    metadata: {
+      ...runMetadata,
+      ...workBranchPreparation.metadata,
+    },
+  });
+
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "TARGET_BRANCH_CHECKED_OUT",
+    message: "ferret-runner checked out the target branch base.",
+    metadata: {
+      baseCommit: workBranchPreparation.metadata.baseCommit,
+      baseRef: workBranchPreparation.metadata.baseRef,
+      localPath: workBranchPreparation.metadata.localPath,
+      runId: run.id,
+      targetBranch: workBranchPreparation.metadata.targetBranch,
+      workerId,
+    },
+  });
+
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "WORK_BRANCH_CREATED",
+    message: "ferret-runner created the generated work branch.",
+    metadata: {
+      baseCommit: workBranchPreparation.metadata.baseCommit,
+      localPath: workBranchPreparation.metadata.localPath,
+      runId: run.id,
+      workBranch: workBranchPreparation.metadata.workBranch,
       workerId,
     },
   });
