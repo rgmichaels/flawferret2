@@ -54,6 +54,10 @@ const getNextAction = (readiness: ReadinessResponse) => {
     };
   }
 
+  if (readiness.nextAction) {
+    return readiness.nextAction;
+  }
+
   if (readiness.counts.codexApprovalJobs > 0) {
     return {
       href: "/#jobs",
