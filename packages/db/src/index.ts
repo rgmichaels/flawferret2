@@ -18,6 +18,8 @@ export type ClaimNextApprovedCodexJobResult = Awaited<ReturnType<typeof claimNex
 export type ClaimedCodexJob = NonNullable<ClaimNextApprovedCodexJobResult["job"]>;
 export type ClaimNextValidatingJobResult = Awaited<ReturnType<typeof claimNextValidatingJob>>;
 export type ClaimedValidatingJob = NonNullable<ClaimNextValidatingJobResult["job"]>;
+export type ClaimNextReviewJobResult = Awaited<ReturnType<typeof claimNextReviewJob>>;
+export type ClaimedReviewJob = NonNullable<ClaimNextReviewJobResult["job"]>;
 
 export const DEFAULT_QUEUE_CONTROL_ID = "default";
 
@@ -51,6 +53,10 @@ export const appendJobEvent = async ({
     | "VALIDATION_STARTED"
     | "VALIDATION_COMPLETED"
     | "VALIDATION_FAILED"
+    | "PR_CREATION_STARTED"
+    | "WORK_BRANCH_PUSHED"
+    | "PR_CREATED"
+    | "PR_CREATION_FAILED"
     | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
@@ -340,6 +346,70 @@ export const claimNextValidatingJob = async (workerId: string) =>
     };
   });
 
+export const claimNextReviewJob = async (workerId: string) =>
+  prisma.$transaction(async (tx) => {
+    const queueControl = await tx.queueControl.upsert({
+      where: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+      },
+      update: {},
+      create: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+        paused: false,
+        resumedAt: new Date(),
+      },
+    });
+
+    if (queueControl.paused) {
+      return {
+        job: null,
+        queuePaused: true,
+      };
+    }
+
+    const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM jobs
+      WHERE status = 'REVIEW'
+      ORDER BY updated_at ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+
+    const candidate = candidates[0];
+
+    if (!candidate) {
+      return {
+        job: null,
+        queuePaused: false,
+      };
+    }
+
+    const job = await tx.job.update({
+      where: {
+        id: candidate.id,
+      },
+      data: {
+        claimedAt: new Date(),
+        claimedBy: workerId,
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return {
+      job,
+      queuePaused: false,
+    };
+  });
+
 export const markJobRunning = async ({
   jobId,
   workerId,
@@ -415,6 +485,27 @@ export const markJobReview = async ({
     data: {
       claimedBy: workerId,
       status: "REVIEW",
+    },
+    include: {
+      repository: true,
+    },
+  });
+
+export const markJobCompleted = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      completedAt: new Date(),
+      status: "COMPLETED",
     },
     include: {
       repository: true,
@@ -542,6 +633,41 @@ export const markRunSucceeded = async ({
       completedAt: new Date(),
       metadata,
       status: "SUCCEEDED",
+    },
+  });
+
+export const markRunPushing = async ({
+  runId,
+  metadata,
+}: {
+  runId: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      metadata,
+      status: "PUSHING",
+    },
+  });
+
+export const markRunPrCreated = async ({
+  runId,
+  metadata,
+}: {
+  runId: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      completedAt: new Date(),
+      metadata,
+      status: "PR_CREATED",
     },
   });
 
