@@ -34,6 +34,9 @@ export const appendJobEvent = async ({
     | "JOB_CANCELED"
     | "REPOSITORY_CHECKOUT_VALIDATION_STARTED"
     | "REPOSITORY_CHECKOUT_VALIDATED"
+    | "WORK_BRANCH_PREPARATION_STARTED"
+    | "TARGET_BRANCH_CHECKED_OUT"
+    | "WORK_BRANCH_CREATED"
     | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
@@ -250,6 +253,33 @@ export const createJobRun = async ({
       metadata,
       status: "STARTED",
       workerId,
+    },
+  });
+
+export const updateRunMetadata = async ({
+  runId,
+  metadata,
+}: {
+  runId: string;
+  metadata: Prisma.InputJsonValue;
+}) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      metadata,
+    },
+  });
+
+export const markRunFailed = async ({ runId }: { runId: string }) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      completedAt: new Date(),
+      status: "FAILED",
     },
   });
 
