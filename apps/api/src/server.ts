@@ -1,5 +1,12 @@
 import cors from "@fastify/cors";
-import { appendJobEvent, getQueueControl, pauseQueue, prisma, resumeQueue } from "@flawferret2/db";
+import {
+  appendJobEvent,
+  approveJobForCodex,
+  getQueueControl,
+  pauseQueue,
+  prisma,
+  resumeQueue,
+} from "@flawferret2/db";
 import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
@@ -446,6 +453,60 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toJobResponseWithRepository(canceledJob);
+  });
+
+  server.post("/jobs/:id/approve-codex", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+
+    const approvalResult = await approveJobForCodex({
+      jobId: params.id,
+    });
+
+    if (approvalResult.count === 0) {
+      const job = await prisma.job.findUnique({
+        where: {
+          id: params.id,
+        },
+      });
+
+      if (!job) {
+        return reply.status(404).send({
+          error: "NotFound",
+          message: "Job not found.",
+        });
+      }
+
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only jobs ready for Codex can be approved.",
+      });
+    }
+
+    const approvedJob = await prisma.job.findUniqueOrThrow({
+      where: {
+        id: params.id,
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    await appendJobEvent({
+      jobId: approvedJob.id,
+      eventType: "CODEX_APPROVAL_GRANTED",
+      message: "Codex execution was manually approved for this job.",
+      metadata: {
+        status: approvedJob.status,
+      },
+    });
+
+    return toJobResponseWithRepository(approvedJob);
   });
 
   server.get("/jobs/:id", async (request, reply) => {

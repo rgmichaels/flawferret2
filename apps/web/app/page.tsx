@@ -13,10 +13,12 @@ const statusLabels: Record<JobStatus, string> = {
   BLOCKED: "Blocked",
   CANCELED: "Canceled",
   CLAIMED: "Claimed",
+  CODEX_APPROVED: "Codex Approved",
   COMPLETED: "Completed",
   DRAFT: "Draft",
   FAILED: "Failed",
   QUEUED: "Queued",
+  READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
   REVIEW: "Review",
   RUNNING: "Running",
@@ -28,6 +30,7 @@ const runStatusLabels: Record<RunStatus, string> = {
   FAILED: "Failed",
   PR_CREATED: "PR Created",
   PUSHING: "Pushing",
+  READY_FOR_CODEX: "Ready",
   STARTED: "Started",
   SUCCEEDED: "Succeeded",
   VALIDATING: "Validating",
@@ -201,6 +204,21 @@ async function cancelJob(formData: FormData) {
   revalidatePath("/");
 }
 
+async function approveCodex(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/approve-codex`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to approve Codex for this job.");
+  }
+
+  revalidatePath("/");
+}
+
 const countByStatus = (jobs: JobResponse[], statuses: JobStatus[]) =>
   jobs.filter((job) => statuses.includes(job.status)).length;
 
@@ -262,6 +280,8 @@ const getRunnerStateLabel = (runningJobs: number) => (runningJobs > 0 ? "Active"
 const canCancelJob = (job: JobResponse) =>
   job.status === "DRAFT" || job.status === "QUEUED" || job.status === "RETRY";
 
+const canApproveCodex = (job: JobResponse) => job.status === "READY_FOR_CODEX";
+
 export default async function Home({
   searchParams,
 }: {
@@ -276,7 +296,7 @@ export default async function Home({
   ]);
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
   const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
-  const reviewCount = countByStatus(jobs, ["REVIEW"]);
+  const reviewCount = countByStatus(jobs, ["READY_FOR_CODEX", "CODEX_APPROVED", "REVIEW"]);
   const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
   const completedCount = countByStatus(jobs, ["COMPLETED"]);
   const runnerState = getRunnerStateLabel(runningCount);
@@ -377,9 +397,9 @@ export default async function Home({
             <small>Claimed or in progress</small>
           </article>
           <article className="metric-card review">
-            <span>Needs Review</span>
+            <span>Approval</span>
             <strong>{reviewCount}</strong>
-            <small>Future PR review gate</small>
+            <small>Ready, approved, or review</small>
           </article>
           <article className="metric-card failed">
             <span>Failed</span>
@@ -455,7 +475,12 @@ export default async function Home({
                         <td>{job.priority}</td>
                         <td>{formatRelativeTime(job.updatedAt)}</td>
                         <td>
-                          {canCancelJob(job) ? (
+                          {canApproveCodex(job) ? (
+                            <form action={approveCodex} className="inline-job-action">
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <button type="submit">Approve Codex</button>
+                            </form>
+                          ) : canCancelJob(job) ? (
                             <form action={cancelJob} className="inline-job-action">
                               <input type="hidden" name="jobId" value={job.id} />
                               <button type="submit">Remove</button>
@@ -542,7 +567,9 @@ export default async function Home({
                   </span>
                 </label>
                 {queueControl.paused ? (
-                  <p className="queue-paused-note">Queue is paused. Resume it before adding work.</p>
+                  <p className="queue-paused-note">
+                    Queue is paused. New jobs will wait until you resume it.
+                  </p>
                 ) : null}
                 <label>
                   Target Branch
@@ -587,7 +614,7 @@ export default async function Home({
                     Create draft PR
                   </label>
                 </div>
-                <button type="submit" disabled={repositories.length === 0 || queueControl.paused}>
+                <button type="submit" disabled={repositories.length === 0}>
                   Queue Job
                 </button>
               </form>

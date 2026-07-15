@@ -4,9 +4,10 @@ import {
   createJobRun,
   heartbeatWorker,
   markJobBlocked,
+  markJobReadyForCodex,
   markJobRunning,
   markRunFailed,
-  markSimulatedWorkSucceeded,
+  markRunReadyForCodex,
   prisma,
   updateRunMetadata,
 } from "@flawferret2/db";
@@ -320,47 +321,39 @@ while (!shouldStop) {
     },
   });
 
-  await appendJobEvent({
-    jobId: runningJob.id,
-    eventType: "JOB_RUNNING",
-    message: "Worker marked the job as running.",
-    metadata: {
-      hostname: workerHostname,
-      repository: runningJob.repository
-        ? `${runningJob.repository.owner}/${runningJob.repository.name}`
-        : null,
-      runId: run.id,
-      workerId,
-    },
-  });
-
-  log("Claimed job", {
-    job: runningJob,
-    run,
-  });
-
-  await sleep(config.WORKER_SIMULATED_WORK_MS);
-
-  const completed = await markSimulatedWorkSucceeded({
-    jobId: runningJob.id,
+  await markRunReadyForCodex({
     runId: run.id,
   });
 
-  log("Simulated worker pass complete", {
-    jobId: completed.job.id,
-    runId: completed.run.id,
+  const readyJob = await markJobReadyForCodex({
+    jobId: runningJob.id,
+    workerId,
   });
 
   await appendJobEvent({
-    jobId: completed.job.id,
-    eventType: "WORKER_SIMULATED_WORK_COMPLETE",
-    message: "Worker completed the Milestone 2 simulated work pass.",
+    jobId: readyJob.id,
+    eventType: "CODEX_APPROVAL_REQUIRED",
+    message: "Worker prepared the job and is waiting for Codex approval.",
     metadata: {
-      jobStatus: completed.job.status,
-      runId: completed.run.id,
-      runStatus: completed.run.status,
-      simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
+      hostname: workerHostname,
+      repository: readyJob.repository
+        ? `${readyJob.repository.owner}/${readyJob.repository.name}`
+        : null,
+      runId: run.id,
+      status: readyJob.status,
       workerId,
     },
+  });
+
+  log("Prepared job for Codex approval", {
+    job: readyJob,
+    run,
+  });
+
+  await heartbeatWorker({
+    workerId,
+    hostname: workerHostname,
+    status: "IDLE",
+    version: config.WORKER_VERSION,
   });
 }

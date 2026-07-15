@@ -5,6 +5,7 @@ import type {
   RunResponse,
   RunStatus,
 } from "@flawferret2/job-schemas";
+import { revalidatePath } from "next/cache";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -74,6 +75,7 @@ const runStatusLabels: Record<RunStatus, string> = {
   FAILED: "Failed",
   PR_CREATED: "PR Created",
   PUSHING: "Pushing",
+  READY_FOR_CODEX: "Ready for Codex",
   STARTED: "Started",
   SUCCEEDED: "Succeeded",
   VALIDATING: "Validating",
@@ -83,15 +85,33 @@ const jobStatusLabels: Record<JobStatus, string> = {
   BLOCKED: "Blocked",
   CANCELED: "Canceled",
   CLAIMED: "Claimed",
+  CODEX_APPROVED: "Codex Approved",
   COMPLETED: "Completed",
   DRAFT: "Draft",
   FAILED: "Failed",
   QUEUED: "Queued",
+  READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
   REVIEW: "Review",
   RUNNING: "Running",
   VALIDATING: "Validating",
 };
+
+async function approveCodex(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/approve-codex`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to approve Codex for this job.");
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/jobs/${jobId}`);
+}
 
 const getJobRepositoryName = (job: JobResponse) => {
   if (job.repository) {
@@ -151,9 +171,17 @@ export default async function JobDetailPage({
           <h1>{job.payload.featureArea}</h1>
           <p>{job.payload.goal}</p>
         </div>
-        <span className={`status-pill ${job.status.toLowerCase()}`}>
-          {jobStatusLabels[job.status]}
-        </span>
+        <div className="detail-actions">
+          {job.status === "READY_FOR_CODEX" ? (
+            <form action={approveCodex}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button type="submit">Approve Codex</button>
+            </form>
+          ) : null}
+          <span className={`status-pill ${job.status.toLowerCase()}`}>
+            {jobStatusLabels[job.status]}
+          </span>
+        </div>
       </header>
 
       <div className="detail-grid">

@@ -37,6 +37,8 @@ export const appendJobEvent = async ({
     | "WORK_BRANCH_PREPARATION_STARTED"
     | "TARGET_BRANCH_CHECKED_OUT"
     | "WORK_BRANCH_CREATED"
+    | "CODEX_APPROVAL_REQUIRED"
+    | "CODEX_APPROVAL_GRANTED"
     | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
@@ -238,6 +240,26 @@ export const markJobBlocked = async ({
     },
   });
 
+export const markJobReadyForCodex = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      status: "READY_FOR_CODEX",
+    },
+    include: {
+      repository: true,
+    },
+  });
+
 export const createJobRun = async ({
   jobId,
   workerId,
@@ -280,6 +302,27 @@ export const markRunFailed = async ({ runId }: { runId: string }) =>
     data: {
       completedAt: new Date(),
       status: "FAILED",
+    },
+  });
+
+export const markRunReadyForCodex = async ({ runId }: { runId: string }) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      status: "READY_FOR_CODEX",
+    },
+  });
+
+export const approveJobForCodex = async ({ jobId }: { jobId: string }) =>
+  prisma.job.updateMany({
+    where: {
+      id: jobId,
+      status: "READY_FOR_CODEX",
+    },
+    data: {
+      status: "CODEX_APPROVED",
     },
   });
 

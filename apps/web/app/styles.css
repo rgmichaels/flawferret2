@@ -493,12 +493,14 @@ td span {
 
 .status-pill.claimed,
 .status-pill.running,
-.status-pill.validating {
+.status-pill.validating,
+.status-pill.ready_for_codex {
   background: #dcfce7;
   color: #15803d;
 }
 
-.status-pill.review {
+.status-pill.review,
+.status-pill.codex_approved {
   background: #fef3c7;
   color: #b45309;
 }
@@ -542,7 +544,8 @@ td span {
 .run-pill.started,
 .run-pill.codex_running,
 .run-pill.validating,
-.run-pill.pushing {
+.run-pill.pushing,
+.run-pill.ready_for_codex {
   background: #dbeafe;
   color: #1d4ed8;
 }
@@ -739,6 +742,21 @@ textarea {
   color: #667085;
   margin-bottom: 0;
   max-width: 760px;
+}
+
+.detail-actions {
+  align-items: flex-end;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.detail-actions form {
+  margin: 0;
+}
+
+.detail-actions button {
+  white-space: nowrap;
 }
 
 .detail-grid {
