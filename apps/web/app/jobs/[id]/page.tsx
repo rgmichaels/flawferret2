@@ -133,6 +133,45 @@ const getJobTargetBranch = (job: JobResponse) => {
   return job.payload.branch;
 };
 
+const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<string, unknown>;
+};
+
+const getMetadataString = (metadata: unknown, key: string) => {
+  const value = getMetadataRecord(metadata)[key];
+
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const getMetadataNumber = (metadata: unknown, key: string) => {
+  const value = getMetadataRecord(metadata)[key];
+
+  return typeof value === "number" ? value : null;
+};
+
+const getMetadataStrings = (metadata: unknown, key: string) => {
+  const value = getMetadataRecord(metadata)[key];
+
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+};
+
+const getNestedMetadata = (metadata: unknown, key: string) =>
+  getMetadataRecord(getMetadataRecord(metadata)[key]);
+
+const getLastEventMessage = (events: JobEventResponse[], eventTypes: string[]) => {
+  const event = [...events].reverse().find((item) => eventTypes.includes(item.eventType));
+
+  return event?.message ?? null;
+};
+
+const isWebUrl = (value: string) => value.startsWith("https://") || value.startsWith("http://");
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -158,6 +197,20 @@ export default async function JobDetailPage({
       </main>
     );
   }
+
+  const latestRun = runs[0] ?? job.latestRun;
+  const latestMetadata = latestRun?.metadata ?? null;
+  const codexMetadata = getNestedMetadata(latestMetadata, "codex");
+  const validationMetadata = getNestedMetadata(latestMetadata, "validation");
+  const pullRequestMetadata = getNestedMetadata(latestMetadata, "pullRequest");
+  const changedFiles = getMetadataStrings(validationMetadata, "changedFiles");
+  const blockedReason = getLastEventMessage(events, [
+    "JOB_BLOCKED",
+    "CODEX_INVOCATION_FAILED",
+    "VALIDATION_FAILED",
+    "PR_CREATION_FAILED",
+  ]);
+  const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
 
   return (
     <main className="detail-shell">
@@ -231,6 +284,120 @@ export default async function JobDetailPage({
               ))}
             </ol>
           )}
+        </section>
+
+        <section className="panel detail-card pipeline-card">
+          <h2>Pipeline</h2>
+          <div className="pipeline-grid">
+            <section className="pipeline-section">
+              <h3>Workspace</h3>
+              <dl>
+                <div>
+                  <dt>Local Path</dt>
+                  <dd>
+                    <code>{getMetadataString(latestMetadata, "localPath") ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Work Branch</dt>
+                  <dd>
+                    <code>{getMetadataString(latestMetadata, "workBranch") ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="pipeline-section">
+              <h3>Codex</h3>
+              <dl>
+                <div>
+                  <dt>Model</dt>
+                  <dd>{getMetadataString(codexMetadata, "model") ?? "Default"}</dd>
+                </div>
+                <div>
+                  <dt>Output Log</dt>
+                  <dd>
+                    <code>{getMetadataString(codexMetadata, "logPath") ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Summary</dt>
+                  <dd>{getMetadataString(codexMetadata, "finalResponse") ?? "Not recorded"}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="pipeline-section">
+              <h3>Validation</h3>
+              <dl>
+                <div>
+                  <dt>Changed Files</dt>
+                  <dd>
+                    {changedFiles.length > 0
+                      ? `${getMetadataNumber(validationMetadata, "changedFileCount") ?? changedFiles.length}`
+                      : "None recorded"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Command</dt>
+                  <dd>{getMetadataString(validationMetadata, "command") ?? "Change detection only"}</dd>
+                </div>
+                <div>
+                  <dt>Validation Log</dt>
+                  <dd>
+                    <code>{getMetadataString(validationMetadata, "logPath") ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+              </dl>
+              {changedFiles.length > 0 ? (
+                <ul className="changed-file-list">
+                  {changedFiles.slice(0, 12).map((file) => (
+                    <li key={file}>
+                      <code>{file}</code>
+                    </li>
+                  ))}
+                  {changedFiles.length > 12 ? (
+                    <li>
+                      <span>{changedFiles.length - 12} more</span>
+                    </li>
+                  ) : null}
+                </ul>
+              ) : null}
+            </section>
+
+            <section className="pipeline-section">
+              <h3>Pull Request</h3>
+              <dl>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{prUrl ? "Created" : "Not created"}</dd>
+                </div>
+                <div>
+                  <dt>Branch</dt>
+                  <dd>
+                    <code>{getMetadataString(pullRequestMetadata, "headBranch") ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>URL</dt>
+                  <dd>
+                    {prUrl && isWebUrl(prUrl) ? (
+                      <a href={prUrl}>{prUrl}</a>
+                    ) : (
+                      <span>{prUrl ?? "Not recorded"}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+
+          {blockedReason ? (
+            <div className="pipeline-alert">
+              <strong>Latest attention item</strong>
+              <p>{blockedReason}</p>
+            </div>
+          ) : null}
         </section>
 
         <section className="panel detail-card">
