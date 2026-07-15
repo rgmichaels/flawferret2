@@ -180,6 +180,8 @@ const repositoryParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const retryableStatuses = ["BLOCKED", "FAILED", "RETRY"] as const;
+
 const githubRepositoryUrl = ({ owner, name }: { owner: string; name: string }) =>
   `https://github.com/${owner}/${name}`;
 
@@ -507,6 +509,188 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toJobResponseWithRepository(approvedJob);
+  });
+
+  server.post("/jobs/:id/requeue", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const job = await prisma.job.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    if (!retryableStatuses.includes(job.status as (typeof retryableStatuses)[number])) {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only blocked, failed, or retry jobs can be requeued.",
+      });
+    }
+
+    const requeuedJob = await prisma.job.update({
+      where: {
+        id: params.id,
+      },
+      data: {
+        claimedAt: null,
+        claimedBy: null,
+        completedAt: null,
+        status: "QUEUED",
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    await appendJobEvent({
+      jobId: requeuedJob.id,
+      eventType: "JOB_RESET",
+      message: "Job was requeued for setup retry.",
+      metadata: {
+        previousStatus: job.status,
+        status: requeuedJob.status,
+      },
+    });
+
+    return toJobResponseWithRepository(requeuedJob);
+  });
+
+  server.post("/jobs/:id/retry-stage", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const job = await prisma.job.findUnique({
+      where: {
+        id: params.id,
+      },
+      include: {
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    const retryableStageStatuses = ["BLOCKED", "FAILED", "RETRY", "REVIEW"] as const;
+
+    if (!retryableStageStatuses.includes(job.status as (typeof retryableStageStatuses)[number])) {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only blocked, failed, retry, or review jobs can retry the current stage.",
+      });
+    }
+
+    const latestRun = job.runs[0];
+
+    if (!latestRun) {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "This job has no run to retry.",
+      });
+    }
+
+    const metadata =
+      latestRun.metadata && typeof latestRun.metadata === "object" && !Array.isArray(latestRun.metadata)
+        ? (latestRun.metadata as Record<string, unknown>)
+        : {};
+
+    const hasPullRequestAttempt = "pullRequest" in metadata;
+    const hasValidationAttempt = "validation" in metadata;
+    const hasCodexAttempt = "codex" in metadata || "workBranch" in metadata;
+    const target =
+      hasPullRequestAttempt || job.status === "REVIEW"
+        ? {
+            jobStatus: "REVIEW" as const,
+            message: "Job was returned to review for draft PR retry.",
+            runStatus: "SUCCEEDED" as const,
+          }
+        : hasValidationAttempt
+          ? {
+              jobStatus: "VALIDATING" as const,
+              message: "Job was returned to validation retry.",
+              runStatus: "VALIDATING" as const,
+            }
+          : hasCodexAttempt
+            ? {
+                jobStatus: "READY_FOR_CODEX" as const,
+                message: "Job was returned to Codex approval retry.",
+                runStatus: "READY_FOR_CODEX" as const,
+              }
+            : null;
+
+    if (!target) {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "This job has no retryable pipeline stage. Requeue setup instead.",
+      });
+    }
+
+    const retriedJob = await prisma.$transaction(async (tx) => {
+      await tx.run.update({
+        where: {
+          id: latestRun.id,
+        },
+        data: {
+          completedAt: null,
+          status: target.runStatus,
+        },
+      });
+
+      return tx.job.update({
+        where: {
+          id: params.id,
+        },
+        data: {
+          claimedAt: null,
+          claimedBy: null,
+          completedAt: null,
+          status: target.jobStatus,
+        },
+        include: {
+          repository: true,
+          runs: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
+          },
+        },
+      });
+    });
+
+    await appendJobEvent({
+      jobId: retriedJob.id,
+      eventType: "JOB_RESET",
+      message: target.message,
+      metadata: {
+        previousRunStatus: latestRun.status,
+        previousStatus: job.status,
+        runId: latestRun.id,
+        runStatus: target.runStatus,
+        status: target.jobStatus,
+      },
+    });
+
+    return toJobResponseWithRepository(retriedJob);
   });
 
   server.get("/jobs/:id", async (request, reply) => {

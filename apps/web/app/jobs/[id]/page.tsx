@@ -113,6 +113,38 @@ async function approveCodex(formData: FormData) {
   revalidatePath(`/jobs/${jobId}`);
 }
 
+async function requeueJob(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/requeue`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to requeue this job.");
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/jobs/${jobId}`);
+}
+
+async function retryCurrentStage(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/retry-stage`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to retry the current stage.");
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/jobs/${jobId}`);
+}
+
 const getJobRepositoryName = (job: JobResponse) => {
   if (job.repository) {
     return `${job.repository.owner}/${job.repository.name}`;
@@ -172,6 +204,16 @@ const getLastEventMessage = (events: JobEventResponse[], eventTypes: string[]) =
 
 const isWebUrl = (value: string) => value.startsWith("https://") || value.startsWith("http://");
 
+const canRequeueJob = (status: JobStatus) =>
+  status === "BLOCKED" || status === "FAILED" || status === "RETRY";
+
+const canRetryCurrentStage = (job: JobResponse, latestRun: RunResponse | null) =>
+  Boolean(latestRun) &&
+  (job.status === "BLOCKED" ||
+    job.status === "FAILED" ||
+    job.status === "RETRY" ||
+    job.status === "REVIEW");
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -229,6 +271,22 @@ export default async function JobDetailPage({
             <form action={approveCodex}>
               <input type="hidden" name="jobId" value={job.id} />
               <button type="submit">Approve Codex</button>
+            </form>
+          ) : null}
+          {canRetryCurrentStage(job, latestRun) ? (
+            <form action={retryCurrentStage}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button className="secondary-button" type="submit">
+                Retry Current Stage
+              </button>
+            </form>
+          ) : null}
+          {canRequeueJob(job.status) ? (
+            <form action={requeueJob}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button className="secondary-button" type="submit">
+                Retry Setup
+              </button>
             </form>
           ) : null}
           <span className={`status-pill ${job.status.toLowerCase()}`}>
