@@ -139,6 +139,33 @@ export default async function ReadinessPage() {
           <strong>{nextAction.label}</strong>
         </section>
 
+        <section className="panel execution-mode-card" aria-label="Execution mode">
+          <div>
+            <span className={readiness.runner.codexEnabled ? "mode-live" : "mode-dry-run"}>
+              Codex
+            </span>
+            <strong>{readiness.runner.codexEnabled ? "Live execution" : "Dry-run mode"}</strong>
+            <p>
+              {readiness.runner.codexEnabled
+                ? "Codex approvals can invoke the configured model command."
+                : "Codex approvals record plans without calling the model."}
+            </p>
+          </div>
+          <div>
+            <span className={readiness.runner.prCreationEnabled ? "mode-live" : "mode-dry-run"}>
+              Draft PR
+            </span>
+            <strong>
+              {readiness.runner.prCreationEnabled ? "PR creation enabled" : "PR creation disabled"}
+            </strong>
+            <p>
+              {readiness.runner.prCreationEnabled
+                ? "Draft PR approvals can push branches and create GitHub PRs."
+                : "Draft PR approvals will not push branches or create GitHub PRs."}
+            </p>
+          </div>
+        </section>
+
         <section className="readiness-grid" aria-label="Pipeline readiness checks">
           <article className="panel readiness-card">
             <span className={statusClass(readiness.api.databaseConnected)}>API / DB</span>
