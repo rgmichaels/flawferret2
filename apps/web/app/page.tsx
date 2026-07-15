@@ -20,6 +20,7 @@ const statusLabels: Record<JobStatus, string> = {
   QUEUED: "Queued",
   READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
+  PR_APPROVED: "PR Approved",
   REVIEW: "Review",
   RUNNING: "Running",
   VALIDATING: "Validating",
@@ -88,6 +89,21 @@ async function approveCodex(formData: FormData) {
   revalidatePath("/");
 }
 
+async function approvePr(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/approve-pr`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to approve draft PR creation for this job.");
+  }
+
+  revalidatePath("/");
+}
+
 const countByStatus = (jobs: JobResponse[], statuses: JobStatus[]) =>
   jobs.filter((job) => statuses.includes(job.status)).length;
 
@@ -151,6 +167,8 @@ const canCancelJob = (job: JobResponse) =>
 
 const canApproveCodex = (job: JobResponse) => job.status === "READY_FOR_CODEX";
 
+const canApprovePr = (job: JobResponse) => job.status === "REVIEW";
+
 export default async function Home({
   searchParams,
 }: {
@@ -161,7 +179,12 @@ export default async function Home({
   const jobs = await getJobs(includeCanceled);
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
   const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
-  const reviewCount = countByStatus(jobs, ["READY_FOR_CODEX", "CODEX_APPROVED", "REVIEW"]);
+  const reviewCount = countByStatus(jobs, [
+    "READY_FOR_CODEX",
+    "CODEX_APPROVED",
+    "REVIEW",
+    "PR_APPROVED",
+  ]);
   const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
   const completedCount = countByStatus(jobs, ["COMPLETED"]);
 
@@ -271,6 +294,11 @@ export default async function Home({
                           <form action={approveCodex} className="inline-job-action">
                             <input type="hidden" name="jobId" value={job.id} />
                             <button type="submit">Approve Codex</button>
+                          </form>
+                        ) : canApprovePr(job) ? (
+                          <form action={approvePr} className="inline-job-action">
+                            <input type="hidden" name="jobId" value={job.id} />
+                            <button type="submit">Approve PR</button>
                           </form>
                         ) : canCancelJob(job) ? (
                           <form action={cancelJob} className="inline-job-action">
