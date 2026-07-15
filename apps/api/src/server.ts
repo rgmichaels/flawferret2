@@ -183,6 +183,38 @@ const repositoryParamsSchema = z.object({
 
 const retryableStatuses = ["BLOCKED", "FAILED", "RETRY"] as const;
 
+const nextActionStatusPriority: Partial<Record<JobResponse["status"], number>> = {
+  READY_FOR_CODEX: 0,
+  REVIEW: 1,
+  BLOCKED: 2,
+  FAILED: 3,
+  RETRY: 4,
+};
+
+const getJobActionLabel = (status: JobResponse["status"]) => {
+  if (status === "READY_FOR_CODEX") {
+    return "Approve Codex";
+  }
+
+  if (status === "REVIEW") {
+    return "Approve Draft PR";
+  }
+
+  return "Open Attention Job";
+};
+
+const getJobActionText = (status: JobResponse["status"]) => {
+  if (status === "READY_FOR_CODEX") {
+    return "A prepared job is waiting before any model spend happens.";
+  }
+
+  if (status === "REVIEW") {
+    return "Validated work is waiting before any branch push or PR creation.";
+  }
+
+  return "A job needs recovery before the pipeline can continue.";
+};
+
 const githubRepositoryUrl = ({ owner, name }: { owner: string; name: string }) =>
   `https://github.com/${owner}/${name}`;
 
@@ -226,12 +258,28 @@ export const buildServer = async (): Promise<FastifyInstance> => {
   server.get("/readiness", async () => {
     await prisma.$queryRaw`SELECT 1`;
 
-    const [queueControl, repositories, jobs, latestWorker] = await Promise.all([
+    const [queueControl, repositories, jobs, nextActionJobs, latestWorker] = await Promise.all([
       getQueueControl(),
       prisma.repository.count(),
       prisma.job.findMany({
         select: {
           status: true,
+        },
+      }),
+      prisma.job.findMany({
+        orderBy: [
+          {
+            updatedAt: "desc",
+          },
+        ],
+        select: {
+          id: true,
+          status: true,
+        },
+        where: {
+          status: {
+            in: ["READY_FOR_CODEX", "REVIEW", "BLOCKED", "FAILED", "RETRY"],
+          },
         },
       }),
       prisma.worker.findFirst({
@@ -246,6 +294,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       : null;
     const countByStatus = (statuses: JobResponse["status"][]) =>
       jobs.filter((job) => statuses.includes(job.status)).length;
+    const nextActionJob =
+      nextActionJobs.sort((left, right) => {
+        const leftPriority = nextActionStatusPriority[left.status] ?? 99;
+        const rightPriority = nextActionStatusPriority[right.status] ?? 99;
+
+        return leftPriority - rightPriority;
+      })[0] ?? null;
 
     return {
       api: {
@@ -261,6 +316,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         prApprovalJobs: countByStatus(["REVIEW"]),
         repositories,
       },
+      nextAction: nextActionJob
+        ? {
+            href: `/jobs/${nextActionJob.id}`,
+            jobId: nextActionJob.id,
+            label: getJobActionLabel(nextActionJob.status),
+            text: getJobActionText(nextActionJob.status),
+          }
+        : null,
       runner: {
         codexCommand: config.CODEX_COMMAND,
         codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,

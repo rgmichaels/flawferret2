@@ -116,6 +116,14 @@ export const readinessResponseSchema = z.object({
     prApprovalJobs: z.number().int().nonnegative(),
     repositories: z.number().int().nonnegative(),
   }),
+  nextAction: z
+    .object({
+      href: z.string(),
+      jobId: z.string().nullable(),
+      label: z.string(),
+      text: z.string(),
+    })
+    .nullable(),
   runner: z.object({
     codexCommand: z.string(),
     codexEnabled: z.boolean(),
