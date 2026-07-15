@@ -150,6 +150,7 @@ export default async function ReadinessPage() {
                 ? "Codex approvals can invoke the configured model command."
                 : "Codex approvals record plans without calling the model."}
             </p>
+            <code>FERRET_RUNNER_ENABLE_CODEX={readiness.runner.codexEnabled ? "true" : "false"}</code>
           </div>
           <div>
             <span className={readiness.runner.prCreationEnabled ? "mode-live" : "mode-dry-run"}>
@@ -163,6 +164,10 @@ export default async function ReadinessPage() {
                 ? "Draft PR approvals can push branches and create GitHub PRs."
                 : "Draft PR approvals will not push branches or create GitHub PRs."}
             </p>
+            <code>
+              FERRET_RUNNER_ENABLE_PR_CREATION=
+              {readiness.runner.prCreationEnabled ? "true" : "false"}
+            </code>
           </div>
         </section>
 
