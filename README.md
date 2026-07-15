@@ -93,6 +93,10 @@ pnpm --filter @flawferret2/ferret-runner dev
 
 The API defaults to `http://localhost:4000`. The web app defaults to `http://localhost:3000`.
 
+`ferret-runner` starts in dry-run mode by default. See
+[`apps/ferret-runner/README.md`](apps/ferret-runner/README.md) for the safe first-live-run checklist
+before enabling Codex execution or draft PR creation.
+
 ## v0.1 Goal
 
 The first complete workflow is `ADD_PLAYWRIGHT_TEST`:
