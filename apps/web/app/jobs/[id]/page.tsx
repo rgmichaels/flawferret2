@@ -2,6 +2,7 @@ import type {
   JobEventResponse,
   JobResponse,
   JobStatus,
+  ReadinessResponse,
   RunResponse,
   RunStatus,
 } from "@flawferret2/job-schemas";
@@ -54,6 +55,22 @@ async function getJobRuns(id: string): Promise<RunResponse[]> {
     return response.json() as Promise<RunResponse[]>;
   } catch {
     return [];
+  }
+}
+
+async function getReadiness(): Promise<ReadinessResponse | null> {
+  try {
+    const response = await fetch(`${apiUrl}/readiness`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<ReadinessResponse>;
+  } catch {
+    return null;
   }
 }
 
@@ -259,26 +276,35 @@ const terminalAttentionStatuses: JobStatus[] = ["BLOCKED", "FAILED", "RETRY", "C
 const getCreateDraftPr = (validationMetadata: Record<string, unknown>) =>
   getMetadataBoolean(validationMetadata, "createDraftPr") !== false;
 
-const getApprovalAction = (job: JobResponse): ApprovalAction | null => {
+const getApprovalAction = (
+  job: JobResponse,
+  readiness: ReadinessResponse | null,
+): ApprovalAction | null => {
   if (job.status === "READY_FOR_CODEX") {
+    const codexEnabled = readiness?.runner.codexEnabled ?? false;
+
     return {
       buttonLabel: "Approve Codex",
-      description:
-        "The runner may invoke Codex for this job after this approval. Keep the queue paused if you are not ready for model usage yet.",
+      description: codexEnabled
+        ? "The runner may invoke Codex for this job after this approval. Keep the queue paused if you are not ready for model usage yet."
+        : "Codex execution is disabled. This approval will let the runner record the invocation plan, then return the job to this gate.",
       formAction: approveCodex,
-      riskLabel: "Can spend API credits",
-      title: "Approve model execution",
+      riskLabel: codexEnabled ? "Can spend API credits" : "Dry-run: no model call",
+      title: codexEnabled ? "Approve model execution" : "Approve dry-run plan",
     };
   }
 
   if (job.status === "REVIEW") {
+    const prCreationEnabled = readiness?.runner.prCreationEnabled ?? false;
+
     return {
       buttonLabel: "Approve Draft PR",
-      description:
-        "The runner may push the generated work branch and create a draft GitHub pull request after this approval.",
+      description: prCreationEnabled
+        ? "The runner may push the generated work branch and create a draft GitHub pull request after this approval."
+        : "Draft PR creation is disabled. This approval will not push a branch or create a GitHub pull request until runner PR creation is enabled.",
       formAction: approvePr,
-      riskLabel: "Can push code",
-      title: "Approve PR creation",
+      riskLabel: prCreationEnabled ? "Can push code" : "Dry-run: no push",
+      title: prCreationEnabled ? "Approve PR creation" : "Approve PR dry-run",
     };
   }
 
@@ -408,10 +434,11 @@ export default async function JobDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, events, runs] = await Promise.all([
+  const [job, events, runs, readiness] = await Promise.all([
     getJob(id),
     getJobEvents(id),
     getJobRuns(id),
+    getReadiness(),
   ]);
 
   if (!job) {
@@ -441,7 +468,9 @@ export default async function JobDetailPage({
     "PR_CREATION_FAILED",
   ]);
   const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
-  const approvalAction = getApprovalAction(job);
+  const approvalAction = getApprovalAction(job, readiness);
+  const codexEnabled = readiness?.runner.codexEnabled ?? false;
+  const prCreationEnabled = readiness?.runner.prCreationEnabled ?? false;
   const pipelineStages = buildPipelineStages({
     job,
     latestRun,
@@ -494,6 +523,27 @@ export default async function JobDetailPage({
           </span>
         </div>
       </header>
+
+      <section className="panel execution-mode-card" aria-label="Execution mode">
+        <div>
+          <span className={codexEnabled ? "mode-live" : "mode-dry-run"}>Codex</span>
+          <strong>{codexEnabled ? "Live execution enabled" : "Dry-run mode"}</strong>
+          <p>
+            {codexEnabled
+              ? "Codex approvals can invoke the configured model command."
+              : "Codex approvals record invocation plans without calling the model."}
+          </p>
+        </div>
+        <div>
+          <span className={prCreationEnabled ? "mode-live" : "mode-dry-run"}>Draft PR</span>
+          <strong>{prCreationEnabled ? "PR creation enabled" : "PR creation disabled"}</strong>
+          <p>
+            {prCreationEnabled
+              ? "Draft PR approvals can push branches and create GitHub PRs."
+              : "Draft PR approvals will not push branches or create GitHub PRs."}
+          </p>
+        </div>
+      </section>
 
       <section className="panel stage-tracker" aria-label="Job pipeline stages">
         {pipelineStages.map((stage, index) => (

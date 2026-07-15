@@ -943,6 +943,49 @@ textarea {
   margin-top: 2px;
 }
 
+.execution-mode-card {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.execution-mode-card div {
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.execution-mode-card span {
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.execution-mode-card strong {
+  color: #172033;
+  display: block;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.execution-mode-card p {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.mode-live {
+  color: #15803d;
+}
+
+.mode-dry-run {
+  color: #b45309;
+}
+
 .stage-tracker {
   display: grid;
   gap: 10px;
@@ -1318,6 +1361,7 @@ textarea {
     flex-direction: column;
   }
 
+  .execution-mode-card,
   .stage-tracker {
     grid-template-columns: 1fr;
   }
