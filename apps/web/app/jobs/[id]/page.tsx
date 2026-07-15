@@ -92,6 +92,7 @@ const jobStatusLabels: Record<JobStatus, string> = {
   QUEUED: "Queued",
   READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
+  PR_APPROVED: "PR Approved",
   REVIEW: "Review",
   RUNNING: "Running",
   VALIDATING: "Validating",
@@ -107,6 +108,22 @@ async function approveCodex(formData: FormData) {
 
   if (!response.ok) {
     throw new Error("Unable to approve Codex for this job.");
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/jobs/${jobId}`);
+}
+
+async function approvePr(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/approve-pr`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to approve draft PR creation for this job.");
   }
 
   revalidatePath("/");
@@ -212,7 +229,8 @@ const canRetryCurrentStage = (job: JobResponse, latestRun: RunResponse | null) =
   (job.status === "BLOCKED" ||
     job.status === "FAILED" ||
     job.status === "RETRY" ||
-    job.status === "REVIEW");
+    job.status === "REVIEW" ||
+    job.status === "PR_APPROVED");
 
 export default async function JobDetailPage({
   params,
@@ -271,6 +289,12 @@ export default async function JobDetailPage({
             <form action={approveCodex}>
               <input type="hidden" name="jobId" value={job.id} />
               <button type="submit">Approve Codex</button>
+            </form>
+          ) : null}
+          {job.status === "REVIEW" ? (
+            <form action={approvePr}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button type="submit">Approve Draft PR</button>
             </form>
           ) : null}
           {canRetryCurrentStage(job, latestRun) ? (

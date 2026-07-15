@@ -57,6 +57,7 @@ export const appendJobEvent = async ({
     | "WORK_BRANCH_PUSHED"
     | "PR_CREATED"
     | "PR_CREATION_FAILED"
+    | "PR_CREATION_APPROVED"
     | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
@@ -370,7 +371,7 @@ export const claimNextReviewJob = async (workerId: string) =>
     const candidates = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id
       FROM jobs
-      WHERE status = 'REVIEW'
+      WHERE status = 'PR_APPROVED'
       ORDER BY updated_at ASC
       FOR UPDATE SKIP LOCKED
       LIMIT 1
@@ -488,6 +489,17 @@ export const markJobReview = async ({
     },
     include: {
       repository: true,
+    },
+  });
+
+export const approveJobForPrCreation = async ({ jobId }: { jobId: string }) =>
+  prisma.job.updateMany({
+    where: {
+      id: jobId,
+      status: "REVIEW",
+    },
+    data: {
+      status: "PR_APPROVED",
     },
   });
 

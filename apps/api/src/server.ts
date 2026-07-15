@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import {
   appendJobEvent,
   approveJobForCodex,
+  approveJobForPrCreation,
   getQueueControl,
   pauseQueue,
   prisma,
@@ -511,6 +512,59 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(approvedJob);
   });
 
+  server.post("/jobs/:id/approve-pr", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const approvalResult = await approveJobForPrCreation({
+      jobId: params.id,
+    });
+
+    if (approvalResult.count === 0) {
+      const job = await prisma.job.findUnique({
+        where: {
+          id: params.id,
+        },
+      });
+
+      if (!job) {
+        return reply.status(404).send({
+          error: "NotFound",
+          message: "Job not found.",
+        });
+      }
+
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only jobs in review can be approved for draft PR creation.",
+      });
+    }
+
+    const approvedJob = await prisma.job.findUniqueOrThrow({
+      where: {
+        id: params.id,
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    await appendJobEvent({
+      jobId: approvedJob.id,
+      eventType: "PR_CREATION_APPROVED",
+      message: "Draft PR creation was manually approved for this job.",
+      metadata: {
+        status: approvedJob.status,
+      },
+    });
+
+    return toJobResponseWithRepository(approvedJob);
+  });
+
   server.post("/jobs/:id/requeue", async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const job = await prisma.job.findUnique({
@@ -590,7 +644,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
-    const retryableStageStatuses = ["BLOCKED", "FAILED", "RETRY", "REVIEW"] as const;
+    const retryableStageStatuses = ["BLOCKED", "FAILED", "RETRY", "REVIEW", "PR_APPROVED"] as const;
 
     if (!retryableStageStatuses.includes(job.status as (typeof retryableStageStatuses)[number])) {
       return reply.status(409).send({
@@ -617,10 +671,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const hasValidationAttempt = "validation" in metadata;
     const hasCodexAttempt = "codex" in metadata || "workBranch" in metadata;
     const target =
-      hasPullRequestAttempt || job.status === "REVIEW"
+      hasPullRequestAttempt || job.status === "REVIEW" || job.status === "PR_APPROVED"
         ? {
             jobStatus: "REVIEW" as const,
-            message: "Job was returned to review for draft PR retry.",
+            message: "Job was returned to review for draft PR approval retry.",
             runStatus: "SUCCEEDED" as const,
           }
         : hasValidationAttempt

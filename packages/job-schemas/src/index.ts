@@ -9,6 +9,7 @@ export const jobStatusSchema = z.enum([
   "RUNNING",
   "VALIDATING",
   "REVIEW",
+  "PR_APPROVED",
   "COMPLETED",
   "FAILED",
   "BLOCKED",
@@ -60,6 +61,7 @@ export const jobEventTypeSchema = z.enum([
   "WORK_BRANCH_PUSHED",
   "PR_CREATED",
   "PR_CREATION_FAILED",
+  "PR_CREATION_APPROVED",
   "JOB_BLOCKED",
 ]);
 
