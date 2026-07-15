@@ -611,6 +611,12 @@ while (!shouldStop) {
       continue;
     }
 
+    const runAffectedTests = getPayloadBoolean(
+      validationJob.payload,
+      "runAffectedTests",
+      true,
+    );
+
     await appendJobEvent({
       jobId: validationJob.id,
       eventType: "VALIDATION_STARTED",
@@ -618,6 +624,7 @@ while (!shouldStop) {
       metadata: {
         command: config.FERRET_RUNNER_VALIDATION_COMMAND ?? null,
         localPath,
+        runAffectedTests,
         runId: latestRun.id,
         workerId,
       },
@@ -639,7 +646,10 @@ while (!shouldStop) {
 
     const validationMetadata = {
       ...getMetadataRecord(latestRun.metadata),
-      validation: validationResult.metadata,
+      validation: {
+        ...validationResult.metadata,
+        runAffectedTests,
+      },
     };
     const shouldCreateDraftPr = getPayloadBoolean(
       validationJob.payload,
@@ -710,6 +720,7 @@ while (!shouldStop) {
       metadata: {
         ...validationResult.metadata,
         createDraftPr: shouldCreateDraftPr,
+        runAffectedTests,
         runId: latestRun.id,
         status: nextJob.status,
         workerId,
@@ -723,6 +734,7 @@ while (!shouldStop) {
         validation: {
           ...validationResult.metadata,
           createDraftPr: shouldCreateDraftPr,
+          runAffectedTests,
         },
       },
     });
