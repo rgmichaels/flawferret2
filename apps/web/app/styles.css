@@ -231,6 +231,17 @@ button {
   padding: 11px 16px;
 }
 
+.secondary-button {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.secondary-button:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
 .metric-grid {
   display: grid;
   gap: 14px;
