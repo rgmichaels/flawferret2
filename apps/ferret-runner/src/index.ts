@@ -2,16 +2,20 @@ import {
   appendJobEvent,
   claimNextApprovedCodexJob,
   claimNextQueuedJob,
+  claimNextReviewJob,
   claimNextValidatingJob,
   createJobRun,
   heartbeatWorker,
   markJobBlocked,
+  markJobCompleted,
   markJobReadyForCodex,
   markJobReview,
   markJobRunning,
   markJobValidating,
   markRunCodexRunning,
   markRunFailed,
+  markRunPrCreated,
+  markRunPushing,
   markRunReadyForCodex,
   markRunSucceeded,
   markRunValidating,
@@ -23,6 +27,7 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
 import { config } from "./config.js";
+import { createDraftPullRequest } from "./pull-request.js";
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
 import { validateGeneratedWork } from "./validation.js";
@@ -184,6 +189,7 @@ process.on("SIGTERM", () => {
 log("Worker starting", {
   hostname: workerHostname,
   codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,
+  prCreationEnabled: config.FERRET_RUNNER_ENABLE_PR_CREATION,
   heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
   pollIntervalMs: config.WORKER_POLL_INTERVAL_MS,
   simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
@@ -701,6 +707,204 @@ while (!shouldStop) {
       status: "IDLE",
     });
     continue;
+  }
+
+  if (config.FERRET_RUNNER_ENABLE_PR_CREATION) {
+    const reviewClaimResult = await claimNextReviewJob(workerId);
+
+    if (reviewClaimResult.queuePaused) {
+      log("Queue is paused; skipping review claim");
+      await sleep(config.WORKER_POLL_INTERVAL_MS);
+      continue;
+    }
+
+    if (reviewClaimResult.job) {
+      const reviewJob = reviewClaimResult.job;
+      const latestRun = reviewJob.runs[0] ?? null;
+      const localPath = getMetadataString(latestRun?.metadata, "localPath");
+
+      await setWorkerState({
+        currentJob: reviewJob.id,
+        status: "BUSY",
+      });
+
+      if (!latestRun || !localPath) {
+        const blockedJob = await markJobBlocked({
+          jobId: reviewJob.id,
+          workerId,
+        });
+
+        if (latestRun) {
+          await markRunFailed({
+            runId: latestRun.id,
+            metadata: {
+              ...getMetadataRecord(latestRun.metadata),
+              pullRequest: {
+                error: "Missing prepared local checkout path.",
+              },
+            },
+          });
+        }
+
+        await appendJobEvent({
+          jobId: blockedJob.id,
+          eventType: "PR_CREATION_FAILED",
+          message: latestRun
+            ? "Draft PR creation failed because the prepared local checkout path is missing."
+            : "Draft PR creation failed because the job has no execution run.",
+          metadata: {
+            localPath,
+            runId: latestRun?.id ?? null,
+            workerId,
+          },
+        });
+
+        await appendJobEvent({
+          jobId: blockedJob.id,
+          eventType: "JOB_BLOCKED",
+          message: "Draft PR creation could not start.",
+          metadata: {
+            runId: latestRun?.id ?? null,
+            workerId,
+          },
+        });
+
+        log("Blocked job before draft PR creation", {
+          jobId: blockedJob.id,
+          runId: latestRun?.id ?? null,
+        });
+
+        await setWorkerState({
+          status: "IDLE",
+        });
+        continue;
+      }
+
+      await appendJobEvent({
+        jobId: reviewJob.id,
+        eventType: "PR_CREATION_STARTED",
+        message: "ferret-runner started draft PR creation.",
+        metadata: {
+          localPath,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await markRunPushing({
+        runId: latestRun.id,
+        metadata: {
+          ...getMetadataRecord(latestRun.metadata),
+          pullRequest: {
+            enabled: true,
+          },
+        },
+      });
+
+      log("Starting draft PR creation", {
+        jobId: reviewJob.id,
+        localPath,
+        runId: latestRun.id,
+      });
+
+      const pullRequestResult = await createDraftPullRequest({
+        job: reviewJob,
+        localPath,
+        runMetadata: latestRun.metadata,
+      });
+
+      const pullRequestMetadata = {
+        ...getMetadataRecord(latestRun.metadata),
+        pullRequest: pullRequestResult.metadata,
+      };
+
+      if (!pullRequestResult.ok) {
+        await markRunFailed({
+          runId: latestRun.id,
+          metadata: pullRequestMetadata,
+        });
+
+        const blockedJob = await markJobBlocked({
+          jobId: reviewJob.id,
+          workerId,
+        });
+
+        await appendJobEvent({
+          jobId: blockedJob.id,
+          eventType: "PR_CREATION_FAILED",
+          message: pullRequestResult.message,
+          metadata: {
+            ...pullRequestResult.metadata,
+            runId: latestRun.id,
+            workerId,
+          },
+        });
+
+        await appendJobEvent({
+          jobId: blockedJob.id,
+          eventType: "JOB_BLOCKED",
+          message: "Draft PR creation did not complete successfully.",
+          metadata: {
+            runId: latestRun.id,
+            workerId,
+          },
+        });
+
+        log("Blocked job after draft PR creation failure", {
+          jobId: blockedJob.id,
+          reason: pullRequestResult.message,
+          runId: latestRun.id,
+        });
+
+        await setWorkerState({
+          status: "IDLE",
+        });
+        continue;
+      }
+
+      await appendJobEvent({
+        jobId: reviewJob.id,
+        eventType: "WORK_BRANCH_PUSHED",
+        message: "ferret-runner pushed the generated work branch.",
+        metadata: {
+          headBranch: pullRequestResult.metadata.headBranch,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await markRunPrCreated({
+        runId: latestRun.id,
+        metadata: pullRequestMetadata,
+      });
+
+      const completedJob = await markJobCompleted({
+        jobId: reviewJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: completedJob.id,
+        eventType: "PR_CREATED",
+        message: "ferret-runner created a draft pull request.",
+        metadata: {
+          ...pullRequestResult.metadata,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      log("Draft PR created", {
+        jobId: completedJob.id,
+        prUrl: pullRequestResult.metadata.prUrl,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
   }
 
   const claimResult = await claimNextQueuedJob(workerId);
