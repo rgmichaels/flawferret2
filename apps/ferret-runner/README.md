@@ -4,7 +4,7 @@ Milestone service for proving queue processing and explicit repository checkout 
 
 `ferret-runner`:
 
-1. Registers or heartbeats itself in the `workers` table.
+1. Maintains one current-state row per worker in the `workers` table, with sparse heartbeat updates.
 2. Atomically claims the oldest highest-priority `QUEUED` job.
 3. Validates the repository's configured local checkout path.
 4. Marks invalid checkout jobs `BLOCKED`.
@@ -17,7 +17,9 @@ The runner does not clone repositories. A repository must have an explicit local
 
 Generated work branches are local-only at this milestone. If a generated branch already exists, the runner blocks the job instead of overwriting it.
 
-It does not invoke Codex, run Playwright, commit changes, push to GitHub, or create pull requests. Codex execution requires a separate manual approval step and is not implemented yet.
+Codex execution requires a separate manual approval step. By default, `FERRET_RUNNER_ENABLE_CODEX=false`, so approved jobs only record the invocation plan and return to `READY_FOR_CODEX`.
+
+It does not run Playwright, commit changes, push to GitHub, or create pull requests.
 
 ## Run
 
@@ -27,6 +29,11 @@ pnpm --filter @flawferret2/ferret-runner dev
 
 Optional environment variables:
 
+- `CODEX_COMMAND`
+- `CODEX_MODEL`
+- `CODEX_TIMEOUT_MS`
+- `FERRET_RUNNER_ENABLE_CODEX`
+- `WORKER_HEARTBEAT_INTERVAL_MS`
 - `WORKER_ID`
 - `WORKER_POLL_INTERVAL_MS`
 - `WORKER_SIMULATED_WORK_MS`
