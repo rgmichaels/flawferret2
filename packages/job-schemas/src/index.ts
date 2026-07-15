@@ -14,6 +14,8 @@ export const jobStatusSchema = z.enum([
   "BLOCKED",
   "RETRY",
   "CANCELED",
+  "READY_FOR_CODEX",
+  "CODEX_APPROVED",
 ]);
 
 export const prioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
@@ -28,6 +30,7 @@ export const runStatusSchema = z.enum([
   "PR_CREATED",
   "SUCCEEDED",
   "FAILED",
+  "READY_FOR_CODEX",
 ]);
 
 export const jobEventTypeSchema = z.enum([
@@ -43,6 +46,8 @@ export const jobEventTypeSchema = z.enum([
   "WORK_BRANCH_PREPARATION_STARTED",
   "TARGET_BRANCH_CHECKED_OUT",
   "WORK_BRANCH_CREATED",
+  "CODEX_APPROVAL_REQUIRED",
+  "CODEX_APPROVAL_GRANTED",
   "JOB_BLOCKED",
 ]);
 
