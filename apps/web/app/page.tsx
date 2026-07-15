@@ -1,11 +1,11 @@
 import type {
   JobResponse,
   JobStatus,
-  QueueControlResponse,
   RepositoryResponse,
   RunStatus,
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
+import { AppShell } from "./app-shell";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -56,137 +56,6 @@ async function getJobs(includeCanceled = false): Promise<JobResponse[]> {
   } catch {
     return [];
   }
-}
-
-async function getRepositories(): Promise<RepositoryResponse[]> {
-  try {
-    const response = await fetch(`${apiUrl}/repositories`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json() as Promise<RepositoryResponse[]>;
-  } catch {
-    return [];
-  }
-}
-
-async function getQueueControl(): Promise<QueueControlResponse> {
-  try {
-    const response = await fetch(`${apiUrl}/queue`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return {
-        paused: false,
-        pausedAt: null,
-        resumedAt: null,
-        updatedAt: new Date().toISOString(),
-      };
-    }
-
-    return response.json() as Promise<QueueControlResponse>;
-  } catch {
-    return {
-      paused: false,
-      pausedAt: null,
-      resumedAt: null,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-}
-
-async function registerRepository(formData: FormData) {
-  "use server";
-
-  const fullName = String(formData.get("fullName") ?? "").trim();
-  const [owner, name, ...extraParts] = fullName.split("/");
-
-  if (!owner || !name || extraParts.length > 0) {
-    throw new Error("Repository must use owner/name format.");
-  }
-
-  const response = await fetch(`${apiUrl}/repositories`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      provider: "GITHUB",
-      owner,
-      name,
-      defaultBranch: formData.get("defaultBranch"),
-      localPath: formData.get("localPath"),
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to register repository.");
-  }
-
-  revalidatePath("/");
-}
-
-async function pauseQueueAction() {
-  "use server";
-
-  const response = await fetch(`${apiUrl}/queue/pause`, {
-    method: "POST",
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to pause queue.");
-  }
-
-  revalidatePath("/");
-}
-
-async function resumeQueueAction() {
-  "use server";
-
-  const response = await fetch(`${apiUrl}/queue/resume`, {
-    method: "POST",
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to resume queue.");
-  }
-
-  revalidatePath("/");
-}
-
-async function queueJob(formData: FormData) {
-  "use server";
-
-  const response = await fetch(`${apiUrl}/jobs`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      jobType: "ADD_PLAYWRIGHT_TEST",
-      priority: formData.get("priority"),
-      payload: {
-        repositoryId: formData.get("repositoryId"),
-        targetBranch: formData.get("targetBranch"),
-        featureArea: formData.get("featureArea"),
-        goal: formData.get("goal"),
-        acceptanceCriteria: formData.get("acceptanceCriteria"),
-        runAffectedTests: formData.get("runAffectedTests") === "on",
-        createDraftPr: formData.get("createDraftPr") === "on",
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to queue job.");
-  }
-
-  revalidatePath("/");
 }
 
 async function cancelJob(formData: FormData) {
@@ -289,98 +158,22 @@ export default async function Home({
 }) {
   const { includeCanceled: includeCanceledParam } = await searchParams;
   const includeCanceled = includeCanceledParam === "true";
-  const [jobs, repositories, queueControl] = await Promise.all([
-    getJobs(includeCanceled),
-    getRepositories(),
-    getQueueControl(),
-  ]);
+  const jobs = await getJobs(includeCanceled);
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
   const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
   const reviewCount = countByStatus(jobs, ["READY_FOR_CODEX", "CODEX_APPROVED", "REVIEW"]);
   const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
   const completedCount = countByStatus(jobs, ["COMPLETED"]);
-  const runnerState = getRunnerStateLabel(runningCount);
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar" aria-label="FlawFerret2 navigation">
-        <div className="brand">
-          <div className="brand-mark">F2</div>
-          <div>
-            <strong>FlawFerret 2</strong>
-            <span>QA orchestration</span>
-          </div>
-        </div>
-
-        <nav className="nav-section" aria-label="Main">
-          <span>Main</span>
-          <a className="nav-item active" href="/">
-            Dashboard
-          </a>
-          <a className="nav-item" href="#jobs">
-            Jobs
-          </a>
-          <a className="nav-item" href="#repositories">
-            Repositories
-          </a>
-        </nav>
-
-        <nav className="nav-section" aria-label="Create">
-          <span>Create</span>
-          <a className="nav-item" href="#new-job">
-            New Job
-          </a>
-        </nav>
-
-        <div className="system-card">
-          <div className="system-card-title">
-            <span className="status-dot" />
-            <strong>System Status</strong>
-          </div>
-          <dl className="system-status-list">
-            <div>
-              <dt>API / DB</dt>
-              <dd className="positive">Connected</dd>
-            </div>
-            <div>
-              <dt>ferret-runner</dt>
-              <dd>{runnerState}</dd>
-            </div>
-            <div>
-              <dt>Queue</dt>
-              <dd className={queueControl.paused ? "warning" : "positive"}>
-                {queueControl.paused ? "Paused" : "Active"}
-              </dd>
-            </div>
-            <div>
-              <dt>Active Jobs</dt>
-              <dd>{runningCount}</dd>
-            </div>
-            <div>
-              <dt>Tracked</dt>
-              <dd>
-                {jobs.length} jobs / {repositories.length} repos
-              </dd>
-            </div>
-          </dl>
-          <form
-            action={queueControl.paused ? resumeQueueAction : pauseQueueAction}
-            className="queue-control-form"
-          >
-            <button type="submit" className={queueControl.paused ? "resume-button" : "pause-button"}>
-              {queueControl.paused ? "Resume Queue" : "Pause Queue"}
-            </button>
-          </form>
-        </div>
-      </aside>
-
+    <AppShell active="dashboard">
       <section className="workspace">
         <header className="topbar">
           <div>
             <p className="eyebrow">Milestone 3</p>
             <h1>Dashboard</h1>
           </div>
-          <a className="primary-link" href="#new-job">
+          <a className="primary-link" href="/jobs/new">
             New Job
           </a>
         </header>
@@ -413,215 +206,89 @@ export default async function Home({
           </article>
         </section>
 
-        <div className="content-grid">
-          <section className="panel jobs-panel" id="jobs">
-            <div className="panel-header">
-              <div>
-                <h2>Recent Jobs</h2>
-                <p>Stored orchestration work from the job queue.</p>
-              </div>
-              <div className="panel-actions">
-                <a
-                  className={includeCanceled ? "filter-toggle active" : "filter-toggle"}
-                  href={includeCanceled ? "/" : "/?includeCanceled=true"}
-                >
-                  {includeCanceled ? "Hide canceled" : "Show canceled"}
-                </a>
-                <span>{jobs.length} total</span>
-              </div>
+        <section className="panel jobs-panel" id="jobs">
+          <div className="panel-header">
+            <div>
+              <h2>Recent Jobs</h2>
+              <p>Stored orchestration work from the job queue.</p>
             </div>
-
-            {jobs.length === 0 ? (
-              <p className="empty">No jobs have been queued yet.</p>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Job</th>
-                      <th>Repository</th>
-                      <th>Status</th>
-                      <th>Run</th>
-                      <th>Priority</th>
-                      <th>Updated</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {jobs.map((job) => (
-                      <tr key={job.id}>
-                        <td>
-                          <a href={`/jobs/${job.id}`}>{shortId(job.id)}</a>
-                          <span>{job.payload.featureArea}</span>
-                        </td>
-                        <td>
-                          <strong>{getJobRepositoryName(job)}</strong>
-                          <span>{getJobTargetBranch(job)}</span>
-                        </td>
-                        <td>
-                          <span className={`status-pill ${job.status.toLowerCase()}`}>
-                            {statusLabels[job.status]}
-                          </span>
-                        </td>
-                        <td>
-                          <span
-                            className={`run-pill ${
-                              job.latestRun ? job.latestRun.status.toLowerCase() : "none"
-                            }`}
-                          >
-                            {getLatestRunLabel(job)}
-                          </span>
-                        </td>
-                        <td>{job.priority}</td>
-                        <td>{formatRelativeTime(job.updatedAt)}</td>
-                        <td>
-                          {canApproveCodex(job) ? (
-                            <form action={approveCodex} className="inline-job-action">
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit">Approve Codex</button>
-                            </form>
-                          ) : canCancelJob(job) ? (
-                            <form action={cancelJob} className="inline-job-action">
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit">Remove</button>
-                            </form>
-                          ) : (
-                            <span className="muted-action">Locked</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <div className="side-stack">
-            <details className="panel collapsible-panel repositories-panel" id="repositories">
-              <summary className="panel-header compact collapsible-summary">
-                <div>
-                  <h2>Repositories</h2>
-                  <p>Register GitHub repos for future runner checkout.</p>
-                </div>
-                <span>{repositories.length} total</span>
-              </summary>
-
-              {repositories.length === 0 ? (
-                <p className="empty">No repositories registered yet.</p>
-              ) : (
-                <ul className="repository-list">
-                  {repositories.map((repository) => (
-                    <li key={repository.id}>
-                      <div>
-                        <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
-                        <code>{repository.localPath ?? "No local checkout configured"}</code>
-                      </div>
-                      <span>{repository.defaultBranch}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <form action={registerRepository} className="repository-form">
-                <label>
-                  GitHub Repository
-                  <input name="fullName" placeholder="rgmichaels/playwright-tests" required />
-                </label>
-                <label>
-                  Default Branch
-                  <input name="defaultBranch" defaultValue="main" required />
-                </label>
-                <label>
-                  Local Checkout Path
-                  <input
-                    name="localPath"
-                    placeholder="/Users/robertmichaels/Documents/code/playwright-tests"
-                    required
-                  />
-                </label>
-                <button type="submit">Register Repository</button>
-              </form>
-            </details>
-
-            <details className="panel collapsible-panel form-panel" id="new-job">
-              <summary className="panel-header compact collapsible-summary">
-                <div>
-                  <h2>Create New Job</h2>
-                  <p>Queue an Add Playwright Test request.</p>
-                </div>
-              </summary>
-              <form action={queueJob} className="job-form">
-                <label>
-                  Test Suite Repository
-                  <select name="repositoryId" required disabled={repositories.length === 0}>
-                    <option value="">Select repository</option>
-                    {repositories.map((repository) => (
-                      <option key={repository.id} value={repository.id}>
-                        {repositoryLabel(repository)}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="field-hint">
-                    Register a repository before queueing work for ferret-runner.
-                  </span>
-                </label>
-                {queueControl.paused ? (
-                  <p className="queue-paused-note">
-                    Queue is paused. New jobs will wait until you resume it.
-                  </p>
-                ) : null}
-                <label>
-                  Target Branch
-                  <input name="targetBranch" defaultValue="main" required />
-                </label>
-                <label>
-                  Feature Area
-                  <input name="featureArea" placeholder="Login flow" required />
-                </label>
-                <label>
-                  Goal
-                  <textarea
-                    name="goal"
-                    placeholder="Verify login fails with an invalid password..."
-                    required
-                  />
-                </label>
-                <label>
-                  Acceptance Criteria
-                  <textarea
-                    name="acceptanceCriteria"
-                    placeholder="The test should verify the error message..."
-                    required
-                  />
-                </label>
-                <label>
-                  Priority
-                  <select name="priority" defaultValue="NORMAL">
-                    <option value="LOW">Low</option>
-                    <option value="NORMAL">Normal</option>
-                    <option value="HIGH">High</option>
-                    <option value="URGENT">Urgent</option>
-                  </select>
-                </label>
-                <div className="toggles">
-                  <label>
-                    <input name="runAffectedTests" type="checkbox" defaultChecked />
-                    Run affected tests only
-                  </label>
-                  <label>
-                    <input name="createDraftPr" type="checkbox" defaultChecked />
-                    Create draft PR
-                  </label>
-                </div>
-                <button type="submit" disabled={repositories.length === 0}>
-                  Queue Job
-                </button>
-              </form>
-            </details>
+            <div className="panel-actions">
+              <a
+                className={includeCanceled ? "filter-toggle active" : "filter-toggle"}
+                href={includeCanceled ? "/" : "/?includeCanceled=true"}
+              >
+                {includeCanceled ? "Hide canceled" : "Show canceled"}
+              </a>
+              <span>{jobs.length} total</span>
+            </div>
           </div>
-        </div>
+
+          {jobs.length === 0 ? (
+            <p className="empty">No jobs have been queued yet.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Repository</th>
+                    <th>Status</th>
+                    <th>Run</th>
+                    <th>Priority</th>
+                    <th>Updated</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => (
+                    <tr key={job.id}>
+                      <td>
+                        <a href={`/jobs/${job.id}`}>{shortId(job.id)}</a>
+                        <span>{job.payload.featureArea}</span>
+                      </td>
+                      <td>
+                        <strong>{getJobRepositoryName(job)}</strong>
+                        <span>{getJobTargetBranch(job)}</span>
+                      </td>
+                      <td>
+                        <span className={`status-pill ${job.status.toLowerCase()}`}>
+                          {statusLabels[job.status]}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`run-pill ${
+                            job.latestRun ? job.latestRun.status.toLowerCase() : "none"
+                          }`}
+                        >
+                          {getLatestRunLabel(job)}
+                        </span>
+                      </td>
+                      <td>{job.priority}</td>
+                      <td>{formatRelativeTime(job.updatedAt)}</td>
+                      <td>
+                        {canApproveCodex(job) ? (
+                          <form action={approveCodex} className="inline-job-action">
+                            <input type="hidden" name="jobId" value={job.id} />
+                            <button type="submit">Approve Codex</button>
+                          </form>
+                        ) : canCancelJob(job) ? (
+                          <form action={cancelJob} className="inline-job-action">
+                            <input type="hidden" name="jobId" value={job.id} />
+                            <button type="submit">Remove</button>
+                          </form>
+                        ) : (
+                          <span className="muted-action">Locked</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </section>
-    </main>
+    </AppShell>
   );
 }

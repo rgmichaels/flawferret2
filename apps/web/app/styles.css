@@ -291,6 +291,24 @@ button {
   grid-template-columns: minmax(0, 1fr) 360px;
 }
 
+.page-grid {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+}
+
+.page-grid.two-column {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+}
+
+.form-page-panel {
+  max-width: 760px;
+}
+
+.standalone-form {
+  border-top: 0;
+}
+
 .side-stack {
   display: grid;
   gap: 20px;
