@@ -1,5 +1,6 @@
 import {
   appendJobEvent,
+  claimNextApprovedCodexJob,
   claimNextQueuedJob,
   createJobRun,
   heartbeatWorker,
@@ -9,10 +10,12 @@ import {
   markRunFailed,
   markRunReadyForCodex,
   prisma,
+  resetJobToReadyForCodex,
   updateRunMetadata,
 } from "@flawferret2/db";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { buildCodexInvocationPlan } from "./codex-invocation.js";
 import { config } from "./config.js";
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
@@ -23,6 +26,8 @@ const workerHostname = hostname();
 
 let shouldStop = false;
 let shutdownStarted = false;
+let lastHeartbeatAt = 0;
+let lastHeartbeatState: string | null = null;
 
 const log = (message: string, metadata?: Record<string, unknown>) => {
   const entry = {
@@ -56,6 +61,38 @@ const getTargetBranch = (payload: unknown) => {
   return "main";
 };
 
+const setWorkerState = async ({
+  currentJob = null,
+  force = false,
+  status,
+}: {
+  currentJob?: string | null;
+  force?: boolean;
+  status: "IDLE" | "BUSY" | "OFFLINE" | "ERROR";
+}) => {
+  const now = Date.now();
+  const stateKey = `${status}:${currentJob ?? ""}`;
+  const shouldWrite =
+    force ||
+    stateKey !== lastHeartbeatState ||
+    now - lastHeartbeatAt >= config.WORKER_HEARTBEAT_INTERVAL_MS;
+
+  if (!shouldWrite) {
+    return;
+  }
+
+  await heartbeatWorker({
+    workerId,
+    hostname: workerHostname,
+    currentJob,
+    status,
+    version: config.WORKER_VERSION,
+  });
+
+  lastHeartbeatAt = now;
+  lastHeartbeatState = stateKey;
+};
+
 const shutdown = async () => {
   if (shutdownStarted) {
     return;
@@ -65,11 +102,9 @@ const shutdown = async () => {
   shouldStop = true;
   log("Worker shutting down");
 
-  await heartbeatWorker({
-    workerId,
-    hostname: workerHostname,
+  await setWorkerState({
+    force: true,
     status: "OFFLINE",
-    version: config.WORKER_VERSION,
   });
   await prisma.$disconnect();
 };
@@ -84,17 +119,114 @@ process.on("SIGTERM", () => {
 
 log("Worker starting", {
   hostname: workerHostname,
+  codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,
+  heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
   pollIntervalMs: config.WORKER_POLL_INTERVAL_MS,
   simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
 });
 
 while (!shouldStop) {
-  await heartbeatWorker({
-    workerId,
-    hostname: workerHostname,
+  await setWorkerState({
     status: "IDLE",
-    version: config.WORKER_VERSION,
   });
+
+  const codexClaimResult = await claimNextApprovedCodexJob(workerId);
+
+  if (codexClaimResult.queuePaused) {
+    log("Queue is paused; skipping Codex-approved claim");
+    await sleep(config.WORKER_POLL_INTERVAL_MS);
+    continue;
+  }
+
+  if (codexClaimResult.job) {
+    const codexJob = codexClaimResult.job;
+    const latestRun = codexJob.runs[0] ?? null;
+    const invocationPlan = buildCodexInvocationPlan({
+      codexCommand: config.CODEX_COMMAND,
+      codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,
+      codexModel: config.CODEX_MODEL,
+      codexTimeoutMs: config.CODEX_TIMEOUT_MS,
+      job: codexJob,
+    });
+
+    await setWorkerState({
+      currentJob: codexJob.id,
+      status: "BUSY",
+    });
+
+    await appendJobEvent({
+      jobId: codexJob.id,
+      eventType: "CODEX_INVOCATION_READY",
+      message: "ferret-runner prepared the Codex invocation plan.",
+      metadata: {
+        command: invocationPlan.command,
+        enabled: invocationPlan.enabled,
+        localPath: invocationPlan.localPath,
+        model: invocationPlan.model,
+        runId: latestRun?.id ?? null,
+        timeoutMs: invocationPlan.timeoutMs,
+        workBranch: invocationPlan.workBranch,
+        workerId,
+      },
+    });
+
+    if (!invocationPlan.enabled) {
+      const readyJob = await resetJobToReadyForCodex({
+        jobId: codexJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: readyJob.id,
+        eventType: "CODEX_INVOCATION_SKIPPED",
+        message: "Codex invocation skipped because FERRET_RUNNER_ENABLE_CODEX is false.",
+        metadata: {
+          command: invocationPlan.command,
+          localPath: invocationPlan.localPath,
+          model: invocationPlan.model,
+          runId: latestRun?.id ?? null,
+          timeoutMs: invocationPlan.timeoutMs,
+          workBranch: invocationPlan.workBranch,
+          workerId,
+        },
+      });
+
+      log("Skipped Codex invocation because it is disabled", {
+        jobId: readyJob.id,
+        runId: latestRun?.id ?? null,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    await appendJobEvent({
+      jobId: codexJob.id,
+      eventType: "CODEX_INVOCATION_SKIPPED",
+      message: "Real Codex invocation is not implemented yet.",
+      metadata: {
+        command: invocationPlan.command,
+        localPath: invocationPlan.localPath,
+        model: invocationPlan.model,
+        runId: latestRun?.id ?? null,
+        timeoutMs: invocationPlan.timeoutMs,
+        workBranch: invocationPlan.workBranch,
+        workerId,
+      },
+    });
+
+    await resetJobToReadyForCodex({
+      jobId: codexJob.id,
+      workerId,
+    });
+
+    await setWorkerState({
+      status: "IDLE",
+    });
+    continue;
+  }
 
   const claimResult = await claimNextQueuedJob(workerId);
 
@@ -125,12 +257,9 @@ while (!shouldStop) {
     },
   });
 
-  await heartbeatWorker({
-    workerId,
-    hostname: workerHostname,
+  await setWorkerState({
     currentJob: claimedJob.id,
     status: "BUSY",
-    version: config.WORKER_VERSION,
   });
 
   await appendJobEvent({
@@ -180,11 +309,8 @@ while (!shouldStop) {
       reason: checkoutValidation.message,
     });
 
-    await heartbeatWorker({
-      workerId,
-      hostname: workerHostname,
+    await setWorkerState({
       status: "IDLE",
-      version: config.WORKER_VERSION,
     });
     continue;
   }
@@ -277,11 +403,8 @@ while (!shouldStop) {
       runId: run.id,
     });
 
-    await heartbeatWorker({
-      workerId,
-      hostname: workerHostname,
+    await setWorkerState({
       status: "IDLE",
-      version: config.WORKER_VERSION,
     });
     continue;
   }
@@ -350,10 +473,7 @@ while (!shouldStop) {
     run,
   });
 
-  await heartbeatWorker({
-    workerId,
-    hostname: workerHostname,
+  await setWorkerState({
     status: "IDLE",
-    version: config.WORKER_VERSION,
   });
 }

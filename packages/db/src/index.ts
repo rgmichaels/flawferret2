@@ -14,6 +14,8 @@ export type { Job, Prisma, Repository, Run, Worker } from "@prisma/client";
 
 export type ClaimNextQueuedJobResult = Awaited<ReturnType<typeof claimNextQueuedJob>>;
 export type ClaimedJob = NonNullable<ClaimNextQueuedJobResult["job"]>;
+export type ClaimNextApprovedCodexJobResult = Awaited<ReturnType<typeof claimNextApprovedCodexJob>>;
+export type ClaimedCodexJob = NonNullable<ClaimNextApprovedCodexJobResult["job"]>;
 
 export const DEFAULT_QUEUE_CONTROL_ID = "default";
 
@@ -39,6 +41,8 @@ export const appendJobEvent = async ({
     | "WORK_BRANCH_CREATED"
     | "CODEX_APPROVAL_REQUIRED"
     | "CODEX_APPROVAL_GRANTED"
+    | "CODEX_INVOCATION_READY"
+    | "CODEX_INVOCATION_SKIPPED"
     | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
@@ -199,6 +203,71 @@ export const claimNextQueuedJob = async (workerId: string) =>
     };
   });
 
+export const claimNextApprovedCodexJob = async (workerId: string) =>
+  prisma.$transaction(async (tx) => {
+    const queueControl = await tx.queueControl.upsert({
+      where: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+      },
+      update: {},
+      create: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+        paused: false,
+        resumedAt: new Date(),
+      },
+    });
+
+    if (queueControl.paused) {
+      return {
+        job: null,
+        queuePaused: true,
+      };
+    }
+
+    const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM jobs
+      WHERE status = 'CODEX_APPROVED'
+      ORDER BY updated_at ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+
+    const candidate = candidates[0];
+
+    if (!candidate) {
+      return {
+        job: null,
+        queuePaused: false,
+      };
+    }
+
+    const job = await tx.job.update({
+      where: {
+        id: candidate.id,
+      },
+      data: {
+        claimedAt: new Date(),
+        claimedBy: workerId,
+        status: "RUNNING",
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return {
+      job,
+      queuePaused: false,
+    };
+  });
+
 export const markJobRunning = async ({
   jobId,
   workerId,
@@ -323,6 +392,26 @@ export const approveJobForCodex = async ({ jobId }: { jobId: string }) =>
     },
     data: {
       status: "CODEX_APPROVED",
+    },
+  });
+
+export const resetJobToReadyForCodex = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      status: "READY_FOR_CODEX",
+    },
+    include: {
+      repository: true,
     },
   });
 
