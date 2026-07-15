@@ -223,6 +223,57 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     };
   });
 
+  server.get("/readiness", async () => {
+    await prisma.$queryRaw`SELECT 1`;
+
+    const [queueControl, repositories, jobs, latestWorker] = await Promise.all([
+      getQueueControl(),
+      prisma.repository.count(),
+      prisma.job.findMany({
+        select: {
+          status: true,
+        },
+      }),
+      prisma.worker.findFirst({
+        orderBy: {
+          lastHeartbeat: "desc",
+        },
+      }),
+    ]);
+    const now = Date.now();
+    const heartbeatAgeSeconds = latestWorker
+      ? Math.max(0, Math.floor((now - latestWorker.lastHeartbeat.getTime()) / 1000))
+      : null;
+    const countByStatus = (statuses: JobResponse["status"][]) =>
+      jobs.filter((job) => statuses.includes(job.status)).length;
+
+    return {
+      api: {
+        databaseConnected: true,
+      },
+      queue: toQueueControlResponse(queueControl),
+      counts: {
+        activeJobs: countByStatus(["CLAIMED", "RUNNING", "VALIDATING", "CODEX_APPROVED", "PR_APPROVED"]),
+        blockedJobs: countByStatus(["BLOCKED", "FAILED", "RETRY"]),
+        codexApprovalJobs: countByStatus(["READY_FOR_CODEX"]),
+        completedJobs: countByStatus(["COMPLETED"]),
+        jobs: jobs.length,
+        prApprovalJobs: countByStatus(["REVIEW"]),
+        repositories,
+      },
+      runner: {
+        codexCommand: config.CODEX_COMMAND,
+        codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,
+        heartbeatAgeSeconds,
+        id: latestWorker?.id ?? null,
+        lastHeartbeat: latestWorker?.lastHeartbeat.toISOString() ?? null,
+        prCreationEnabled: config.FERRET_RUNNER_ENABLE_PR_CREATION,
+        status: latestWorker?.status ?? null,
+        validationCommandConfigured: Boolean(config.FERRET_RUNNER_VALIDATION_COMMAND),
+      },
+    };
+  });
+
   server.get("/queue", async () => {
     const queueControl = await getQueueControl();
 

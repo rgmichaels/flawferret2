@@ -102,6 +102,32 @@ export const queueControlResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const readinessResponseSchema = z.object({
+  api: z.object({
+    databaseConnected: z.boolean(),
+  }),
+  queue: queueControlResponseSchema,
+  counts: z.object({
+    activeJobs: z.number().int().nonnegative(),
+    blockedJobs: z.number().int().nonnegative(),
+    codexApprovalJobs: z.number().int().nonnegative(),
+    completedJobs: z.number().int().nonnegative(),
+    jobs: z.number().int().nonnegative(),
+    prApprovalJobs: z.number().int().nonnegative(),
+    repositories: z.number().int().nonnegative(),
+  }),
+  runner: z.object({
+    codexCommand: z.string(),
+    codexEnabled: z.boolean(),
+    heartbeatAgeSeconds: z.number().int().nonnegative().nullable(),
+    id: z.string().nullable(),
+    lastHeartbeat: z.string().nullable(),
+    prCreationEnabled: z.boolean(),
+    status: z.string().nullable(),
+    validationCommandConfigured: z.boolean(),
+  }),
+});
+
 export const runResponseSchema = z.object({
   id: z.string(),
   jobId: z.string(),
@@ -178,6 +204,7 @@ export type JobEventType = z.infer<typeof jobEventTypeSchema>;
 export type CreateRepositoryRequest = z.infer<typeof createRepositoryRequestSchema>;
 export type RepositoryResponse = z.infer<typeof repositoryResponseSchema>;
 export type QueueControlResponse = z.infer<typeof queueControlResponseSchema>;
+export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type RunResponse = z.infer<typeof runResponseSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
