@@ -2,15 +2,18 @@ import {
   appendJobEvent,
   claimNextApprovedCodexJob,
   claimNextQueuedJob,
+  claimNextValidatingJob,
   createJobRun,
   heartbeatWorker,
   markJobBlocked,
   markJobReadyForCodex,
+  markJobReview,
   markJobRunning,
   markJobValidating,
   markRunCodexRunning,
   markRunFailed,
   markRunReadyForCodex,
+  markRunSucceeded,
   markRunValidating,
   prisma,
   resetJobToReadyForCodex,
@@ -22,6 +25,7 @@ import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation
 import { config } from "./config.js";
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
+import { validateGeneratedWork } from "./validation.js";
 import { prepareWorkBranch } from "./work-branch.js";
 
 const workerId = config.WORKER_ID ?? randomUUID();
@@ -70,6 +74,13 @@ const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
   }
 
   return metadata as Record<string, unknown>;
+};
+
+const getMetadataString = (metadata: unknown, key: string) => {
+  const record = getMetadataRecord(metadata);
+  const value = record[key];
+
+  return typeof value === "string" && value.length > 0 ? value : null;
 };
 
 const truncateText = (value: string | null, maxLength = 4000) => {
@@ -505,6 +516,184 @@ while (!shouldStop) {
     log("Codex invocation completed", {
       jobId: validatingJob.id,
       logPath: codexResult.logPath,
+      runId: latestRun.id,
+    });
+
+    await setWorkerState({
+      status: "IDLE",
+    });
+    continue;
+  }
+
+  const validationClaimResult = await claimNextValidatingJob(workerId);
+
+  if (validationClaimResult.queuePaused) {
+    log("Queue is paused; skipping validation claim");
+    await sleep(config.WORKER_POLL_INTERVAL_MS);
+    continue;
+  }
+
+  if (validationClaimResult.job) {
+    const validationJob = validationClaimResult.job;
+    const latestRun = validationJob.runs[0] ?? null;
+    const localPath = getMetadataString(latestRun?.metadata, "localPath");
+
+    await setWorkerState({
+      currentJob: validationJob.id,
+      status: "BUSY",
+    });
+
+    if (!latestRun || !localPath) {
+      const blockedJob = await markJobBlocked({
+        jobId: validationJob.id,
+        workerId,
+      });
+
+      if (latestRun) {
+        await markRunFailed({
+          runId: latestRun.id,
+          metadata: {
+            ...getMetadataRecord(latestRun.metadata),
+            validation: {
+              error: "Missing prepared local checkout path.",
+            },
+          },
+        });
+      }
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "VALIDATION_FAILED",
+        message: latestRun
+          ? "Validation failed because the prepared local checkout path is missing."
+          : "Validation failed because the job has no execution run.",
+        metadata: {
+          localPath,
+          runId: latestRun?.id ?? null,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Validation could not start.",
+        metadata: {
+          runId: latestRun?.id ?? null,
+          workerId,
+        },
+      });
+
+      log("Blocked job before validation", {
+        jobId: blockedJob.id,
+        runId: latestRun?.id ?? null,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    await appendJobEvent({
+      jobId: validationJob.id,
+      eventType: "VALIDATION_STARTED",
+      message: "ferret-runner started validating generated work.",
+      metadata: {
+        command: config.FERRET_RUNNER_VALIDATION_COMMAND ?? null,
+        localPath,
+        runId: latestRun.id,
+        workerId,
+      },
+    });
+
+    log("Starting validation", {
+      jobId: validationJob.id,
+      localPath,
+      runId: latestRun.id,
+    });
+
+    const validationResult = await validateGeneratedWork({
+      command: config.FERRET_RUNNER_VALIDATION_COMMAND,
+      jobId: validationJob.id,
+      localPath,
+      logDir: config.FERRET_RUNNER_LOG_DIR,
+      runId: latestRun.id,
+    });
+
+    const validationMetadata = {
+      ...getMetadataRecord(latestRun.metadata),
+      validation: validationResult.metadata,
+    };
+
+    if (!validationResult.ok) {
+      await markRunFailed({
+        runId: latestRun.id,
+        metadata: validationMetadata,
+      });
+
+      const blockedJob = await markJobBlocked({
+        jobId: validationJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "VALIDATION_FAILED",
+        message: validationResult.message,
+        metadata: {
+          ...validationResult.metadata,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Generated work did not pass validation.",
+        metadata: {
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      log("Blocked job after validation failure", {
+        jobId: blockedJob.id,
+        reason: validationResult.message,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    await markRunSucceeded({
+      runId: latestRun.id,
+      metadata: validationMetadata,
+    });
+
+    const reviewJob = await markJobReview({
+      jobId: validationJob.id,
+      workerId,
+    });
+
+    await appendJobEvent({
+      jobId: reviewJob.id,
+      eventType: "VALIDATION_COMPLETED",
+      message: "Generated work passed validation and is ready for review.",
+      metadata: {
+        ...validationResult.metadata,
+        runId: latestRun.id,
+        workerId,
+      },
+    });
+
+    log("Validation completed", {
+      changedFileCount: validationResult.metadata.changedFileCount,
+      jobId: reviewJob.id,
       runId: latestRun.id,
     });
 
