@@ -162,6 +162,32 @@ const getLatestRunLabel = (job: JobResponse) =>
 
 const getRunnerStateLabel = (runningJobs: number) => (runningJobs > 0 ? "Active" : "Idle");
 
+const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<string, unknown>;
+};
+
+const getNestedMetadata = (metadata: unknown, key: string) =>
+  getMetadataRecord(getMetadataRecord(metadata)[key]);
+
+const getMetadataString = (metadata: unknown, key: string) => {
+  const value = getMetadataRecord(metadata)[key];
+
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const isWebUrl = (value: string) => value.startsWith("https://") || value.startsWith("http://");
+
+const getPullRequestUrl = (job: JobResponse) => {
+  const pullRequestMetadata = getNestedMetadata(job.latestRun?.metadata, "pullRequest");
+  const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
+
+  return prUrl && isWebUrl(prUrl) ? prUrl : null;
+};
+
 const stageLabels: Partial<Record<JobStatus, string>> = {
   BLOCKED: "Needs operator recovery",
   CODEX_APPROVED: "Codex approved; waiting for runner",
@@ -277,59 +303,73 @@ export default async function Home({
                     <th>Run</th>
                     <th>Priority</th>
                     <th>Updated</th>
+                    <th>Artifact</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {jobs.map((job) => (
-                    <tr key={job.id}>
-                      <td>
-                        <a href={`/jobs/${job.id}`}>{shortId(job.id)}</a>
-                        <span>{job.payload.featureArea}</span>
-                      </td>
-                      <td>
-                        <strong>{getJobRepositoryName(job)}</strong>
-                        <span>{getJobTargetBranch(job)}</span>
-                      </td>
-                      <td>
-                        <span className={`status-pill ${job.status.toLowerCase()}`}>
-                          {statusLabels[job.status]}
-                        </span>
-                        <span className="stage-note">{getStageLabel(job)}</span>
-                      </td>
-                      <td>
-                        <span
-                          className={`run-pill ${
-                            job.latestRun ? job.latestRun.status.toLowerCase() : "none"
-                          }`}
-                        >
-                          {getLatestRunLabel(job)}
-                        </span>
-                      </td>
-                      <td>{job.priority}</td>
-                      <td>{formatRelativeTime(job.updatedAt)}</td>
-                      <td>
-                        {canApproveCodex(job) ? (
-                          <form action={approveCodex} className="inline-job-action">
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <button type="submit">Approve Codex</button>
-                          </form>
-                        ) : canApprovePr(job) ? (
-                          <form action={approvePr} className="inline-job-action">
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <button type="submit">Approve PR</button>
-                          </form>
-                        ) : canCancelJob(job) ? (
-                          <form action={cancelJob} className="inline-job-action">
-                            <input type="hidden" name="jobId" value={job.id} />
-                            <button type="submit">Remove</button>
-                          </form>
-                        ) : (
-                          <span className="muted-action">Locked</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {jobs.map((job) => {
+                    const pullRequestUrl = getPullRequestUrl(job);
+
+                    return (
+                      <tr key={job.id}>
+                        <td>
+                          <a href={`/jobs/${job.id}`}>{shortId(job.id)}</a>
+                          <span>{job.payload.featureArea}</span>
+                        </td>
+                        <td>
+                          <strong>{getJobRepositoryName(job)}</strong>
+                          <span>{getJobTargetBranch(job)}</span>
+                        </td>
+                        <td>
+                          <span className={`status-pill ${job.status.toLowerCase()}`}>
+                            {statusLabels[job.status]}
+                          </span>
+                          <span className="stage-note">{getStageLabel(job)}</span>
+                        </td>
+                        <td>
+                          <span
+                            className={`run-pill ${
+                              job.latestRun ? job.latestRun.status.toLowerCase() : "none"
+                            }`}
+                          >
+                            {getLatestRunLabel(job)}
+                          </span>
+                        </td>
+                        <td>{job.priority}</td>
+                        <td>{formatRelativeTime(job.updatedAt)}</td>
+                        <td>
+                          {pullRequestUrl ? (
+                            <a className="artifact-link" href={pullRequestUrl}>
+                              Open PR
+                            </a>
+                          ) : (
+                            <span className="muted-action">No PR</span>
+                          )}
+                        </td>
+                        <td>
+                          {canApproveCodex(job) ? (
+                            <form action={approveCodex} className="inline-job-action">
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <button type="submit">Approve Codex</button>
+                            </form>
+                          ) : canApprovePr(job) ? (
+                            <form action={approvePr} className="inline-job-action">
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <button type="submit">Approve PR</button>
+                            </form>
+                          ) : canCancelJob(job) ? (
+                            <form action={cancelJob} className="inline-job-action">
+                              <input type="hidden" name="jobId" value={job.id} />
+                              <button type="submit">Remove</button>
+                            </form>
+                          ) : (
+                            <span className="muted-action">Locked</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
