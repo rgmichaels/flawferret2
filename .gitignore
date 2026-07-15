@@ -15,6 +15,7 @@ coverage/
 tmp/
 temp/
 output/
+.flawferret-runs/
 
 apps/web/.next/
 packages/db/generated/

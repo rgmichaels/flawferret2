@@ -43,6 +43,9 @@ export const appendJobEvent = async ({
     | "CODEX_APPROVAL_GRANTED"
     | "CODEX_INVOCATION_READY"
     | "CODEX_INVOCATION_SKIPPED"
+    | "CODEX_INVOCATION_STARTED"
+    | "CODEX_INVOCATION_COMPLETED"
+    | "CODEX_INVOCATION_FAILED"
     | "JOB_BLOCKED";
   message: string;
   metadata?: Prisma.InputJsonValue;
@@ -309,6 +312,26 @@ export const markJobBlocked = async ({
     },
   });
 
+export const markJobValidating = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      status: "VALIDATING",
+    },
+    include: {
+      repository: true,
+    },
+  });
+
 export const markJobReadyForCodex = async ({
   jobId,
   workerId,
@@ -363,14 +386,55 @@ export const updateRunMetadata = async ({
     },
   });
 
-export const markRunFailed = async ({ runId }: { runId: string }) =>
+export const markRunCodexRunning = async ({
+  runId,
+  metadata,
+}: {
+  runId: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      metadata,
+      status: "CODEX_RUNNING",
+    },
+  });
+
+export const markRunFailed = async ({
+  runId,
+  metadata,
+}: {
+  runId: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
   prisma.run.update({
     where: {
       id: runId,
     },
     data: {
       completedAt: new Date(),
+      metadata,
       status: "FAILED",
+    },
+  });
+
+export const markRunValidating = async ({
+  runId,
+  metadata,
+}: {
+  runId: string;
+  metadata?: Prisma.InputJsonValue;
+}) =>
+  prisma.run.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      metadata,
+      status: "VALIDATING",
     },
   });
 

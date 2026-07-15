@@ -12,6 +12,7 @@ const envSchema = z.object({
   CODEX_TIMEOUT_MS: z.coerce.number().int().positive().default(20 * 60 * 1000),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   FERRET_RUNNER_ENABLE_CODEX: z.coerce.boolean().default(false),
+  FERRET_RUNNER_LOG_DIR: z.string().trim().min(1).default(".flawferret-runs"),
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   WORKER_ID: z.string().optional(),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),

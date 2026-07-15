@@ -7,15 +7,18 @@ import {
   markJobBlocked,
   markJobReadyForCodex,
   markJobRunning,
+  markJobValidating,
+  markRunCodexRunning,
   markRunFailed,
   markRunReadyForCodex,
+  markRunValidating,
   prisma,
   resetJobToReadyForCodex,
   updateRunMetadata,
 } from "@flawferret2/db";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
-import { buildCodexInvocationPlan } from "./codex-invocation.js";
+import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
 import { config } from "./config.js";
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
@@ -60,6 +63,56 @@ const getTargetBranch = (payload: unknown) => {
 
   return "main";
 };
+
+const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<string, unknown>;
+};
+
+const truncateText = (value: string | null, maxLength = 4000) => {
+  if (!value || value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength)}...`;
+};
+
+const getInvocationMetadata = ({
+  invocationPlan,
+  logPath = null,
+  stderrPath = null,
+  result = null,
+}: {
+  invocationPlan: ReturnType<typeof buildCodexInvocationPlan>;
+  logPath?: string | null;
+  stderrPath?: string | null;
+  result?: {
+    error?: string | null;
+    exitCode: number | null;
+    finalResponse: string | null;
+    ok: boolean;
+    timedOut: boolean;
+    usage: unknown;
+  } | null;
+}) => ({
+  args: invocationPlan.args.slice(0, -1),
+  command: invocationPlan.command,
+  enabled: invocationPlan.enabled,
+  error: result?.error ?? null,
+  exitCode: result?.exitCode ?? null,
+  finalResponse: truncateText(result?.finalResponse ?? null),
+  logPath,
+  model: invocationPlan.model,
+  ok: result?.ok ?? null,
+  stderrPath,
+  timedOut: result?.timedOut ?? false,
+  timeoutMs: invocationPlan.timeoutMs,
+  usage: result?.usage ?? null,
+  workBranch: invocationPlan.workBranch,
+});
 
 const setWorkerState = async ({
   currentJob = null,
@@ -202,24 +255,257 @@ while (!shouldStop) {
       continue;
     }
 
+    if (!latestRun || !invocationPlan.localPath) {
+      const blockedJob = await markJobBlocked({
+        jobId: codexJob.id,
+        workerId,
+      });
+
+      if (latestRun) {
+        await markRunFailed({
+          runId: latestRun.id,
+          metadata: {
+            ...getMetadataRecord(latestRun.metadata),
+            codex: getInvocationMetadata({
+              invocationPlan,
+            }),
+          },
+        });
+      }
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "CODEX_INVOCATION_FAILED",
+        message: latestRun
+          ? "Codex invocation failed because the prepared local checkout path is missing."
+          : "Codex invocation failed because the job has no execution run.",
+        metadata: {
+          command: invocationPlan.command,
+          localPath: invocationPlan.localPath,
+          model: invocationPlan.model,
+          runId: latestRun?.id ?? null,
+          timeoutMs: invocationPlan.timeoutMs,
+          workBranch: invocationPlan.workBranch,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Codex invocation could not start.",
+        metadata: {
+          localPath: invocationPlan.localPath,
+          runId: latestRun?.id ?? null,
+          workerId,
+        },
+      });
+
+      log("Blocked job before Codex invocation", {
+        jobId: blockedJob.id,
+        runId: latestRun?.id ?? null,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    const codexRunMetadata = {
+      ...getMetadataRecord(latestRun.metadata),
+      codex: getInvocationMetadata({
+        invocationPlan,
+      }),
+    };
+
+    await markRunCodexRunning({
+      runId: latestRun.id,
+      metadata: codexRunMetadata,
+    });
+
     await appendJobEvent({
       jobId: codexJob.id,
-      eventType: "CODEX_INVOCATION_SKIPPED",
-      message: "Real Codex invocation is not implemented yet.",
+      eventType: "CODEX_INVOCATION_STARTED",
+      message: "ferret-runner started Codex execution.",
       metadata: {
         command: invocationPlan.command,
         localPath: invocationPlan.localPath,
         model: invocationPlan.model,
-        runId: latestRun?.id ?? null,
+        runId: latestRun.id,
         timeoutMs: invocationPlan.timeoutMs,
         workBranch: invocationPlan.workBranch,
         workerId,
       },
     });
 
-    await resetJobToReadyForCodex({
+    log("Starting Codex invocation", {
+      jobId: codexJob.id,
+      localPath: invocationPlan.localPath,
+      runId: latestRun.id,
+    });
+
+    let codexResult;
+
+    try {
+      codexResult = await runCodexInvocation({
+        jobId: codexJob.id,
+        logDir: config.FERRET_RUNNER_LOG_DIR,
+        plan: invocationPlan,
+        runId: latestRun.id,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown Codex invocation error.";
+      const failedMetadata = {
+        ...getMetadataRecord(latestRun.metadata),
+        codex: {
+          ...getInvocationMetadata({
+            invocationPlan,
+          }),
+          error: message,
+        },
+      };
+
+      await markRunFailed({
+        runId: latestRun.id,
+        metadata: failedMetadata,
+      });
+
+      const blockedJob = await markJobBlocked({
+        jobId: codexJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "CODEX_INVOCATION_FAILED",
+        message,
+        metadata: {
+          command: invocationPlan.command,
+          localPath: invocationPlan.localPath,
+          model: invocationPlan.model,
+          runId: latestRun.id,
+          timeoutMs: invocationPlan.timeoutMs,
+          workBranch: invocationPlan.workBranch,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Codex invocation failed before producing a result.",
+        metadata: {
+          error: message,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      log("Blocked job after Codex invocation error", {
+        error: message,
+        jobId: blockedJob.id,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    const completedCodexMetadata = {
+      ...getMetadataRecord(latestRun.metadata),
+      codex: getInvocationMetadata({
+        invocationPlan,
+        logPath: codexResult.logPath,
+        result: codexResult,
+        stderrPath: codexResult.stderrPath,
+      }),
+    };
+
+    if (!codexResult.ok) {
+      await markRunFailed({
+        runId: latestRun.id,
+        metadata: completedCodexMetadata,
+      });
+
+      const blockedJob = await markJobBlocked({
+        jobId: codexJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "CODEX_INVOCATION_FAILED",
+        message: codexResult.timedOut
+          ? "Codex invocation timed out."
+          : codexResult.error ?? "Codex invocation exited unsuccessfully.",
+        metadata: {
+          error: codexResult.error,
+          exitCode: codexResult.exitCode,
+          logPath: codexResult.logPath,
+          runId: latestRun.id,
+          stderrPath: codexResult.stderrPath,
+          timedOut: codexResult.timedOut,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Codex invocation did not complete successfully.",
+        metadata: {
+          exitCode: codexResult.exitCode,
+          logPath: codexResult.logPath,
+          runId: latestRun.id,
+          stderrPath: codexResult.stderrPath,
+          timedOut: codexResult.timedOut,
+          workerId,
+        },
+      });
+
+      log("Blocked job after unsuccessful Codex invocation", {
+        exitCode: codexResult.exitCode,
+        jobId: blockedJob.id,
+        runId: latestRun.id,
+        timedOut: codexResult.timedOut,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    await markRunValidating({
+      runId: latestRun.id,
+      metadata: completedCodexMetadata,
+    });
+
+    const validatingJob = await markJobValidating({
       jobId: codexJob.id,
       workerId,
+    });
+
+    await appendJobEvent({
+      jobId: validatingJob.id,
+      eventType: "CODEX_INVOCATION_COMPLETED",
+      message: "Codex invocation completed successfully; job is ready for validation.",
+      metadata: {
+        exitCode: codexResult.exitCode,
+        logPath: codexResult.logPath,
+        runId: latestRun.id,
+        stderrPath: codexResult.stderrPath,
+        workerId,
+      },
+    });
+
+    log("Codex invocation completed", {
+      jobId: validatingJob.id,
+      logPath: codexResult.logPath,
+      runId: latestRun.id,
     });
 
     await setWorkerState({
