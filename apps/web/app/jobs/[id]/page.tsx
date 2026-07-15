@@ -202,6 +202,12 @@ const getMetadataNumber = (metadata: unknown, key: string) => {
   return typeof value === "number" ? value : null;
 };
 
+const getMetadataBoolean = (metadata: unknown, key: string) => {
+  const value = getMetadataRecord(metadata)[key];
+
+  return typeof value === "boolean" ? value : null;
+};
+
 const getMetadataStrings = (metadata: unknown, key: string) => {
   const value = getMetadataRecord(metadata)[key];
 
@@ -423,6 +429,14 @@ export default async function JobDetailPage({
                 <div>
                   <dt>Command</dt>
                   <dd>{getMetadataString(validationMetadata, "command") ?? "Change detection only"}</dd>
+                </div>
+                <div>
+                  <dt>Draft PR</dt>
+                  <dd>
+                    {getMetadataBoolean(validationMetadata, "createDraftPr") === false
+                      ? "Not requested"
+                      : "Requested"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Validation Log</dt>
