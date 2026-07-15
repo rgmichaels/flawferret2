@@ -908,6 +908,41 @@ textarea {
   white-space: nowrap;
 }
 
+.approval-card {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  max-width: 340px;
+  padding: 12px;
+  text-align: left;
+}
+
+.approval-card span {
+  color: #9a3412;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.approval-card strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.approval-card p {
+  color: #7c2d12;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.approval-card form {
+  margin-top: 2px;
+}
+
 .stage-tracker {
   display: grid;
   gap: 10px;

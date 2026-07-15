@@ -235,6 +235,14 @@ type PipelineStage = {
   state: PipelineStageState;
 };
 
+type ApprovalAction = {
+  buttonLabel: string;
+  description: string;
+  formAction: (formData: FormData) => Promise<void>;
+  riskLabel: string;
+  title: string;
+};
+
 const canRequeueJob = (status: JobStatus) =>
   status === "BLOCKED" || status === "FAILED" || status === "RETRY";
 
@@ -250,6 +258,32 @@ const terminalAttentionStatuses: JobStatus[] = ["BLOCKED", "FAILED", "RETRY", "C
 
 const getCreateDraftPr = (validationMetadata: Record<string, unknown>) =>
   getMetadataBoolean(validationMetadata, "createDraftPr") !== false;
+
+const getApprovalAction = (job: JobResponse): ApprovalAction | null => {
+  if (job.status === "READY_FOR_CODEX") {
+    return {
+      buttonLabel: "Approve Codex",
+      description:
+        "The runner may invoke Codex for this job after this approval. Keep the queue paused if you are not ready for model usage yet.",
+      formAction: approveCodex,
+      riskLabel: "Can spend API credits",
+      title: "Approve model execution",
+    };
+  }
+
+  if (job.status === "REVIEW") {
+    return {
+      buttonLabel: "Approve Draft PR",
+      description:
+        "The runner may push the generated work branch and create a draft GitHub pull request after this approval.",
+      formAction: approvePr,
+      riskLabel: "Can push code",
+      title: "Approve PR creation",
+    };
+  }
+
+  return null;
+};
 
 const buildPipelineStages = ({
   job,
@@ -407,6 +441,7 @@ export default async function JobDetailPage({
     "PR_CREATION_FAILED",
   ]);
   const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
+  const approvalAction = getApprovalAction(job);
   const pipelineStages = buildPipelineStages({
     job,
     latestRun,
@@ -427,17 +462,16 @@ export default async function JobDetailPage({
           <p>{job.payload.goal}</p>
         </div>
         <div className="detail-actions">
-          {job.status === "READY_FOR_CODEX" ? (
-            <form action={approveCodex}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button type="submit">Approve Codex</button>
-            </form>
-          ) : null}
-          {job.status === "REVIEW" ? (
-            <form action={approvePr}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button type="submit">Approve Draft PR</button>
-            </form>
+          {approvalAction ? (
+            <section className="approval-card" aria-label={approvalAction.title}>
+              <span>{approvalAction.riskLabel}</span>
+              <strong>{approvalAction.title}</strong>
+              <p>{approvalAction.description}</p>
+              <form action={approvalAction.formAction}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <button type="submit">{approvalAction.buttonLabel}</button>
+              </form>
+            </section>
           ) : null}
           {canRetryCurrentStage(job, latestRun) ? (
             <form action={retryCurrentStage}>
