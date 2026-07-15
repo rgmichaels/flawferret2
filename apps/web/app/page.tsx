@@ -162,6 +162,20 @@ const getLatestRunLabel = (job: JobResponse) =>
 
 const getRunnerStateLabel = (runningJobs: number) => (runningJobs > 0 ? "Active" : "Idle");
 
+const stageLabels: Partial<Record<JobStatus, string>> = {
+  BLOCKED: "Needs operator recovery",
+  CODEX_APPROVED: "Codex approved; waiting for runner",
+  COMPLETED: "Pipeline finished",
+  PR_APPROVED: "Draft PR approved; waiting for runner",
+  READY_FOR_CODEX: "Waiting for Codex approval",
+  REVIEW: "Waiting for draft PR approval",
+  RUNNING: "Codex or setup in progress",
+  VALIDATING: "Validation in progress",
+};
+
+const getStageLabel = (job: JobResponse) =>
+  stageLabels[job.status] ?? (job.latestRun ? runStatusLabels[job.latestRun.status] : "Setup pending");
+
 const canCancelJob = (job: JobResponse) =>
   job.status === "DRAFT" || job.status === "QUEUED" || job.status === "RETRY";
 
@@ -185,6 +199,8 @@ export default async function Home({
     "REVIEW",
     "PR_APPROVED",
   ]);
+  const codexApprovalCount = countByStatus(jobs, ["READY_FOR_CODEX"]);
+  const prApprovalCount = countByStatus(jobs, ["REVIEW"]);
   const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
   const completedCount = countByStatus(jobs, ["COMPLETED"]);
 
@@ -215,7 +231,9 @@ export default async function Home({
           <article className="metric-card review">
             <span>Approval</span>
             <strong>{reviewCount}</strong>
-            <small>Ready, approved, or review</small>
+            <small>
+              {codexApprovalCount} Codex / {prApprovalCount} PR waiting
+            </small>
           </article>
           <article className="metric-card failed">
             <span>Failed</span>
@@ -277,6 +295,7 @@ export default async function Home({
                         <span className={`status-pill ${job.status.toLowerCase()}`}>
                           {statusLabels[job.status]}
                         </span>
+                        <span className="stage-note">{getStageLabel(job)}</span>
                       </td>
                       <td>
                         <span
