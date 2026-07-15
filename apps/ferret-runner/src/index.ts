@@ -73,6 +73,16 @@ const getTargetBranch = (payload: unknown) => {
   return "main";
 };
 
+const getPayloadBoolean = (payload: unknown, key: string, fallback: boolean) => {
+  if (!payload || typeof payload !== "object" || !(key in payload)) {
+    return fallback;
+  }
+
+  const value = (payload as Record<string, unknown>)[key];
+
+  return typeof value === "boolean" ? value : fallback;
+};
+
 const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return {};
@@ -631,6 +641,11 @@ while (!shouldStop) {
       ...getMetadataRecord(latestRun.metadata),
       validation: validationResult.metadata,
     };
+    const shouldCreateDraftPr = getPayloadBoolean(
+      validationJob.payload,
+      "createDraftPr",
+      true,
+    );
 
     if (!validationResult.ok) {
       await markRunFailed({
@@ -676,30 +691,46 @@ while (!shouldStop) {
       continue;
     }
 
-    await markRunSucceeded({
-      runId: latestRun.id,
-      metadata: validationMetadata,
-    });
-
-    const reviewJob = await markJobReview({
-      jobId: validationJob.id,
-      workerId,
-    });
+    const nextJob = shouldCreateDraftPr
+      ? await markJobReview({
+          jobId: validationJob.id,
+          workerId,
+        })
+      : await markJobCompleted({
+          jobId: validationJob.id,
+          workerId,
+        });
 
     await appendJobEvent({
-      jobId: reviewJob.id,
+      jobId: nextJob.id,
       eventType: "VALIDATION_COMPLETED",
-      message: "Generated work passed validation and is ready for review.",
+      message: shouldCreateDraftPr
+        ? "Generated work passed validation and is ready for review."
+        : "Generated work passed validation and was completed without draft PR creation.",
       metadata: {
         ...validationResult.metadata,
+        createDraftPr: shouldCreateDraftPr,
         runId: latestRun.id,
+        status: nextJob.status,
         workerId,
+      },
+    });
+
+    await markRunSucceeded({
+      runId: latestRun.id,
+      metadata: {
+        ...validationMetadata,
+        validation: {
+          ...validationResult.metadata,
+          createDraftPr: shouldCreateDraftPr,
+        },
       },
     });
 
     log("Validation completed", {
       changedFileCount: validationResult.metadata.changedFileCount,
-      jobId: reviewJob.id,
+      createDraftPr: shouldCreateDraftPr,
+      jobId: nextJob.id,
       runId: latestRun.id,
     });
 
