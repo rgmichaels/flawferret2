@@ -26,6 +26,9 @@ importers:
       '@flawferret2/job-schemas':
         specifier: workspace:*
         version: link:../../packages/job-schemas
+      '@flawferret2/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
@@ -54,6 +57,9 @@ importers:
       '@flawferret2/job-schemas':
         specifier: workspace:*
         version: link:../../packages/job-schemas
+      '@flawferret2/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2

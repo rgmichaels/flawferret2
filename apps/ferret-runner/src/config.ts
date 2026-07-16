@@ -24,6 +24,16 @@ const envBoolean = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
+const optionalUrl = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().url().optional());
+
 const envSchema = z.object({
   CODEX_COMMAND: z.string().trim().min(1).default("codex"),
   CODEX_MODEL: z.string().trim().optional(),
@@ -33,6 +43,7 @@ const envSchema = z.object({
   FERRET_RUNNER_ENABLE_PR_CREATION: envBoolean.default(false),
   FERRET_RUNNER_LOG_DIR: z.string().trim().min(1).default(".flawferret-runs"),
   FERRET_RUNNER_VALIDATION_COMMAND: z.string().trim().optional(),
+  SLACK_WEBHOOK_URL: optionalUrl,
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
   WORKER_ID: z.string().optional(),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),

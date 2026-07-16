@@ -24,6 +24,12 @@ import {
   resetJobToReadyForCodex,
   updateRunMetadata,
 } from "@flawferret2/db";
+import {
+  getJobGoal,
+  getJobTitle,
+  sendSlackNotification,
+  shortJobId,
+} from "@flawferret2/shared";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
@@ -72,6 +78,37 @@ const getTargetBranch = (payload: unknown) => {
   }
 
   return "main";
+};
+
+const sendRunnerSlackMilestone = async ({
+  headline,
+  jobId,
+  lines = [],
+  payload,
+}: {
+  headline: string;
+  jobId: string;
+  lines?: Array<string | null>;
+  payload: unknown;
+}) => {
+  const jobGoal = getJobGoal(payload);
+  const slackResult = await sendSlackNotification({
+    text: [
+      `Job ${shortJobId(jobId)} ${headline} - ${getJobTitle(payload)}`,
+      ...lines,
+      jobGoal ? `Goal: ${jobGoal}` : null,
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n"),
+    webhookUrl: config.SLACK_WEBHOOK_URL,
+  });
+
+  if (!slackResult.sent && slackResult.reason !== "not_configured") {
+    log("Unable to send Slack milestone notification", {
+      jobId,
+      reason: slackResult.reason,
+    });
+  }
 };
 
 const getPayloadBoolean = (payload: unknown, key: string, fallback: boolean) => {
@@ -740,6 +777,15 @@ while (!shouldStop) {
       },
     });
 
+    if (!shouldCreateDraftPr) {
+      await sendRunnerSlackMilestone({
+        headline: "completed",
+        jobId: nextJob.id,
+        lines: ["Generated work passed validation without draft PR creation."],
+        payload: nextJob.payload,
+      });
+    }
+
     log("Validation completed", {
       changedFileCount: validationResult.metadata.changedFileCount,
       createDraftPr: shouldCreateDraftPr,
@@ -949,6 +995,13 @@ while (!shouldStop) {
           runId: latestRun.id,
           workerId,
         },
+      });
+
+      await sendRunnerSlackMilestone({
+        headline: "PR Created",
+        jobId: prCreatedJob.id,
+        lines: [`<${pullRequestResult.metadata.prUrl}|Open pull request>`],
+        payload: prCreatedJob.payload,
       });
 
       log("Draft PR created", {
@@ -1202,6 +1255,13 @@ while (!shouldStop) {
       status: readyJob.status,
       workerId,
     },
+  });
+
+  await sendRunnerSlackMilestone({
+    headline: "ready for Codex approval",
+    jobId: readyJob.id,
+    lines: ["Manual approval is required before model spend."],
+    payload: readyJob.payload,
   });
 
   log("Prepared job for Codex approval", {

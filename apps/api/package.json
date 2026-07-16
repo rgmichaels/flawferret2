@@ -15,6 +15,7 @@
     "@fastify/cors": "^11.3.0",
     "@flawferret2/db": "workspace:*",
     "@flawferret2/job-schemas": "workspace:*",
+    "@flawferret2/shared": "workspace:*",
     "dotenv": "^17.4.2",
     "fastify": "^5.10.0",
     "zod": "^4.4.3"
