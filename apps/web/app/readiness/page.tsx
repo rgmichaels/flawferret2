@@ -109,6 +109,27 @@ const runnerHealthLabels: Record<ReadinessResponse["runner"]["health"], string> 
 
 const modeClass = (enabled: boolean) => (enabled ? "mode-live" : "mode-dry-run");
 
+const runnerCommandProfiles = [
+  {
+    command:
+      "FERRET_RUNNER_ENABLE_CODEX=false FERRET_RUNNER_ENABLE_PR_CREATION=false pnpm --filter @flawferret2/ferret-runner dev",
+    description: "Prepares work branches and approval gates without model spend or pushes.",
+    label: "Safe dry-run",
+  },
+  {
+    command:
+      "FERRET_RUNNER_ENABLE_CODEX=true FERRET_RUNNER_ENABLE_PR_CREATION=false pnpm --filter @flawferret2/ferret-runner dev",
+    description: "Allows approved Codex jobs to spend model credits, but does not push branches.",
+    label: "Live Codex only",
+  },
+  {
+    command:
+      "FERRET_RUNNER_ENABLE_CODEX=true FERRET_RUNNER_ENABLE_PR_CREATION=true pnpm --filter @flawferret2/ferret-runner dev",
+    description: "Allows approved Codex jobs and approved draft PR creation.",
+    label: "Live Codex + PR",
+  },
+];
+
 export default async function ReadinessPage() {
   const readiness = await getReadiness();
 
@@ -137,6 +158,10 @@ export default async function ReadinessPage() {
     readiness.runner.heartbeatAgeSeconds <= 120;
   const runnerNeedsStart =
     readiness.runner.health === "offline" || readiness.runner.health === "stale";
+  const queueCanClaimWork = !readiness.queue.paused;
+  const liveRunnerRisk =
+    queueCanClaimWork &&
+    (readiness.runner.codexEnabled || readiness.runner.prCreationEnabled);
 
   return (
     <AppShell active="readiness">
@@ -240,6 +265,33 @@ export default async function ReadinessPage() {
                 ? `Last heartbeat ${formatHeartbeat(readiness.runner.heartbeatAgeSeconds)}`
                 : "No heartbeat has been recorded yet."}
             </p>
+          </div>
+        </section>
+
+        <section className="panel runner-operations-card" aria-label="Runner operations">
+          <div className="operations-safety-header">
+            <div>
+              <h2>Runner Operations</h2>
+              <p>Start the runner in the mode that matches the work you are ready to allow.</p>
+            </div>
+            <span className={liveRunnerRisk ? "mode-live" : "mode-dry-run"}>
+              {liveRunnerRisk ? "Live claims possible" : "Approval gated"}
+            </span>
+          </div>
+          {liveRunnerRisk ? (
+            <div className="runner-warning">
+              <strong>Queue is active with live runner permissions.</strong>
+              <p>Pause the queue if you want to approve jobs one at a time before any spend or push.</p>
+            </div>
+          ) : null}
+          <div className="runner-command-grid">
+            {runnerCommandProfiles.map((profile) => (
+              <article key={profile.label}>
+                <span>{profile.label}</span>
+                <p>{profile.description}</p>
+                <code>{profile.command}</code>
+              </article>
+            ))}
           </div>
         </section>
 
