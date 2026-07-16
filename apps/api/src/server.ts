@@ -186,9 +186,10 @@ const retryableStatuses = ["BLOCKED", "FAILED", "RETRY"] as const;
 const nextActionStatusPriority: Partial<Record<JobResponse["status"], number>> = {
   READY_FOR_CODEX: 0,
   REVIEW: 1,
-  BLOCKED: 2,
-  FAILED: 3,
-  RETRY: 4,
+  PR_CREATED: 2,
+  BLOCKED: 3,
+  FAILED: 4,
+  RETRY: 5,
 };
 
 const getJobActionLabel = (status: JobResponse["status"]) => {
@@ -198,6 +199,10 @@ const getJobActionLabel = (status: JobResponse["status"]) => {
 
   if (status === "REVIEW") {
     return "Approve Draft PR";
+  }
+
+  if (status === "PR_CREATED") {
+    return "Review Pull Request";
   }
 
   return "Open Attention Job";
@@ -210,6 +215,10 @@ const getJobActionText = (status: JobResponse["status"]) => {
 
   if (status === "REVIEW") {
     return "Validated work is waiting before any branch push or PR creation.";
+  }
+
+  if (status === "PR_CREATED") {
+    return "A draft pull request exists; checks and merge are still pending.";
   }
 
   return "A job needs recovery before the pipeline can continue.";
@@ -278,7 +287,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         },
         where: {
           status: {
-            in: ["READY_FOR_CODEX", "REVIEW", "BLOCKED", "FAILED", "RETRY"],
+            in: ["READY_FOR_CODEX", "REVIEW", "PR_CREATED", "BLOCKED", "FAILED", "RETRY"],
           },
         },
       }),
@@ -308,12 +317,20 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       },
       queue: toQueueControlResponse(queueControl),
       counts: {
-        activeJobs: countByStatus(["CLAIMED", "RUNNING", "VALIDATING", "CODEX_APPROVED", "PR_APPROVED"]),
+        activeJobs: countByStatus([
+          "CLAIMED",
+          "RUNNING",
+          "VALIDATING",
+          "CODEX_APPROVED",
+          "PR_APPROVED",
+          "PR_CREATED",
+        ]),
         blockedJobs: countByStatus(["BLOCKED", "FAILED", "RETRY"]),
         codexApprovalJobs: countByStatus(["READY_FOR_CODEX"]),
         completedJobs: countByStatus(["COMPLETED"]),
         jobs: jobs.length,
         prApprovalJobs: countByStatus(["REVIEW"]),
+        prCreatedJobs: countByStatus(["PR_CREATED"]),
         repositories,
       },
       nextAction: nextActionJob

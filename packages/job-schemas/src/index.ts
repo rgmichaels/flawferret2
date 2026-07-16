@@ -10,6 +10,7 @@ export const jobStatusSchema = z.enum([
   "VALIDATING",
   "REVIEW",
   "PR_APPROVED",
+  "PR_CREATED",
   "COMPLETED",
   "FAILED",
   "BLOCKED",
@@ -114,6 +115,7 @@ export const readinessResponseSchema = z.object({
     completedJobs: z.number().int().nonnegative(),
     jobs: z.number().int().nonnegative(),
     prApprovalJobs: z.number().int().nonnegative(),
+    prCreatedJobs: z.number().int().nonnegative(),
     repositories: z.number().int().nonnegative(),
   }),
   nextAction: z

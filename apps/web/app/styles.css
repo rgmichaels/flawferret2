@@ -544,6 +544,7 @@ td span {
 
 .status-pill.review,
 .status-pill.pr_approved,
+.status-pill.pr_created,
 .status-pill.codex_approved {
   background: #fef3c7;
   color: #b45309;

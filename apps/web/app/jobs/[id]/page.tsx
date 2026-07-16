@@ -110,6 +110,7 @@ const jobStatusLabels: Record<JobStatus, string> = {
   READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
   PR_APPROVED: "PR Approved",
+  PR_CREATED: "PR Created",
   REVIEW: "Review",
   RUNNING: "Running",
   VALIDATING: "Validating",
@@ -331,9 +332,12 @@ const buildPipelineStages = ({
     job.status === "VALIDATING" ||
     job.status === "REVIEW" ||
     job.status === "PR_APPROVED" ||
+    job.status === "PR_CREATED" ||
     job.status === "COMPLETED";
   const validationDone =
-    job.status === "COMPLETED" || (hasValidation && job.status === "REVIEW");
+    job.status === "COMPLETED" ||
+    job.status === "PR_CREATED" ||
+    (hasValidation && (job.status === "REVIEW" || job.status === "PR_APPROVED"));
 
   return [
     {
@@ -400,6 +404,8 @@ const buildPipelineStages = ({
           ? "Draft pull request is available."
           : job.status === "PR_APPROVED"
             ? "Approved; runner will push the branch and create the PR."
+            : job.status === "PR_CREATED"
+              ? "Draft pull request was created; checks and merge are pending."
             : job.status === "COMPLETED"
               ? "Pipeline completed."
               : "Manual approval required before branch push and PR creation."
@@ -407,7 +413,7 @@ const buildPipelineStages = ({
       label: "Draft PR",
       state: !shouldCreateDraftPr
         ? "skipped"
-        : prUrl || job.status === "COMPLETED"
+        : prUrl || job.status === "PR_CREATED" || job.status === "COMPLETED"
           ? "complete"
           : job.status === "REVIEW" || job.status === "PR_APPROVED" || latestRun?.status === "PUSHING"
             ? "current"

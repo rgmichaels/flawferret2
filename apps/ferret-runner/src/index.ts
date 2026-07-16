@@ -8,6 +8,7 @@ import {
   heartbeatWorker,
   markJobBlocked,
   markJobCompleted,
+  markJobPrCreated,
   markJobReadyForCodex,
   markJobReview,
   markJobRunning,
@@ -934,15 +935,15 @@ while (!shouldStop) {
         metadata: pullRequestMetadata,
       });
 
-      const completedJob = await markJobCompleted({
+      const prCreatedJob = await markJobPrCreated({
         jobId: reviewJob.id,
         workerId,
       });
 
       await appendJobEvent({
-        jobId: completedJob.id,
+        jobId: prCreatedJob.id,
         eventType: "PR_CREATED",
-        message: "ferret-runner created a draft pull request.",
+        message: "ferret-runner created a draft pull request; checks and merge are pending.",
         metadata: {
           ...pullRequestResult.metadata,
           runId: latestRun.id,
@@ -951,7 +952,7 @@ while (!shouldStop) {
       });
 
       log("Draft PR created", {
-        jobId: completedJob.id,
+        jobId: prCreatedJob.id,
         prUrl: pullRequestResult.metadata.prUrl,
         runId: latestRun.id,
       });

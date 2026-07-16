@@ -1,0 +1,1 @@
+ALTER TYPE "JobStatus" ADD VALUE 'PR_CREATED';

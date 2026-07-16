@@ -74,6 +74,14 @@ const getNextAction = (readiness: ReadinessResponse) => {
     };
   }
 
+  if (readiness.counts.prCreatedJobs > 0) {
+    return {
+      href: "/#jobs",
+      label: "Review Pull Request",
+      text: "A draft PR exists; checks and merge are still pending.",
+    };
+  }
+
   if (readiness.counts.blockedJobs > 0) {
     return {
       href: "/#jobs",
@@ -236,6 +244,10 @@ export default async function ReadinessPage() {
             <div>
               <dt>Awaiting Draft PR Approval</dt>
               <dd>{readiness.counts.prApprovalJobs}</dd>
+            </div>
+            <div>
+              <dt>Pull Requests Created</dt>
+              <dd>{readiness.counts.prCreatedJobs}</dd>
             </div>
             <div>
               <dt>Completed</dt>
