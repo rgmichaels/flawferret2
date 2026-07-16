@@ -855,50 +855,97 @@ label {
   font-size: 14px;
 }
 
-.runner-ops-card {
+.operations-safety-card {
   display: grid;
-  gap: 14px;
-  grid-template-columns: 1.2fr 1.6fr 1.2fr;
-  padding: 20px 24px;
+  gap: 18px;
+  padding: 22px 24px;
 }
 
-.runner-ops-card div {
+.operations-safety-header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.operations-safety-header p {
+  color: #667085;
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.operations-safety-header > span {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 6px 9px;
+  text-transform: uppercase;
+}
+
+.safety-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.safety-grid article {
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
   display: grid;
   gap: 8px;
   min-width: 0;
+  padding: 14px;
 }
 
-.runner-ops-card span {
-  color: #667085;
-  font-size: 12px;
+.safety-grid span,
+.runner-worker-strip span {
+  font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.runner-ops-card strong {
+.safety-grid strong {
   color: #172033;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.2;
-  overflow-wrap: anywhere;
 }
 
-.runner-ops-card p {
+.safety-grid p,
+.runner-worker-strip p {
   color: #667085;
   font-size: 12px;
   line-height: 1.4;
   margin-bottom: 0;
 }
 
-.runner-ops-card code {
+.safety-grid code {
   background: #f8fafc;
-  border: 1px solid #e1e7f0;
+  border: 1px solid #edf1f6;
   border-radius: 8px;
   color: #172033;
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.45;
   overflow-wrap: anywhere;
-  padding: 10px 12px;
+  padding: 8px 9px;
+}
+
+.runner-worker-strip {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px 14px;
+}
+
+.runner-worker-strip strong {
+  color: #172033;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .readiness-grid {
@@ -1468,6 +1515,10 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .safety-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .content-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1534,8 +1585,18 @@ textarea {
   }
 
   .execution-mode-card,
-  .runner-ops-card,
+  .safety-grid,
   .stage-tracker {
     grid-template-columns: 1fr;
+  }
+
+  .operations-safety-header,
+  .runner-worker-strip {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+
+  .operations-safety-header {
+    flex-direction: column;
   }
 }
