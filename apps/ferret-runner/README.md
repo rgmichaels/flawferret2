@@ -28,10 +28,10 @@ Draft PR creation also requires a separate manual approval step. By default,
 GitHub pull request.
 
 Validation always runs after Codex completes. If `FERRET_RUNNER_VALIDATION_COMMAND` is set, it is
-used as a global override. Otherwise the runner uses the registered repository's validation command.
-If neither command is configured, validation only checks that Codex left changed files in the local
-checkout. Start with a small command when you want real validation, for example
-`pnpm test -- --grep login`.
+used as a global override. Otherwise the runner uses a focused validation command from Codex's final
+response when one is available, then the registered repository's validation command. If neither
+command is configured, validation only checks that Codex left changed files in the local checkout.
+Start with a small command when you want real validation, for example `pnpm test -- --grep login`.
 
 ## Run
 

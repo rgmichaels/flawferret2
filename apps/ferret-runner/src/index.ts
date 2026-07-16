@@ -176,6 +176,21 @@ const truncateText = (value: string | null, maxLength = 4000) => {
   return `${value.slice(0, maxLength)}...`;
 };
 
+const extractFocusedValidationCommand = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/(?:^|\n)\s*Focused validation command:\s*(.+)\s*$/im);
+  const command = match?.[1]?.trim().replace(/^`+|`+$/g, "").trim();
+
+  if (!command || /^unavailable$/i.test(command) || /^n\/a$/i.test(command)) {
+    return null;
+  }
+
+  return command;
+};
+
 const getInvocationMetadata = ({
   invocationPlan,
   logPath = null,
@@ -199,6 +214,7 @@ const getInvocationMetadata = ({
   enabled: invocationPlan.enabled,
   error: result?.error ?? null,
   exitCode: result?.exitCode ?? null,
+  focusedValidationCommand: extractFocusedValidationCommand(result?.finalResponse ?? null),
   finalResponse: truncateText(result?.finalResponse ?? null),
   logPath,
   model: invocationPlan.model,
@@ -686,12 +702,19 @@ while (!shouldStop) {
       "runAffectedTests",
       true,
     );
+    const codexMetadata = getMetadataRecord(getMetadataRecord(latestRun.metadata).codex);
+    const focusedValidationCommand = getOptionalCommand(
+      getMetadataString(codexMetadata, "focusedValidationCommand"),
+    );
     const validationCommand =
       getOptionalCommand(config.FERRET_RUNNER_VALIDATION_COMMAND) ??
+      focusedValidationCommand ??
       getOptionalCommand(validationJob.repository?.validationCommand);
     const validationCommandSource = validationCommand
       ? getOptionalCommand(config.FERRET_RUNNER_VALIDATION_COMMAND)
         ? "environment"
+        : focusedValidationCommand
+          ? "focused"
         : "repository"
       : "changed_files";
 
@@ -702,6 +725,7 @@ while (!shouldStop) {
       metadata: {
         command: validationCommand ?? null,
         commandSource: validationCommandSource,
+        focusedValidationCommand: focusedValidationCommand ?? null,
         localPath,
         runAffectedTests,
         runId: latestRun.id,
@@ -728,6 +752,7 @@ while (!shouldStop) {
       validation: {
         ...validationResult.metadata,
         commandSource: validationCommandSource,
+        focusedValidationCommand: focusedValidationCommand ?? null,
         runAffectedTests,
       },
     };
@@ -755,6 +780,7 @@ while (!shouldStop) {
         metadata: {
           ...validationResult.metadata,
           commandSource: validationCommandSource,
+          focusedValidationCommand: focusedValidationCommand ?? null,
           runId: latestRun.id,
           workerId,
         },
@@ -802,6 +828,7 @@ while (!shouldStop) {
         ...validationResult.metadata,
         createDraftPr: shouldCreateDraftPr,
         commandSource: validationCommandSource,
+        focusedValidationCommand: focusedValidationCommand ?? null,
         runAffectedTests,
         runId: latestRun.id,
         status: nextJob.status,
@@ -817,6 +844,7 @@ while (!shouldStop) {
           ...validationResult.metadata,
           commandSource: validationCommandSource,
           createDraftPr: shouldCreateDraftPr,
+          focusedValidationCommand: focusedValidationCommand ?? null,
           runAffectedTests,
         },
       },

@@ -538,6 +538,9 @@ export default async function JobDetailPage({
   const codexTimedOut = getMetadataBoolean(codexMetadata, "timedOut");
   const codexError = getMetadataString(codexMetadata, "error");
   const codexFinalResponse = getMetadataString(codexMetadata, "finalResponse");
+  const focusedValidationCommand =
+    getMetadataString(validationMetadata, "focusedValidationCommand") ??
+    getMetadataString(codexMetadata, "focusedValidationCommand");
   const codexLogPath = getMetadataString(codexMetadata, "logPath");
   const codexStderrPath = getMetadataString(codexMetadata, "stderrPath");
   const validationExitCode = getMetadataNumber(validationMetadata, "exitCode");
@@ -563,7 +566,9 @@ export default async function JobDetailPage({
     : validationRanRealCommand
       ? {
           description:
-            validationCommandSource === "repository"
+            validationCommandSource === "focused"
+              ? "Codex suggested a focused command for this generated test, and it ran successfully."
+              : validationCommandSource === "repository"
               ? "The repository validation command ran successfully after Codex changed the code."
               : "The global validation command ran successfully after Codex changed the code.",
           label: "Real command passed",
@@ -944,6 +949,12 @@ export default async function JobDetailPage({
                   <dt>Summary</dt>
                   <dd>{getMetadataString(codexMetadata, "finalResponse") ?? "Not recorded"}</dd>
                 </div>
+                <div>
+                  <dt>Suggested Focused Check</dt>
+                  <dd>
+                    <code>{focusedValidationCommand ?? "Not suggested"}</code>
+                  </dd>
+                </div>
               </dl>
             </section>
 
@@ -965,6 +976,12 @@ export default async function JobDetailPage({
                 <div>
                   <dt>Command Source</dt>
                   <dd>{validationCommandSource ?? "Not recorded"}</dd>
+                </div>
+                <div>
+                  <dt>Focused Suggestion</dt>
+                  <dd>
+                    <code>{focusedValidationCommand ?? "Not recorded"}</code>
+                  </dd>
                 </div>
                 <div>
                   <dt>Test Scope</dt>
