@@ -20,6 +20,8 @@ export type ClaimNextValidatingJobResult = Awaited<ReturnType<typeof claimNextVa
 export type ClaimedValidatingJob = NonNullable<ClaimNextValidatingJobResult["job"]>;
 export type ClaimNextReviewJobResult = Awaited<ReturnType<typeof claimNextReviewJob>>;
 export type ClaimedReviewJob = NonNullable<ClaimNextReviewJobResult["job"]>;
+export type ClaimNextPrCreatedJobResult = Awaited<ReturnType<typeof claimNextPrCreatedJob>>;
+export type ClaimedPrCreatedJob = NonNullable<ClaimNextPrCreatedJobResult["job"]>;
 
 export const DEFAULT_QUEUE_CONTROL_ID = "default";
 
@@ -57,6 +59,11 @@ export const appendJobEvent = async ({
     | "WORK_BRANCH_COMMITTED"
     | "WORK_BRANCH_PUSHED"
     | "PR_CREATED"
+    | "PR_CHECKS_PENDING"
+    | "PR_CHECKS_PASSED"
+    | "PR_CHECKS_FAILED"
+    | "PR_MERGED"
+    | "PR_CLOSED"
     | "PR_CREATION_FAILED"
     | "PR_CREATION_APPROVED"
     | "JOB_BLOCKED";
@@ -373,6 +380,70 @@ export const claimNextReviewJob = async (workerId: string) =>
       SELECT id
       FROM jobs
       WHERE status = 'PR_APPROVED'
+      ORDER BY updated_at ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+
+    const candidate = candidates[0];
+
+    if (!candidate) {
+      return {
+        job: null,
+        queuePaused: false,
+      };
+    }
+
+    const job = await tx.job.update({
+      where: {
+        id: candidate.id,
+      },
+      data: {
+        claimedAt: new Date(),
+        claimedBy: workerId,
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return {
+      job,
+      queuePaused: false,
+    };
+  });
+
+export const claimNextPrCreatedJob = async (workerId: string) =>
+  prisma.$transaction(async (tx) => {
+    const queueControl = await tx.queueControl.upsert({
+      where: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+      },
+      update: {},
+      create: {
+        id: DEFAULT_QUEUE_CONTROL_ID,
+        paused: false,
+        resumedAt: new Date(),
+      },
+    });
+
+    if (queueControl.paused) {
+      return {
+        job: null,
+        queuePaused: true,
+      };
+    }
+
+    const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM jobs
+      WHERE status = 'PR_CREATED'
       ORDER BY updated_at ASC
       FOR UPDATE SKIP LOCKED
       LIMIT 1
