@@ -148,6 +148,34 @@ textarea {
   color: #fbbf24;
 }
 
+.system-status-list dd.danger {
+  color: #f87171;
+}
+
+.runner-command-card {
+  background: rgb(255 255 255 / 5%);
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px;
+}
+
+.runner-command-card span {
+  color: #a7b5c8;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.runner-command-card code {
+  color: #dbeafe;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .queue-control-form {
   margin-top: 14px;
 }
@@ -746,6 +774,52 @@ label {
   color: #2563eb;
   flex: 0 0 auto;
   font-size: 14px;
+}
+
+.runner-ops-card {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1.2fr 1.6fr 1.2fr;
+  padding: 20px 24px;
+}
+
+.runner-ops-card div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.runner-ops-card span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.runner-ops-card strong {
+  color: #172033;
+  font-size: 18px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.runner-ops-card p {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.runner-ops-card code {
+  background: #f8fafc;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  color: #172033;
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
 }
 
 .readiness-grid {
@@ -1376,6 +1450,7 @@ textarea {
   }
 
   .execution-mode-card,
+  .runner-ops-card,
   .stage-tracker {
     grid-template-columns: 1fr;
   }
