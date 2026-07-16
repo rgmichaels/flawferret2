@@ -99,6 +99,14 @@ const getNextAction = (readiness: ReadinessResponse) => {
 
 const statusClass = (ok: boolean) => (ok ? "readiness-ok" : "readiness-warn");
 
+const runnerHealthLabels: Record<ReadinessResponse["runner"]["health"], string> = {
+  busy: "Busy",
+  error: "Error",
+  idle: "Idle",
+  offline: "Offline",
+  stale: "Stale heartbeat",
+};
+
 export default async function ReadinessPage() {
   const readiness = await getReadiness();
 
@@ -125,6 +133,8 @@ export default async function ReadinessPage() {
   const runnerFresh =
     readiness.runner.heartbeatAgeSeconds !== null &&
     readiness.runner.heartbeatAgeSeconds <= 120;
+  const runnerNeedsStart =
+    readiness.runner.health === "offline" || readiness.runner.health === "stale";
 
   return (
     <AppShell active="readiness">
@@ -179,6 +189,29 @@ export default async function ReadinessPage() {
           </div>
         </section>
 
+        <section className="panel runner-ops-card" aria-label="Runner operations">
+          <div>
+            <span className={statusClass(!runnerNeedsStart && readiness.runner.health !== "error")}>
+              ferret-runner
+            </span>
+            <strong>{runnerHealthLabels[readiness.runner.health]}</strong>
+            <p>{readiness.runner.healthText}</p>
+          </div>
+          <div>
+            <span>Start command</span>
+            <code>{readiness.runner.startCommand}</code>
+          </div>
+          <div>
+            <span>Worker</span>
+            <strong>{readiness.runner.id ?? "Not connected"}</strong>
+            <p>
+              {readiness.runner.lastHeartbeat
+                ? `Last heartbeat ${formatHeartbeat(readiness.runner.heartbeatAgeSeconds)}`
+                : "No heartbeat has been recorded yet."}
+            </p>
+          </div>
+        </section>
+
         <section className="readiness-grid" aria-label="Pipeline readiness checks">
           <article className="panel readiness-card">
             <span className={statusClass(readiness.api.databaseConnected)}>API / DB</span>
@@ -197,8 +230,8 @@ export default async function ReadinessPage() {
           </article>
           <article className="panel readiness-card">
             <span className={statusClass(runnerFresh)}>Runner</span>
-            <strong>{readiness.runner.status ?? "Unknown"}</strong>
-            <p>{formatHeartbeat(readiness.runner.heartbeatAgeSeconds)}</p>
+            <strong>{runnerHealthLabels[readiness.runner.health]}</strong>
+            <p>{readiness.runner.healthText}</p>
           </article>
           <article className="panel readiness-card">
             <span className={statusClass(readiness.runner.codexEnabled)}>Codex</span>

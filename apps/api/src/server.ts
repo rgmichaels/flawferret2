@@ -236,6 +236,56 @@ const githubRepositoryUrl = ({ owner, name }: { owner: string; name: string }) =
 const githubCloneUrl = ({ owner, name }: { owner: string; name: string }) =>
   `${githubRepositoryUrl({ owner, name })}.git`;
 
+const RUNNER_START_COMMAND = "pnpm --filter @flawferret2/ferret-runner dev";
+
+const getRunnerHealth = ({
+  heartbeatAgeSeconds,
+  status,
+}: {
+  heartbeatAgeSeconds: number | null;
+  status: string | null;
+}) => {
+  if (heartbeatAgeSeconds === null) {
+    return {
+      health: "offline" as const,
+      healthText: "No runner heartbeat has been recorded.",
+    };
+  }
+
+  if (status === "OFFLINE") {
+    return {
+      health: "offline" as const,
+      healthText: "Runner reported offline.",
+    };
+  }
+
+  if (status === "ERROR") {
+    return {
+      health: "error" as const,
+      healthText: "Runner reported an error state.",
+    };
+  }
+
+  if (heartbeatAgeSeconds > 120) {
+    return {
+      health: "stale" as const,
+      healthText: `Last heartbeat was ${heartbeatAgeSeconds}s ago.`,
+    };
+  }
+
+  if (status === "BUSY") {
+    return {
+      health: "busy" as const,
+      healthText: "Runner is currently working.",
+    };
+  }
+
+  return {
+    health: "idle" as const,
+    healthText: "Runner heartbeat is fresh and ready.",
+  };
+};
+
 export const buildServer = async (): Promise<FastifyInstance> => {
   const server = Fastify({
     logger: true,
@@ -307,6 +357,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const heartbeatAgeSeconds = latestWorker
       ? Math.max(0, Math.floor((now - latestWorker.lastHeartbeat.getTime()) / 1000))
       : null;
+    const runnerHealth = getRunnerHealth({
+      heartbeatAgeSeconds,
+      status: latestWorker?.status ?? null,
+    });
     const countByStatus = (statuses: JobResponse["status"][]) =>
       jobs.filter((job) => statuses.includes(job.status)).length;
     const nextActionJob =
@@ -351,9 +405,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         codexCommand: config.CODEX_COMMAND,
         codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,
         heartbeatAgeSeconds,
+        health: runnerHealth.health,
+        healthText: runnerHealth.healthText,
         id: latestWorker?.id ?? null,
         lastHeartbeat: latestWorker?.lastHeartbeat.toISOString() ?? null,
         prCreationEnabled: config.FERRET_RUNNER_ENABLE_PR_CREATION,
+        startCommand: RUNNER_START_COMMAND,
         status: latestWorker?.status ?? null,
         validationCommandConfigured: Boolean(config.FERRET_RUNNER_VALIDATION_COMMAND),
       },
