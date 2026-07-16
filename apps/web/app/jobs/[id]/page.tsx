@@ -1,4 +1,5 @@
 import type {
+  JobDiffResponse,
   JobEventResponse,
   JobResponse,
   JobStatus,
@@ -69,6 +70,22 @@ async function getReadiness(): Promise<ReadinessResponse | null> {
     }
 
     return response.json() as Promise<ReadinessResponse>;
+  } catch {
+    return null;
+  }
+}
+
+async function getJobDiff(id: string): Promise<JobDiffResponse | null> {
+  try {
+    const response = await fetch(`${apiUrl}/jobs/${id}/diff`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<JobDiffResponse>;
   } catch {
     return null;
   }
@@ -469,11 +486,12 @@ export default async function JobDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [job, events, runs, readiness] = await Promise.all([
+  const [job, events, runs, readiness, generatedDiff] = await Promise.all([
     getJob(id),
     getJobEvents(id),
     getJobRuns(id),
     getReadiness(),
+    getJobDiff(id),
   ]);
 
   if (!job) {
@@ -671,6 +689,49 @@ export default async function JobDetailPage({
             <small>{stage.state}</small>
           </article>
         ))}
+      </section>
+
+      <section className="panel generated-diff-card" aria-label="Generated diff">
+        <div className="generated-diff-header">
+          <div>
+            <h2>Generated Diff</h2>
+            <p>Review the local generated changes before approving draft PR creation.</p>
+          </div>
+          <span>{generatedDiff?.available ? "Available" : "Not available"}</span>
+        </div>
+        {generatedDiff?.available ? (
+          <>
+            <dl className="generated-diff-meta">
+              <div>
+                <dt>Base</dt>
+                <dd>
+                  <code>{generatedDiff.baseRef ?? "Not recorded"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Work Branch</dt>
+                <dd>
+                  <code>{generatedDiff.workBranch ?? "Not recorded"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Local Path</dt>
+                <dd>
+                  <code>{generatedDiff.localPath ?? "Not recorded"}</code>
+                </dd>
+              </div>
+            </dl>
+            <pre className="generated-diff-stat">{generatedDiff.stat.trim()}</pre>
+            <pre className="generated-diff-output">{generatedDiff.diff}</pre>
+            {generatedDiff.truncated ? (
+              <p className="generated-diff-note">Diff output was truncated for display.</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="empty compact-empty">
+            {generatedDiff?.reason ?? "Generated diff could not be loaded from the API."}
+          </p>
+        )}
       </section>
 
       <section className="panel diagnostics-card" aria-label="Job diagnostics">
