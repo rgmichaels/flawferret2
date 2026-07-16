@@ -162,6 +162,12 @@ const getMetadataString = (metadata: unknown, key: string) => {
   return typeof value === "string" && value.length > 0 ? value : null;
 };
 
+const getOptionalCommand = (value: string | null | undefined) => {
+  const trimmed = value?.trim();
+
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+};
+
 const truncateText = (value: string | null, maxLength = 4000) => {
   if (!value || value.length <= maxLength) {
     return value;
@@ -680,13 +686,22 @@ while (!shouldStop) {
       "runAffectedTests",
       true,
     );
+    const validationCommand =
+      getOptionalCommand(config.FERRET_RUNNER_VALIDATION_COMMAND) ??
+      getOptionalCommand(validationJob.repository?.validationCommand);
+    const validationCommandSource = validationCommand
+      ? getOptionalCommand(config.FERRET_RUNNER_VALIDATION_COMMAND)
+        ? "environment"
+        : "repository"
+      : "changed_files";
 
     await appendJobEvent({
       jobId: validationJob.id,
       eventType: "VALIDATION_STARTED",
       message: "ferret-runner started validating generated work.",
       metadata: {
-        command: config.FERRET_RUNNER_VALIDATION_COMMAND ?? null,
+        command: validationCommand ?? null,
+        commandSource: validationCommandSource,
         localPath,
         runAffectedTests,
         runId: latestRun.id,
@@ -701,7 +716,7 @@ while (!shouldStop) {
     });
 
     const validationResult = await validateGeneratedWork({
-      command: config.FERRET_RUNNER_VALIDATION_COMMAND,
+      command: validationCommand,
       jobId: validationJob.id,
       localPath,
       logDir: config.FERRET_RUNNER_LOG_DIR,
@@ -712,6 +727,7 @@ while (!shouldStop) {
       ...getMetadataRecord(latestRun.metadata),
       validation: {
         ...validationResult.metadata,
+        commandSource: validationCommandSource,
         runAffectedTests,
       },
     };
@@ -738,6 +754,7 @@ while (!shouldStop) {
         message: validationResult.message,
         metadata: {
           ...validationResult.metadata,
+          commandSource: validationCommandSource,
           runId: latestRun.id,
           workerId,
         },
@@ -784,6 +801,7 @@ while (!shouldStop) {
       metadata: {
         ...validationResult.metadata,
         createDraftPr: shouldCreateDraftPr,
+        commandSource: validationCommandSource,
         runAffectedTests,
         runId: latestRun.id,
         status: nextJob.status,
@@ -797,6 +815,7 @@ while (!shouldStop) {
         ...validationMetadata,
         validation: {
           ...validationResult.metadata,
+          commandSource: validationCommandSource,
           createDraftPr: shouldCreateDraftPr,
           runAffectedTests,
         },

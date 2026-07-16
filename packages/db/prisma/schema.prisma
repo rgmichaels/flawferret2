@@ -106,37 +106,38 @@ model QueueControl {
 }
 
 model Repository {
-  id            String             @id @default(uuid()) @db.Uuid
-  provider      RepositoryProvider @default(GITHUB)
-  owner         String
-  name          String
-  defaultBranch String             @default("main") @map("default_branch")
-  cloneUrl      String             @map("clone_url")
-  webUrl        String             @map("web_url")
-  localPath     String?            @map("local_path")
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
-  jobs          Job[]
+  id                String             @id @default(uuid()) @db.Uuid
+  provider          RepositoryProvider @default(GITHUB)
+  owner             String
+  name              String
+  defaultBranch     String             @default("main") @map("default_branch")
+  cloneUrl          String             @map("clone_url")
+  webUrl            String             @map("web_url")
+  localPath         String?            @map("local_path")
+  validationCommand String?            @map("validation_command")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  jobs              Job[]
 
   @@unique([provider, owner, name])
   @@map("repositories")
 }
 
 model Job {
-  id          String      @id @default(uuid()) @db.Uuid
-  jobType     JobType     @map("job_type")
-  status      JobStatus   @default(QUEUED)
-  priority    JobPriority @default(NORMAL)
-  payload     Json
+  id           String      @id @default(uuid()) @db.Uuid
+  jobType      JobType     @map("job_type")
+  status       JobStatus   @default(QUEUED)
+  priority     JobPriority @default(NORMAL)
+  payload      Json
   repositoryId String?     @map("repository_id") @db.Uuid
-  claimedBy   String?     @map("claimed_by")
-  claimedAt   DateTime?   @map("claimed_at")
-  completedAt DateTime?   @map("completed_at")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  events      JobEvent[]
-  repository  Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
-  runs        Run[]
+  claimedBy    String?     @map("claimed_by")
+  claimedAt    DateTime?   @map("claimed_at")
+  completedAt  DateTime?   @map("completed_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  events       JobEvent[]
+  repository   Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  runs         Run[]
 
   @@index([status, priority, createdAt])
   @@index([repositoryId])

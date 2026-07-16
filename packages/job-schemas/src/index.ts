@@ -86,6 +86,7 @@ export const createRepositoryRequestSchema = z.object({
     .regex(/^[A-Za-z0-9_.-]+$/, "Repository name must not include slashes or spaces"),
   defaultBranch: z.string().trim().min(1, "Default branch is required").default("main"),
   localPath: z.string().trim().min(1, "Local checkout path is required"),
+  validationCommand: z.string().trim().optional(),
 });
 
 export const repositoryResponseSchema = z.object({
@@ -97,6 +98,7 @@ export const repositoryResponseSchema = z.object({
   cloneUrl: z.string(),
   webUrl: z.string(),
   localPath: z.string().nullable(),
+  validationCommand: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

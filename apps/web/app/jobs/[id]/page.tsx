@@ -915,6 +915,10 @@ export default async function JobDetailPage({
                   <dd>{getMetadataString(validationMetadata, "command") ?? "Change detection only"}</dd>
                 </div>
                 <div>
+                  <dt>Command Source</dt>
+                  <dd>{getMetadataString(validationMetadata, "commandSource") ?? "Not recorded"}</dd>
+                </div>
+                <div>
                   <dt>Test Scope</dt>
                   <dd>
                     {getMetadataBoolean(validationMetadata, "runAffectedTests") === false
