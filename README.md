@@ -41,6 +41,7 @@ Milestone 3 introduces repository registry state for future runner checkout:
 - `GET /repositories/:id`
 - Dashboard repository registration
 - Job creation by registered repository and target branch
+- Optional repository validation command for runner checks
 
 No repository cloning, Codex invocation, Playwright validation, or pull request automation is implemented in Milestone 3.
 
@@ -62,6 +63,8 @@ No repository checkout, Codex invocation, Playwright validation, or pull request
 1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres connection string.
    To enable Slack milestone notifications, create an incoming webhook for `#ff2-logs`
    and set `SLACK_WEBHOOK_URL` in `.env`.
+   Repositories can also define their own validation command in the web UI.
+   `FERRET_RUNNER_VALIDATION_COMMAND` remains available as a global override.
 2. Install dependencies:
 
 ```bash

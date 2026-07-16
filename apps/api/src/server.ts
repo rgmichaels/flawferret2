@@ -105,6 +105,7 @@ const toRepositoryResponse = (repository: {
   cloneUrl: string;
   webUrl: string;
   localPath: string | null;
+  validationCommand: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): RepositoryResponse => ({
@@ -116,6 +117,7 @@ const toRepositoryResponse = (repository: {
   cloneUrl: repository.cloneUrl,
   webUrl: repository.webUrl,
   localPath: repository.localPath,
+  validationCommand: repository.validationCommand,
   createdAt: repository.createdAt.toISOString(),
   updatedAt: repository.updatedAt.toISOString(),
 });
@@ -136,6 +138,7 @@ const toJobResponseWithRepository = (job: {
         cloneUrl: string;
         webUrl: string;
         localPath: string | null;
+        validationCommand: string | null;
         createdAt: Date;
         updatedAt: Date;
       })
@@ -312,6 +315,12 @@ const repositoryParamsSchema = z.object({
 
 const retryableStatuses = ["BLOCKED", "FAILED", "RETRY"] as const;
 
+const optionalText = (value: string | undefined) => {
+  const trimmed = value?.trim();
+
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+};
+
 const nextActionStatusPriority: Partial<Record<JobResponse["status"], number>> = {
   READY_FOR_CODEX: 0,
   REVIEW: 1,
@@ -446,9 +455,26 @@ export const buildServer = async (): Promise<FastifyInstance> => {
   server.get("/readiness", async () => {
     await prisma.$queryRaw`SELECT 1`;
 
-    const [queueControl, repositories, jobs, nextActionJobs, latestWorker] = await Promise.all([
+    const [
+      queueControl,
+      repositories,
+      repositoryWithValidationCommand,
+      jobs,
+      nextActionJobs,
+      latestWorker,
+    ] = await Promise.all([
       getQueueControl(),
       prisma.repository.count(),
+      prisma.repository.findFirst({
+        select: {
+          id: true,
+        },
+        where: {
+          validationCommand: {
+            not: null,
+          },
+        },
+      }),
       prisma.job.findMany({
         select: {
           status: true,
@@ -536,7 +562,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         slackConfigured: Boolean(config.SLACK_WEBHOOK_URL),
         startCommand: RUNNER_START_COMMAND,
         status: latestWorker?.status ?? null,
-        validationCommandConfigured: Boolean(config.FERRET_RUNNER_VALIDATION_COMMAND),
+        validationCommandConfigured:
+          Boolean(config.FERRET_RUNNER_VALIDATION_COMMAND) ||
+          Boolean(repositoryWithValidationCommand),
       },
     };
   });
@@ -595,12 +623,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         cloneUrl,
         webUrl,
         localPath: body.localPath,
+        validationCommand: optionalText(body.validationCommand),
       },
       update: {
         defaultBranch: body.defaultBranch,
         cloneUrl,
         webUrl,
         localPath: body.localPath,
+        validationCommand: optionalText(body.validationCommand),
       },
     });
 

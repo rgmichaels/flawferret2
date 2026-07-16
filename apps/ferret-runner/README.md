@@ -27,9 +27,10 @@ Draft PR creation also requires a separate manual approval step. By default,
 `FERRET_RUNNER_ENABLE_PR_CREATION=false`, so review approvals do not push a branch or create a
 GitHub pull request.
 
-Validation always runs after Codex completes. If `FERRET_RUNNER_VALIDATION_COMMAND` is unset,
-validation only checks that Codex left changed files in the local checkout. Set
-`FERRET_RUNNER_VALIDATION_COMMAND` to a small command when you want real validation, for example
+Validation always runs after Codex completes. If `FERRET_RUNNER_VALIDATION_COMMAND` is set, it is
+used as a global override. Otherwise the runner uses the registered repository's validation command.
+If neither command is configured, validation only checks that Codex left changed files in the local
+checkout. Start with a small command when you want real validation, for example
 `pnpm test -- --grep login`.
 
 ## Run

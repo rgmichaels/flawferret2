@@ -41,6 +41,7 @@ async function registerRepository(formData: FormData) {
       name,
       defaultBranch: formData.get("defaultBranch"),
       localPath: formData.get("localPath"),
+      validationCommand: formData.get("validationCommand"),
     }),
   });
 
@@ -91,6 +92,14 @@ export default async function RepositoriesPage() {
                     <div>
                       <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
                       <code>{repository.localPath ?? "No local checkout configured"}</code>
+                      <span>
+                        Validation:{" "}
+                        {repository.validationCommand ? (
+                          <code>{repository.validationCommand}</code>
+                        ) : (
+                          "Change detection only"
+                        )}
+                      </span>
                     </div>
                     <span>{repository.defaultBranch}</span>
                   </li>
@@ -122,6 +131,17 @@ export default async function RepositoriesPage() {
                   placeholder="/Users/robertmichaels/Documents/code/playwright-tests"
                   required
                 />
+              </label>
+              <label>
+                Validation Command
+                <input
+                  defaultValue="npx playwright test"
+                  name="validationCommand"
+                  placeholder="npx playwright test"
+                />
+                <span className="field-hint">
+                  Defaults to Playwright. Edit or clear it if this repo needs a different check.
+                </span>
               </label>
               <button type="submit">Register Repository</button>
             </form>
