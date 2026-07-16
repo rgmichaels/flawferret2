@@ -544,8 +544,47 @@ export default async function JobDetailPage({
   const validationError = getMetadataString(validationMetadata, "error");
   const validationLogPath = getMetadataString(validationMetadata, "logPath");
   const validationStderrPath = getMetadataString(validationMetadata, "stderrPath");
+  const validationCommand = getMetadataString(validationMetadata, "command");
+  const validationCommandSource = getMetadataString(validationMetadata, "commandSource");
   const pullRequestError = getMetadataString(pullRequestMetadata, "error");
   const pullRequestLifecycleError = getMetadataString(pullRequestLifecycleMetadata, "error");
+  const validationHasRun = Object.keys(validationMetadata).length > 0;
+  const validationRanRealCommand = Boolean(validationCommand);
+  const validationTrust = validationError
+    ? {
+        description:
+          validationCommandSource === "changed_files"
+            ? "The fallback changed-file check failed. No focused test command was run for this job."
+            : "A configured validation command ran and failed. Review the validation logs before approving anything.",
+        label: "Validation failed",
+        tone: "danger",
+        value: validationCommand ?? "Changed-file check",
+      }
+    : validationRanRealCommand
+      ? {
+          description:
+            validationCommandSource === "repository"
+              ? "The repository validation command ran successfully after Codex changed the code."
+              : "The global validation command ran successfully after Codex changed the code.",
+          label: "Real command passed",
+          tone: "ok",
+          value: validationCommand,
+        }
+      : validationHasRun
+        ? {
+            description:
+              "No focused test command was configured for this run. FF2 only confirmed that Codex changed files.",
+            label: "Only checked changed files",
+            tone: "warn",
+            value: `${changedFiles.length} changed file${changedFiles.length === 1 ? "" : "s"}`,
+          }
+        : {
+            description:
+              "Validation has not run yet. After Codex finishes, FF2 will use the configured command if one exists.",
+            label: "Validation pending",
+            tone: "muted",
+            value: "Not run",
+          };
   const attentionText =
     blockedReason ??
     codexError ??
@@ -689,6 +728,15 @@ export default async function JobDetailPage({
             <small>{stage.state}</small>
           </article>
         ))}
+      </section>
+
+      <section className={`panel validation-trust-card ${validationTrust.tone}`} aria-label="Validation trust level">
+        <div>
+          <span>Validation</span>
+          <strong>{validationTrust.label}</strong>
+          <p>{validationTrust.description}</p>
+        </div>
+        <code>{validationTrust.value}</code>
       </section>
 
       <section className="panel generated-diff-card" aria-label="Generated diff">
@@ -912,11 +960,11 @@ export default async function JobDetailPage({
                 </div>
                 <div>
                   <dt>Command</dt>
-                  <dd>{getMetadataString(validationMetadata, "command") ?? "Change detection only"}</dd>
+                  <dd>{validationCommand ?? "Change detection only"}</dd>
                 </div>
                 <div>
                   <dt>Command Source</dt>
-                  <dd>{getMetadataString(validationMetadata, "commandSource") ?? "Not recorded"}</dd>
+                  <dd>{validationCommandSource ?? "Not recorded"}</dd>
                 </div>
                 <div>
                   <dt>Test Scope</dt>
