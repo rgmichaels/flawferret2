@@ -246,6 +246,26 @@ const getMetadataStrings = (metadata: unknown, key: string) => {
 const getNestedMetadata = (metadata: unknown, key: string) =>
   getMetadataRecord(getMetadataRecord(metadata)[key]);
 
+const formatOptionalNumber = (value: number | null) => (value === null ? "Not recorded" : String(value));
+
+const formatBooleanState = (value: boolean | null, trueLabel: string, falseLabel: string) => {
+  if (value === null) {
+    return "Not recorded";
+  }
+
+  return value ? trueLabel : falseLabel;
+};
+
+const formatDiagnosticText = (value: string | null, fallback: string) => {
+  if (!value) {
+    return fallback;
+  }
+
+  const compactValue = value.replace(/\s+/g, " ").trim();
+
+  return compactValue.length > 180 ? `${compactValue.slice(0, 177)}...` : compactValue;
+};
+
 const getLastEventMessage = (events: JobEventResponse[], eventTypes: string[]) => {
   const event = [...events].reverse().find((item) => eventTypes.includes(item.eventType));
 
@@ -486,6 +506,7 @@ export default async function JobDetailPage({
   const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
   const prLifecycleState = getMetadataString(pullRequestLifecycleMetadata, "lifecycleState");
   const prCheckCounts = getNestedMetadata(pullRequestLifecycleMetadata, "checks");
+  const latestEvent = events[events.length - 1] ?? null;
   const approvalAction = getApprovalAction(job, readiness);
   const codexEnabled = readiness?.runner.codexEnabled ?? false;
   const prCreationEnabled = readiness?.runner.prCreationEnabled ?? false;
@@ -495,6 +516,80 @@ export default async function JobDetailPage({
     prUrl,
     validationMetadata,
   });
+  const codexExitCode = getMetadataNumber(codexMetadata, "exitCode");
+  const codexTimedOut = getMetadataBoolean(codexMetadata, "timedOut");
+  const codexError = getMetadataString(codexMetadata, "error");
+  const codexFinalResponse = getMetadataString(codexMetadata, "finalResponse");
+  const codexLogPath = getMetadataString(codexMetadata, "logPath");
+  const codexStderrPath = getMetadataString(codexMetadata, "stderrPath");
+  const validationExitCode = getMetadataNumber(validationMetadata, "exitCode");
+  const validationError = getMetadataString(validationMetadata, "error");
+  const validationLogPath = getMetadataString(validationMetadata, "logPath");
+  const validationStderrPath = getMetadataString(validationMetadata, "stderrPath");
+  const pullRequestError = getMetadataString(pullRequestMetadata, "error");
+  const pullRequestLifecycleError = getMetadataString(pullRequestLifecycleMetadata, "error");
+  const attentionText =
+    blockedReason ??
+    codexError ??
+    validationError ??
+    pullRequestError ??
+    pullRequestLifecycleError ??
+    latestEvent?.message ??
+    "No events have been recorded yet.";
+  const diagnostics = [
+    {
+      detail: latestRun
+        ? `${runStatusLabels[latestRun.status]} started ${formatDateTime(latestRun.startedAt)}`
+        : "No runner execution has started.",
+      label: "Latest Run",
+      tone: latestRun?.status === "FAILED" ? "danger" : latestRun ? "ok" : "muted",
+      value: latestRun ? `#${latestRun.id.slice(0, 8)}` : "None",
+    },
+    {
+      detail:
+        codexError ??
+        formatDiagnosticText(
+          codexFinalResponse,
+          Object.keys(codexMetadata).length > 0 ? "Codex metadata is available." : "No Codex attempt recorded.",
+        ),
+      label: "Codex",
+      tone: codexError || codexTimedOut ? "danger" : Object.keys(codexMetadata).length > 0 ? "ok" : "muted",
+      value:
+        codexTimedOut === true
+          ? "Timed out"
+          : codexExitCode !== null
+            ? `Exit ${codexExitCode}`
+            : "Not run",
+    },
+    {
+      detail:
+        validationError ??
+        (changedFiles.length > 0
+          ? `${changedFiles.length} changed file${changedFiles.length === 1 ? "" : "s"} recorded.`
+          : "No validation output recorded."),
+      label: "Validation",
+      tone:
+        validationError || (validationExitCode !== null && validationExitCode !== 0)
+          ? "danger"
+          : Object.keys(validationMetadata).length > 0
+            ? "ok"
+            : "muted",
+      value: validationExitCode !== null ? `Exit ${validationExitCode}` : "Not run",
+    },
+    {
+      detail:
+        pullRequestError ??
+        pullRequestLifecycleError ??
+        (prUrl ? "Pull request metadata is available." : "No pull request has been created."),
+      label: "Pull Request",
+      tone: pullRequestError || pullRequestLifecycleError ? "danger" : prUrl ? "ok" : "muted",
+      value: prLifecycleState
+        ? prLifecycleLabels[prLifecycleState] ?? prLifecycleState
+        : prUrl
+          ? "Created"
+          : "Not created",
+    },
+  ];
 
   return (
     <main className="detail-shell">
@@ -576,6 +671,81 @@ export default async function JobDetailPage({
             <small>{stage.state}</small>
           </article>
         ))}
+      </section>
+
+      <section className="panel diagnostics-card" aria-label="Job diagnostics">
+        <div className="diagnostics-header">
+          <div>
+            <h2>Diagnostics</h2>
+            <p>Latest runner output and artifact pointers for this job.</p>
+          </div>
+          <span>{jobStatusLabels[job.status]}</span>
+        </div>
+        <div className="diagnostics-grid">
+          {diagnostics.map((item) => (
+            <article className={`diagnostic-item ${item.tone}`} key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+        <div className="diagnostics-log-grid">
+          <section>
+            <h3>Log Paths</h3>
+            <dl>
+              <div>
+                <dt>Codex stdout</dt>
+                <dd>
+                  <code>{codexLogPath ?? "Not recorded"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Codex stderr</dt>
+                <dd>
+                  <code>{codexStderrPath ?? "Not recorded"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Validation stdout</dt>
+                <dd>
+                  <code>{validationLogPath ?? "Not recorded"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Validation stderr</dt>
+                <dd>
+                  <code>{validationStderrPath ?? "Not recorded"}</code>
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section>
+            <h3>Last Signal</h3>
+            <dl>
+              <div>
+                <dt>Event</dt>
+                <dd>{latestEvent ? formatEventType(latestEvent.eventType) : "None"}</dd>
+              </div>
+              <div>
+                <dt>When</dt>
+                <dd>{latestEvent ? formatDateTime(latestEvent.createdAt) : "Not recorded"}</dd>
+              </div>
+              <div>
+                <dt>Codex Timeout</dt>
+                <dd>{formatBooleanState(codexTimedOut, "Yes", "No")}</dd>
+              </div>
+              <div>
+                <dt>Validation Exit</dt>
+                <dd>{formatOptionalNumber(validationExitCode)}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+        <div className="diagnostics-attention">
+          <strong>What happened last</strong>
+          <p>{attentionText}</p>
+        </div>
       </section>
 
       <div className="detail-grid">
