@@ -135,11 +135,12 @@ export default async function RepositoriesPage() {
               <label>
                 Validation Command
                 <input
+                  defaultValue="npx playwright test"
                   name="validationCommand"
                   placeholder="npx playwright test"
                 />
                 <span className="field-hint">
-                  Optional. ferret-runner uses this command after Codex changes the repo.
+                  Defaults to Playwright. Edit or clear it if this repo needs a different check.
                 </span>
               </label>
               <button type="submit">Register Repository</button>
