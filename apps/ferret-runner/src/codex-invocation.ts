@@ -159,6 +159,9 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     runAffectedTests
       ? "- Run only tests directly affected by the requested coverage."
       : "- Run the smallest useful verification that gives confidence in the change.",
+    "- In your final response, include one line exactly like: Focused validation command: <command>",
+    "- The focused validation command should run only the generated test or the narrowest relevant tag/file when possible.",
+    "- If you cannot identify a focused command, write: Focused validation command: unavailable",
     "- Leave a concise summary of changed files and verification performed.",
   ].join("\n");
 };
