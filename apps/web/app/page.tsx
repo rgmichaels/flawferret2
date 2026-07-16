@@ -27,6 +27,8 @@ const statusLabels: Record<JobStatus, string> = {
   VALIDATING: "Validating",
 };
 
+const jobStatusOptions = Object.keys(statusLabels) as JobStatus[];
+
 const runStatusLabels: Record<RunStatus, string> = {
   CODEX_RUNNING: "Codex",
   FAILED: "Failed",
@@ -37,6 +39,15 @@ const runStatusLabels: Record<RunStatus, string> = {
   SUCCEEDED: "Succeeded",
   VALIDATING: "Validating",
 };
+
+const sortOptions = {
+  status_asc: "Status A-Z",
+  status_desc: "Status Z-A",
+  updated_asc: "Updated oldest",
+  updated_desc: "Updated newest",
+} as const;
+
+type JobSort = keyof typeof sortOptions;
 
 async function getJobs(includeCanceled = false): Promise<JobResponse[]> {
   try {
@@ -211,14 +222,49 @@ const canApproveCodex = (job: JobResponse) => job.status === "READY_FOR_CODEX";
 
 const canApprovePr = (job: JobResponse) => job.status === "REVIEW";
 
+const getSelectedStatus = (value: string | undefined) =>
+  jobStatusOptions.includes(value as JobStatus) ? (value as JobStatus) : "";
+
+const getSelectedSort = (value: string | undefined): JobSort =>
+  value && value in sortOptions ? (value as JobSort) : "updated_desc";
+
+const sortJobs = (jobs: JobResponse[], sort: JobSort) => {
+  const sortedJobs = [...jobs];
+
+  sortedJobs.sort((left, right) => {
+    if (sort === "status_asc" || sort === "status_desc") {
+      const comparison = statusLabels[left.status].localeCompare(statusLabels[right.status]);
+
+      return sort === "status_asc" ? comparison : -comparison;
+    }
+
+    const leftTime = new Date(left.updatedAt).getTime();
+    const rightTime = new Date(right.updatedAt).getTime();
+
+    return sort === "updated_asc" ? leftTime - rightTime : rightTime - leftTime;
+  });
+
+  return sortedJobs;
+};
+
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ includeCanceled?: string }>;
+  searchParams: Promise<{ includeCanceled?: string; sort?: string; status?: string }>;
 }) {
-  const { includeCanceled: includeCanceledParam } = await searchParams;
-  const includeCanceled = includeCanceledParam === "true";
+  const {
+    includeCanceled: includeCanceledParam,
+    sort: sortParam,
+    status: statusParam,
+  } = await searchParams;
+  const selectedStatus = getSelectedStatus(statusParam);
+  const selectedSort = getSelectedSort(sortParam);
+  const includeCanceled = includeCanceledParam === "true" || selectedStatus === "CANCELED";
   const jobs = await getJobs(includeCanceled);
+  const filteredJobs = sortJobs(
+    selectedStatus ? jobs.filter((job) => job.status === selectedStatus) : jobs,
+    selectedSort,
+  );
   const queuedCount = countByStatus(jobs, ["QUEUED"]);
   const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
   const reviewCount = countByStatus(jobs, [
@@ -283,19 +329,51 @@ export default async function Home({
               <h2>Recent Jobs</h2>
               <p>Stored orchestration work from the job queue.</p>
             </div>
-            <div className="panel-actions">
-              <a
-                className={includeCanceled ? "filter-toggle active" : "filter-toggle"}
-                href={includeCanceled ? "/" : "/?includeCanceled=true"}
-              >
-                {includeCanceled ? "Hide canceled" : "Show canceled"}
+            <form action="/" className="job-filter-form">
+              <label>
+                <span>Status</span>
+                <select defaultValue={selectedStatus} name="status">
+                  <option value="">All statuses</option>
+                  {jobStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {statusLabels[status]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Sort</span>
+                <select defaultValue={selectedSort} name="sort">
+                  {Object.entries(sortOptions).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="checkbox-filter">
+                <input
+                  defaultChecked={includeCanceled}
+                  name="includeCanceled"
+                  type="checkbox"
+                  value="true"
+                />
+                <span>Include canceled</span>
+              </label>
+              <button type="submit">Apply</button>
+              <a className="filter-reset" href="/#jobs">
+                Reset
               </a>
-              <span>{jobs.length} total</span>
-            </div>
+              <strong>
+                {filteredJobs.length} of {jobs.length} shown
+              </strong>
+            </form>
           </div>
 
-          {jobs.length === 0 ? (
-            <p className="empty">No jobs have been queued yet.</p>
+          {filteredJobs.length === 0 ? (
+            <p className="empty">
+              {jobs.length === 0 ? "No jobs have been queued yet." : "No jobs match this filter."}
+            </p>
           ) : (
             <div className="table-wrap">
               <table>
@@ -312,7 +390,7 @@ export default async function Home({
                   </tr>
                 </thead>
                 <tbody>
-                  {jobs.map((job) => {
+                  {filteredJobs.map((job) => {
                     const pullRequestUrl = getPullRequestUrl(job);
 
                     return (

@@ -439,6 +439,85 @@ button {
   color: #2563eb;
 }
 
+.job-filter-form {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.job-filter-form label {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 0;
+  min-width: 142px;
+}
+
+.job-filter-form label > span,
+.job-filter-form strong {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.job-filter-form select {
+  font-size: 12px;
+  min-height: 36px;
+  padding: 7px 9px;
+}
+
+.job-filter-form button,
+.filter-reset {
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 10px;
+}
+
+.job-filter-form button {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.filter-reset {
+  background: #ffffff;
+  color: #334155;
+}
+
+.filter-reset:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.job-filter-form .checkbox-filter {
+  align-items: center;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: flex;
+  gap: 7px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.checkbox-filter input {
+  margin: 0;
+  width: auto;
+}
+
+.job-filter-form strong {
+  align-self: center;
+  color: #2563eb;
+  white-space: nowrap;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -1437,6 +1516,11 @@ textarea {
   .panel-header {
     align-items: start;
     flex-direction: column;
+  }
+
+  .job-filter-form {
+    justify-content: flex-start;
+    width: 100%;
   }
 
   .readiness-grid,
