@@ -21,6 +21,7 @@ const statusLabels: Record<JobStatus, string> = {
   READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
   PR_APPROVED: "PR Approved",
+  PR_CREATED: "PR Created",
   REVIEW: "Review",
   RUNNING: "Running",
   VALIDATING: "Validating",
@@ -193,6 +194,7 @@ const stageLabels: Partial<Record<JobStatus, string>> = {
   CODEX_APPROVED: "Codex approved; waiting for runner",
   COMPLETED: "Pipeline finished",
   PR_APPROVED: "Draft PR approved; waiting for runner",
+  PR_CREATED: "Draft PR created; checks and merge pending",
   READY_FOR_CODEX: "Waiting for Codex approval",
   REVIEW: "Waiting for draft PR approval",
   RUNNING: "Codex or setup in progress",
@@ -224,9 +226,11 @@ export default async function Home({
     "CODEX_APPROVED",
     "REVIEW",
     "PR_APPROVED",
+    "PR_CREATED",
   ]);
   const codexApprovalCount = countByStatus(jobs, ["READY_FOR_CODEX"]);
   const prApprovalCount = countByStatus(jobs, ["REVIEW"]);
+  const prCreatedCount = countByStatus(jobs, ["PR_CREATED"]);
   const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
   const completedCount = countByStatus(jobs, ["COMPLETED"]);
 
@@ -258,7 +262,7 @@ export default async function Home({
             <span>Approval</span>
             <strong>{reviewCount}</strong>
             <small>
-              {codexApprovalCount} Codex / {prApprovalCount} PR waiting
+              {codexApprovalCount} Codex / {prApprovalCount} PR waiting / {prCreatedCount} PR open
             </small>
           </article>
           <article className="metric-card failed">

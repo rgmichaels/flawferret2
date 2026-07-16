@@ -525,6 +525,26 @@ export const markJobCompleted = async ({
     },
   });
 
+export const markJobPrCreated = async ({
+  jobId,
+  workerId,
+}: {
+  jobId: string;
+  workerId: string;
+}) =>
+  prisma.job.update({
+    where: {
+      id: jobId,
+    },
+    data: {
+      claimedBy: workerId,
+      status: "PR_CREATED",
+    },
+    include: {
+      repository: true,
+    },
+  });
+
 export const markJobReadyForCodex = async ({
   jobId,
   workerId,
