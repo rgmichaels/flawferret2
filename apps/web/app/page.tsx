@@ -250,16 +250,12 @@ const sortJobs = (jobs: JobResponse[], sort: JobSort) => {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ includeCanceled?: string; sort?: string; status?: string }>;
+  searchParams: Promise<{ sort?: string; status?: string }>;
 }) {
-  const {
-    includeCanceled: includeCanceledParam,
-    sort: sortParam,
-    status: statusParam,
-  } = await searchParams;
+  const { sort: sortParam, status: statusParam } = await searchParams;
   const selectedStatus = getSelectedStatus(statusParam);
   const selectedSort = getSelectedSort(sortParam);
-  const includeCanceled = includeCanceledParam === "true" || selectedStatus === "CANCELED";
+  const includeCanceled = selectedStatus === "CANCELED";
   const jobs = await getJobs(includeCanceled);
   const filteredJobs = sortJobs(
     selectedStatus ? jobs.filter((job) => job.status === selectedStatus) : jobs,
@@ -350,15 +346,6 @@ export default async function Home({
                     </option>
                   ))}
                 </select>
-              </label>
-              <label className="checkbox-filter">
-                <input
-                  defaultChecked={includeCanceled}
-                  name="includeCanceled"
-                  type="checkbox"
-                  value="true"
-                />
-                <span>Include canceled</span>
               </label>
               <button type="submit">Apply</button>
               <a className="filter-reset" href="/#jobs">

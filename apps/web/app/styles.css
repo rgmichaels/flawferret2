@@ -423,22 +423,6 @@ button {
   font-weight: 800;
 }
 
-.filter-toggle {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 800;
-  padding: 7px 10px;
-  white-space: nowrap;
-}
-
-.filter-toggle:hover,
-.filter-toggle.active {
-  border-color: #2563eb;
-  color: #2563eb;
-}
-
 .job-filter-form {
   align-items: end;
   display: flex;
@@ -494,22 +478,6 @@ button {
 .filter-reset:hover {
   border-color: #2563eb;
   color: #2563eb;
-}
-
-.job-filter-form .checkbox-filter {
-  align-items: center;
-  border: 1px solid #dce3ee;
-  border-radius: 8px;
-  display: flex;
-  gap: 7px;
-  min-height: 36px;
-  min-width: 0;
-  padding: 7px 9px;
-}
-
-.checkbox-filter input {
-  margin: 0;
-  width: auto;
 }
 
 .job-filter-form strong {
