@@ -17,6 +17,12 @@ import {
   type RepositoryResponse,
   type RunResponse,
 } from "@flawferret2/job-schemas";
+import {
+  getJobGoal,
+  getJobTitle,
+  sendSlackNotification,
+  shortJobId,
+} from "@flawferret2/shared";
 import Fastify, { type FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { config } from "./config.js";
@@ -485,6 +491,30 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         targetBranch: body.payload.targetBranch,
       },
     });
+
+    const jobTitle = getJobTitle(job.payload);
+    const jobGoal = getJobGoal(job.payload);
+    const slackResult = await sendSlackNotification({
+      text: [
+        `Job ${shortJobId(job.id)} created - ${jobTitle}`,
+        `Repository: ${repository.owner}/${repository.name}`,
+        `Target branch: ${body.payload.targetBranch}`,
+        jobGoal ? `Goal: ${jobGoal}` : null,
+      ]
+        .filter((line): line is string => Boolean(line))
+        .join("\n"),
+      webhookUrl: config.SLACK_WEBHOOK_URL,
+    });
+
+    if (!slackResult.sent && slackResult.reason !== "not_configured") {
+      server.log.warn(
+        {
+          jobId: job.id,
+          reason: slackResult.reason,
+        },
+        "Unable to send Slack job-created notification",
+      );
+    }
 
     return reply.status(201).send(toJobResponseWithRepository(job));
   });

@@ -24,6 +24,16 @@ const envBoolean = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
+const optionalUrl = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().url().optional());
+
 const envSchema = z.object({
   API_HOST: z.string().default("0.0.0.0"),
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -32,6 +42,7 @@ const envSchema = z.object({
   FERRET_RUNNER_ENABLE_CODEX: envBoolean.default(false),
   FERRET_RUNNER_ENABLE_PR_CREATION: envBoolean.default(false),
   FERRET_RUNNER_VALIDATION_COMMAND: z.string().trim().optional(),
+  SLACK_WEBHOOK_URL: optionalUrl,
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
 });
 

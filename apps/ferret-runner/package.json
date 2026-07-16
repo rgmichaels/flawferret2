@@ -14,6 +14,7 @@
   "dependencies": {
     "@flawferret2/db": "workspace:*",
     "@flawferret2/job-schemas": "workspace:*",
+    "@flawferret2/shared": "workspace:*",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },

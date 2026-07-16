@@ -60,6 +60,8 @@ No repository checkout, Codex invocation, Playwright validation, or pull request
 ## Running Locally
 
 1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres connection string.
+   To enable Slack milestone notifications, create an incoming webhook for `#ff2-logs`
+   and set `SLACK_WEBHOOK_URL` in `.env`.
 2. Install dependencies:
 
 ```bash
