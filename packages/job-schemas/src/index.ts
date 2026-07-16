@@ -141,6 +141,7 @@ export const readinessResponseSchema = z.object({
     startCommand: z.string(),
     health: z.enum(["offline", "stale", "idle", "busy", "error"]),
     healthText: z.string(),
+    slackConfigured: z.boolean(),
     status: z.string().nullable(),
     validationCommandConfigured: z.boolean(),
   }),

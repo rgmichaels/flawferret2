@@ -410,6 +410,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         id: latestWorker?.id ?? null,
         lastHeartbeat: latestWorker?.lastHeartbeat.toISOString() ?? null,
         prCreationEnabled: config.FERRET_RUNNER_ENABLE_PR_CREATION,
+        slackConfigured: Boolean(config.SLACK_WEBHOOK_URL),
         startCommand: RUNNER_START_COMMAND,
         status: latestWorker?.status ?? null,
         validationCommandConfigured: Boolean(config.FERRET_RUNNER_VALIDATION_COMMAND),

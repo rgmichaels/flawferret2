@@ -107,6 +107,8 @@ const runnerHealthLabels: Record<ReadinessResponse["runner"]["health"], string> 
   stale: "Stale heartbeat",
 };
 
+const modeClass = (enabled: boolean) => (enabled ? "mode-live" : "mode-dry-run");
+
 export default async function ReadinessPage() {
   const readiness = await getReadiness();
 
@@ -157,51 +159,80 @@ export default async function ReadinessPage() {
           <strong>{nextAction.label}</strong>
         </section>
 
-        <section className="panel execution-mode-card" aria-label="Execution mode">
-          <div>
-            <span className={readiness.runner.codexEnabled ? "mode-live" : "mode-dry-run"}>
-              Codex
+        <section className="panel operations-safety-card" aria-label="Operations safety">
+          <div className="operations-safety-header">
+            <div>
+              <h2>Operations / Safety</h2>
+              <p>Current execution posture before approvals, queue changes, or runner work.</p>
+            </div>
+            <span className={readiness.queue.paused ? "mode-dry-run" : "mode-live"}>
+              Queue {readiness.queue.paused ? "paused" : "active"}
             </span>
-            <strong>{readiness.runner.codexEnabled ? "Live execution" : "Dry-run mode"}</strong>
-            <p>
-              {readiness.runner.codexEnabled
-                ? "Codex approvals can invoke the configured model command."
-                : "Codex approvals record plans without calling the model."}
-            </p>
-            <code>FERRET_RUNNER_ENABLE_CODEX={readiness.runner.codexEnabled ? "true" : "false"}</code>
           </div>
-          <div>
-            <span className={readiness.runner.prCreationEnabled ? "mode-live" : "mode-dry-run"}>
-              Draft PR
-            </span>
-            <strong>
-              {readiness.runner.prCreationEnabled ? "PR creation enabled" : "PR creation disabled"}
-            </strong>
-            <p>
-              {readiness.runner.prCreationEnabled
-                ? "Draft PR approvals can push branches and create GitHub PRs."
-                : "Draft PR approvals will not push branches or create GitHub PRs."}
-            </p>
-            <code>
-              FERRET_RUNNER_ENABLE_PR_CREATION=
-              {readiness.runner.prCreationEnabled ? "true" : "false"}
-            </code>
+          <div className="safety-grid">
+            <article>
+              <span className={statusClass(!runnerNeedsStart && readiness.runner.health !== "error")}>
+                Runner
+              </span>
+              <strong>{runnerHealthLabels[readiness.runner.health]}</strong>
+              <p>{readiness.runner.healthText}</p>
+              <code>{readiness.runner.startCommand}</code>
+            </article>
+            <article>
+              <span className={readiness.queue.paused ? "mode-dry-run" : "mode-live"}>Queue</span>
+              <strong>{readiness.queue.paused ? "Paused" : "Active"}</strong>
+              <p>
+                {readiness.queue.paused
+                  ? "Workers will not claim new work."
+                  : "Workers may claim approved or queued work."}
+              </p>
+            </article>
+            <article>
+              <span className={modeClass(readiness.runner.codexEnabled)}>Codex</span>
+              <strong>{readiness.runner.codexEnabled ? "Live spend enabled" : "Dry-run only"}</strong>
+              <p>
+                {readiness.runner.codexEnabled
+                  ? "Codex approvals can invoke the configured model command."
+                  : "Codex approvals record plans without model usage."}
+              </p>
+              <code>FERRET_RUNNER_ENABLE_CODEX={readiness.runner.codexEnabled ? "true" : "false"}</code>
+            </article>
+            <article>
+              <span className={modeClass(readiness.runner.prCreationEnabled)}>Draft PR</span>
+              <strong>{readiness.runner.prCreationEnabled ? "Push enabled" : "Push disabled"}</strong>
+              <p>
+                {readiness.runner.prCreationEnabled
+                  ? "Draft PR approvals can push branches and create GitHub PRs."
+                  : "Draft PR approvals will not push branches or create PRs."}
+              </p>
+              <code>
+                FERRET_RUNNER_ENABLE_PR_CREATION=
+                {readiness.runner.prCreationEnabled ? "true" : "false"}
+              </code>
+            </article>
+            <article>
+              <span className={modeClass(readiness.runner.validationCommandConfigured)}>Validation</span>
+              <strong>
+                {readiness.runner.validationCommandConfigured ? "Command configured" : "Change check only"}
+              </strong>
+              <p>
+                {readiness.runner.validationCommandConfigured
+                  ? "Runner will execute the configured validation command."
+                  : "Runner will inspect changed files without running a test command."}
+              </p>
+            </article>
+            <article>
+              <span className={modeClass(readiness.runner.slackConfigured)}>Slack</span>
+              <strong>{readiness.runner.slackConfigured ? "Notifications enabled" : "Not configured"}</strong>
+              <p>
+                {readiness.runner.slackConfigured
+                  ? "Milestones can post to the configured Slack webhook."
+                  : "Slack milestone notifications are skipped."}
+              </p>
+              <code>SLACK_WEBHOOK_URL={readiness.runner.slackConfigured ? "set" : "unset"}</code>
+            </article>
           </div>
-        </section>
-
-        <section className="panel runner-ops-card" aria-label="Runner operations">
-          <div>
-            <span className={statusClass(!runnerNeedsStart && readiness.runner.health !== "error")}>
-              ferret-runner
-            </span>
-            <strong>{runnerHealthLabels[readiness.runner.health]}</strong>
-            <p>{readiness.runner.healthText}</p>
-          </div>
-          <div>
-            <span>Start command</span>
-            <code>{readiness.runner.startCommand}</code>
-          </div>
-          <div>
+          <div className="runner-worker-strip">
             <span>Worker</span>
             <strong>{readiness.runner.id ?? "Not connected"}</strong>
             <p>
@@ -234,8 +265,8 @@ export default async function ReadinessPage() {
             <p>{readiness.runner.healthText}</p>
           </article>
           <article className="panel readiness-card">
-            <span className={statusClass(readiness.runner.codexEnabled)}>Codex</span>
-            <strong>{readiness.runner.codexEnabled ? "Enabled" : "Dry-run"}</strong>
+            <span className={modeClass(readiness.runner.codexEnabled)}>Codex</span>
+            <strong>{readiness.runner.codexEnabled ? "Live" : "Dry-run"}</strong>
             <p>Command: {readiness.runner.codexCommand}</p>
           </article>
           <article className="panel readiness-card">
@@ -248,9 +279,14 @@ export default async function ReadinessPage() {
             <p>Runs after Codex leaves generated files.</p>
           </article>
           <article className="panel readiness-card">
-            <span className={statusClass(readiness.runner.prCreationEnabled)}>Draft PR</span>
+            <span className={modeClass(readiness.runner.prCreationEnabled)}>Draft PR</span>
             <strong>{readiness.runner.prCreationEnabled ? "Enabled" : "Disabled"}</strong>
             <p>Still requires manual approval from review.</p>
+          </article>
+          <article className="panel readiness-card">
+            <span className={modeClass(readiness.runner.slackConfigured)}>Slack</span>
+            <strong>{readiness.runner.slackConfigured ? "Enabled" : "Unset"}</strong>
+            <p>Milestone notifications for job and PR progress.</p>
           </article>
           <article className="panel readiness-card">
             <span className={statusClass(readiness.counts.blockedJobs === 0)}>Recovery</span>
