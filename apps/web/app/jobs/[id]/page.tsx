@@ -116,6 +116,15 @@ const jobStatusLabels: Record<JobStatus, string> = {
   VALIDATING: "Validating",
 };
 
+const prLifecycleLabels: Record<string, string> = {
+  CHECKS_FAILED: "Checks failed",
+  CHECKS_PASSED: "Checks passed; waiting for merge",
+  CHECKS_PENDING: "Checks pending",
+  CLOSED: "Closed without merge",
+  MERGED: "Merged",
+  NO_CHECKS: "No checks reported",
+};
+
 async function approveCodex(formData: FormData) {
   "use server";
 
@@ -466,6 +475,7 @@ export default async function JobDetailPage({
   const codexMetadata = getNestedMetadata(latestMetadata, "codex");
   const validationMetadata = getNestedMetadata(latestMetadata, "validation");
   const pullRequestMetadata = getNestedMetadata(latestMetadata, "pullRequest");
+  const pullRequestLifecycleMetadata = getNestedMetadata(pullRequestMetadata, "lifecycle");
   const changedFiles = getMetadataStrings(validationMetadata, "changedFiles");
   const blockedReason = getLastEventMessage(events, [
     "JOB_BLOCKED",
@@ -474,6 +484,8 @@ export default async function JobDetailPage({
     "PR_CREATION_FAILED",
   ]);
   const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
+  const prLifecycleState = getMetadataString(pullRequestLifecycleMetadata, "lifecycleState");
+  const prCheckCounts = getNestedMetadata(pullRequestLifecycleMetadata, "checks");
   const approvalAction = getApprovalAction(job, readiness);
   const codexEnabled = readiness?.runner.codexEnabled ?? false;
   const prCreationEnabled = readiness?.runner.prCreationEnabled ?? false;
@@ -715,7 +727,23 @@ export default async function JobDetailPage({
               <dl>
                 <div>
                   <dt>Status</dt>
-                  <dd>{prUrl ? "Created" : "Not created"}</dd>
+                  <dd>
+                    {prLifecycleState
+                      ? prLifecycleLabels[prLifecycleState] ?? prLifecycleState
+                      : prUrl
+                        ? "Created"
+                        : "Not created"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Checks</dt>
+                  <dd>
+                    {Object.keys(prCheckCounts).length > 0
+                      ? `${getMetadataNumber(prCheckCounts, "passed") ?? 0} passed / ${
+                          getMetadataNumber(prCheckCounts, "pending") ?? 0
+                        } pending / ${getMetadataNumber(prCheckCounts, "failed") ?? 0} failed`
+                      : "Not inspected"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Branch</dt>

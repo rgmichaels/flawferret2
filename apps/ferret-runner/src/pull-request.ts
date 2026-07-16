@@ -30,6 +30,43 @@ export type DraftPullRequestResult =
       };
     };
 
+export type PullRequestLifecycleState =
+  | "CHECKS_FAILED"
+  | "CHECKS_PASSED"
+  | "CHECKS_PENDING"
+  | "CLOSED"
+  | "MERGED"
+  | "NO_CHECKS";
+
+type PullRequestCheckCounts = {
+  failed: number;
+  passed: number;
+  pending: number;
+  skipped: number;
+  total: number;
+};
+
+export type PullRequestLifecycleResult =
+  | {
+      ok: true;
+      metadata: {
+        checks: PullRequestCheckCounts;
+        lifecycleState: PullRequestLifecycleState;
+        mergeStateStatus: string | null;
+        mergedAt: string | null;
+        prUrl: string;
+        state: string | null;
+      };
+    }
+  | {
+      ok: false;
+      message: string;
+      metadata: {
+        error?: string;
+        prUrl: string | null;
+      };
+    };
+
 const runCommand = async (command: string, args: string[], cwd: string) => {
   const { stdout } = await execFileAsync(command, args, {
     cwd,
@@ -37,6 +74,61 @@ const runCommand = async (command: string, args: string[], cwd: string) => {
   });
 
   return stdout.trim();
+};
+
+const getCheckState = (check: unknown) => {
+  if (!check || typeof check !== "object") {
+    return {
+      conclusion: null,
+      status: null,
+    };
+  }
+
+  const record = check as Record<string, unknown>;
+  const conclusion = typeof record.conclusion === "string" ? record.conclusion.toUpperCase() : null;
+  const status =
+    typeof record.status === "string"
+      ? record.status.toUpperCase()
+      : typeof record.state === "string"
+        ? record.state.toUpperCase()
+        : null;
+
+  return {
+    conclusion,
+    status,
+  };
+};
+
+const getLifecycleState = ({
+  checks,
+  mergedAt,
+  state,
+}: {
+  checks: PullRequestCheckCounts;
+  mergedAt: string | null;
+  state: string | null;
+}): PullRequestLifecycleState => {
+  if (mergedAt || state === "MERGED") {
+    return "MERGED";
+  }
+
+  if (state === "CLOSED") {
+    return "CLOSED";
+  }
+
+  if (checks.failed > 0) {
+    return "CHECKS_FAILED";
+  }
+
+  if (checks.total === 0) {
+    return "NO_CHECKS";
+  }
+
+  if (checks.pending > 0) {
+    return "CHECKS_PENDING";
+  }
+
+  return "CHECKS_PASSED";
 };
 
 const getPayloadValue = (payload: unknown, key: string) => {
@@ -219,6 +311,111 @@ export const createDraftPullRequest = async ({
         headBranch,
         prUrl: null,
         pushed,
+      },
+    };
+  }
+};
+
+export const inspectPullRequestLifecycle = async ({
+  localPath,
+  prUrl,
+}: {
+  localPath: string;
+  prUrl: string;
+}): Promise<PullRequestLifecycleResult> => {
+  try {
+    const output = await runCommand(
+      "gh",
+      [
+        "pr",
+        "view",
+        prUrl,
+        "--json",
+        "mergeStateStatus,mergedAt,state,statusCheckRollup,url",
+      ],
+      localPath,
+    );
+    const parsed = JSON.parse(output) as {
+      mergeStateStatus?: unknown;
+      mergedAt?: unknown;
+      state?: unknown;
+      statusCheckRollup?: unknown;
+      url?: unknown;
+    };
+    const statusCheckRollup = Array.isArray(parsed.statusCheckRollup)
+      ? parsed.statusCheckRollup
+      : [];
+    const counts = statusCheckRollup.reduce(
+      (accumulator, check) => {
+        const { conclusion, status } = getCheckState(check);
+
+        if (
+          conclusion &&
+          ["ACTION_REQUIRED", "CANCELLED", "CANCELED", "FAILURE", "TIMED_OUT"].includes(conclusion)
+        ) {
+          accumulator.failed += 1;
+          return accumulator;
+        }
+
+        if (conclusion && ["SUCCESS", "NEUTRAL", "SKIPPED"].includes(conclusion)) {
+          if (conclusion === "SKIPPED") {
+            accumulator.skipped += 1;
+          } else {
+            accumulator.passed += 1;
+          }
+
+          return accumulator;
+        }
+
+        if (status === "SUCCESS") {
+          accumulator.passed += 1;
+          return accumulator;
+        }
+
+        if (status === "FAILURE" || status === "ERROR") {
+          accumulator.failed += 1;
+          return accumulator;
+        }
+
+        accumulator.pending += 1;
+        return accumulator;
+      },
+      {
+        failed: 0,
+        passed: 0,
+        pending: 0,
+        skipped: 0,
+        total: statusCheckRollup.length,
+      },
+    );
+    const mergedAt = typeof parsed.mergedAt === "string" && parsed.mergedAt.length > 0 ? parsed.mergedAt : null;
+    const state = typeof parsed.state === "string" && parsed.state.length > 0 ? parsed.state.toUpperCase() : null;
+
+    return {
+      ok: true,
+      metadata: {
+        checks: counts,
+        lifecycleState: getLifecycleState({
+          checks: counts,
+          mergedAt,
+          state,
+        }),
+        mergeStateStatus:
+          typeof parsed.mergeStateStatus === "string" && parsed.mergeStateStatus.length > 0
+            ? parsed.mergeStateStatus
+            : null,
+        mergedAt,
+        prUrl: typeof parsed.url === "string" && parsed.url.length > 0 ? parsed.url : prUrl,
+        state,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: "Pull request lifecycle inspection failed.",
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        prUrl,
       },
     };
   }

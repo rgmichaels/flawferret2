@@ -1,6 +1,7 @@
 import {
   appendJobEvent,
   claimNextApprovedCodexJob,
+  claimNextPrCreatedJob,
   claimNextQueuedJob,
   claimNextReviewJob,
   claimNextValidatingJob,
@@ -34,7 +35,11 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
 import { config } from "./config.js";
-import { createDraftPullRequest } from "./pull-request.js";
+import {
+  createDraftPullRequest,
+  inspectPullRequestLifecycle,
+  type PullRequestLifecycleState,
+} from "./pull-request.js";
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
 import { validateGeneratedWork } from "./validation.js";
@@ -109,6 +114,27 @@ const sendRunnerSlackMilestone = async ({
       reason: slackResult.reason,
     });
   }
+};
+
+const prLifecycleEventTypeByState: Record<
+  PullRequestLifecycleState,
+  "PR_CHECKS_FAILED" | "PR_CHECKS_PASSED" | "PR_CHECKS_PENDING" | "PR_CLOSED" | "PR_MERGED"
+> = {
+  CHECKS_FAILED: "PR_CHECKS_FAILED",
+  CHECKS_PASSED: "PR_CHECKS_PASSED",
+  CHECKS_PENDING: "PR_CHECKS_PENDING",
+  CLOSED: "PR_CLOSED",
+  MERGED: "PR_MERGED",
+  NO_CHECKS: "PR_CHECKS_PENDING",
+};
+
+const prLifecycleMessageByState: Record<PullRequestLifecycleState, string> = {
+  CHECKS_FAILED: "Pull request checks failed.",
+  CHECKS_PASSED: "Pull request checks passed; waiting for merge.",
+  CHECKS_PENDING: "Pull request checks are still pending.",
+  CLOSED: "Pull request was closed without being merged.",
+  MERGED: "Pull request was merged.",
+  NO_CHECKS: "Pull request has no reported checks yet; waiting for merge.",
 };
 
 const getPayloadBoolean = (payload: unknown, key: string, fallback: boolean) => {
@@ -1015,6 +1041,260 @@ while (!shouldStop) {
       });
       continue;
     }
+  }
+
+  const prLifecycleClaimResult = await claimNextPrCreatedJob(workerId);
+
+  if (prLifecycleClaimResult.queuePaused) {
+    log("Queue is paused; skipping PR lifecycle claim");
+    await sleep(config.WORKER_POLL_INTERVAL_MS);
+    continue;
+  }
+
+  if (prLifecycleClaimResult.job) {
+    const prJob = prLifecycleClaimResult.job;
+    const latestRun = prJob.runs[0] ?? null;
+    const runMetadata = getMetadataRecord(latestRun?.metadata);
+    const pullRequestMetadata = getMetadataRecord(runMetadata.pullRequest);
+    const lifecycleMetadata = getMetadataRecord(pullRequestMetadata.lifecycle);
+    const previousLifecycleState = getMetadataString(lifecycleMetadata, "lifecycleState");
+    const localPath = getMetadataString(runMetadata, "localPath");
+    const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
+
+    await setWorkerState({
+      currentJob: prJob.id,
+      status: "BUSY",
+    });
+
+    if (!latestRun || !localPath || !prUrl) {
+      const blockedJob = await markJobBlocked({
+        jobId: prJob.id,
+        workerId,
+      });
+
+      if (latestRun) {
+        await markRunFailed({
+          runId: latestRun.id,
+          metadata: {
+            ...runMetadata,
+            pullRequest: {
+              ...pullRequestMetadata,
+              lifecycle: {
+                error: "Missing PR lifecycle inspection inputs.",
+                localPath,
+                prUrl,
+              },
+            },
+          },
+        });
+      }
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Pull request lifecycle inspection could not start.",
+        metadata: {
+          localPath,
+          prUrl,
+          runId: latestRun?.id ?? null,
+          workerId,
+        },
+      });
+
+      log("Blocked job before PR lifecycle inspection", {
+        jobId: blockedJob.id,
+        localPath,
+        prUrl,
+        runId: latestRun?.id ?? null,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    const lifecycleResult = await inspectPullRequestLifecycle({
+      localPath,
+      prUrl,
+    });
+
+    if (!lifecycleResult.ok) {
+      await updateRunMetadata({
+        runId: latestRun.id,
+        metadata: {
+          ...runMetadata,
+          pullRequest: {
+            ...pullRequestMetadata,
+            lifecycle: lifecycleResult.metadata,
+          },
+        },
+      });
+
+      log("PR lifecycle inspection failed", {
+        jobId: prJob.id,
+        reason: lifecycleResult.message,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    const lifecycleState = lifecycleResult.metadata.lifecycleState;
+    const lifecycleRunMetadata = {
+      ...runMetadata,
+      pullRequest: {
+        ...pullRequestMetadata,
+        lifecycle: {
+          ...lifecycleResult.metadata,
+          checkedAt: new Date().toISOString(),
+        },
+      },
+    };
+    const lifecycleChanged = previousLifecycleState !== lifecycleState;
+
+    if (lifecycleState === "MERGED") {
+      await markRunSucceeded({
+        runId: latestRun.id,
+        metadata: lifecycleRunMetadata,
+      });
+
+      const completedJob = await markJobCompleted({
+        jobId: prJob.id,
+        workerId,
+      });
+
+      if (lifecycleChanged) {
+        await appendJobEvent({
+          jobId: completedJob.id,
+          eventType: "PR_MERGED",
+          message: prLifecycleMessageByState[lifecycleState],
+          metadata: {
+            ...lifecycleResult.metadata,
+            runId: latestRun.id,
+            workerId,
+          },
+        });
+      }
+
+      await sendRunnerSlackMilestone({
+        headline: "merged",
+        jobId: completedJob.id,
+        lines: [`<${lifecycleResult.metadata.prUrl}|Open pull request>`],
+        payload: completedJob.payload,
+      });
+
+      log("Completed job after PR merge", {
+        jobId: completedJob.id,
+        prUrl: lifecycleResult.metadata.prUrl,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    if (lifecycleState === "CHECKS_FAILED" || lifecycleState === "CLOSED") {
+      await markRunFailed({
+        runId: latestRun.id,
+        metadata: lifecycleRunMetadata,
+      });
+
+      const blockedJob = await markJobBlocked({
+        jobId: prJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: prLifecycleEventTypeByState[lifecycleState],
+        message: prLifecycleMessageByState[lifecycleState],
+        metadata: {
+          ...lifecycleResult.metadata,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message:
+          lifecycleState === "CHECKS_FAILED"
+            ? "Pull request checks need attention."
+            : "Pull request closed before merge.",
+        metadata: {
+          lifecycleState,
+          prUrl: lifecycleResult.metadata.prUrl,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await sendRunnerSlackMilestone({
+        headline: lifecycleState === "CHECKS_FAILED" ? "checks failed" : "PR closed",
+        jobId: blockedJob.id,
+        lines: [`<${lifecycleResult.metadata.prUrl}|Open pull request>`],
+        payload: blockedJob.payload,
+      });
+
+      log("Blocked job after PR lifecycle terminal state", {
+        jobId: blockedJob.id,
+        lifecycleState,
+        prUrl: lifecycleResult.metadata.prUrl,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    await updateRunMetadata({
+      runId: latestRun.id,
+      metadata: lifecycleRunMetadata,
+    });
+
+    if (lifecycleChanged) {
+      await appendJobEvent({
+        jobId: prJob.id,
+        eventType: prLifecycleEventTypeByState[lifecycleState],
+        message: prLifecycleMessageByState[lifecycleState],
+        metadata: {
+          ...lifecycleResult.metadata,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      if (lifecycleState === "CHECKS_PASSED") {
+        await sendRunnerSlackMilestone({
+          headline: "checks passed",
+          jobId: prJob.id,
+          lines: [`<${lifecycleResult.metadata.prUrl}|Open pull request>`],
+          payload: prJob.payload,
+        });
+      }
+    }
+
+    log("PR lifecycle inspected", {
+      checks: lifecycleResult.metadata.checks,
+      jobId: prJob.id,
+      lifecycleState,
+      prUrl: lifecycleResult.metadata.prUrl,
+      runId: latestRun.id,
+    });
+
+    await setWorkerState({
+      status: "IDLE",
+    });
+    continue;
   }
 
   const claimResult = await claimNextQueuedJob(workerId);
