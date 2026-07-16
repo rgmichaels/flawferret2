@@ -6,11 +6,13 @@ import {
   getQueueControl,
   pauseQueue,
   prisma,
+  type Prisma,
   resumeQueue,
 } from "@flawferret2/db";
 import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
+  retryStageRequestSchema,
   type JobDiffResponse,
   type JobEventResponse,
   type JobResponse,
@@ -995,6 +997,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
 
   server.post("/jobs/:id/retry-stage", async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
+    const body = retryStageRequestSchema.parse(request.body ?? {});
+    const feedback = body.feedback?.trim();
     const job = await prisma.job.findUnique({
       where: {
         id: params.id,
@@ -1043,7 +1047,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const hasValidationAttempt = "validation" in metadata;
     const hasCodexAttempt = "codex" in metadata || "workBranch" in metadata;
     const target =
-      hasPullRequestAttempt || job.status === "REVIEW" || job.status === "PR_APPROVED"
+      feedback && hasCodexAttempt
+        ? {
+            jobStatus: "READY_FOR_CODEX" as const,
+            message: "Job was returned to Codex with reviewer feedback.",
+            runStatus: "READY_FOR_CODEX" as const,
+          }
+      : hasPullRequestAttempt || job.status === "REVIEW" || job.status === "PR_APPROVED"
         ? {
             jobStatus: "REVIEW" as const,
             message: "Job was returned to review for draft PR approval retry.",
@@ -1070,6 +1080,21 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
+    const nextRunMetadata: Record<string, unknown> = {
+      ...metadata,
+    };
+
+    if (feedback) {
+      delete nextRunMetadata.validation;
+      delete nextRunMetadata.pullRequest;
+      nextRunMetadata.retryFeedback = {
+        createdAt: new Date().toISOString(),
+        feedback,
+        previousRunStatus: latestRun.status,
+        previousStatus: job.status,
+      };
+    }
+
     const retriedJob = await prisma.$transaction(async (tx) => {
       await tx.run.update({
         where: {
@@ -1077,6 +1102,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         },
         data: {
           completedAt: null,
+          metadata: nextRunMetadata as Prisma.InputJsonValue,
           status: target.runStatus,
         },
       });
@@ -1110,6 +1136,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       metadata: {
         previousRunStatus: latestRun.status,
         previousStatus: job.status,
+        feedback: feedback ?? null,
         runId: latestRun.id,
         runStatus: target.runStatus,
         status: target.jobStatus,

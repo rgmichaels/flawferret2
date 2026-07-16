@@ -194,7 +194,14 @@ async function retryCurrentStage(formData: FormData) {
   "use server";
 
   const jobId = String(formData.get("jobId") ?? "");
+  const feedback = String(formData.get("feedback") ?? "").trim();
   const response = await fetch(`${apiUrl}/jobs/${jobId}/retry-stage`, {
+    body: JSON.stringify({
+      feedback: feedback.length > 0 ? feedback : undefined,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
     method: "POST",
   });
 
@@ -512,6 +519,7 @@ export default async function JobDetailPage({
   const latestMetadata = latestRun?.metadata ?? null;
   const codexMetadata = getNestedMetadata(latestMetadata, "codex");
   const validationMetadata = getNestedMetadata(latestMetadata, "validation");
+  const retryFeedbackMetadata = getNestedMetadata(latestMetadata, "retryFeedback");
   const pullRequestMetadata = getNestedMetadata(latestMetadata, "pullRequest");
   const pullRequestLifecycleMetadata = getNestedMetadata(pullRequestMetadata, "lifecycle");
   const changedFiles = getMetadataStrings(validationMetadata, "changedFiles");
@@ -549,6 +557,7 @@ export default async function JobDetailPage({
   const validationStderrPath = getMetadataString(validationMetadata, "stderrPath");
   const validationCommand = getMetadataString(validationMetadata, "command");
   const validationCommandSource = getMetadataString(validationMetadata, "commandSource");
+  const lastRetryFeedback = getMetadataString(retryFeedbackMetadata, "feedback");
   const pullRequestError = getMetadataString(pullRequestMetadata, "error");
   const pullRequestLifecycleError = getMetadataString(pullRequestLifecycleMetadata, "error");
   const validationHasRun = Object.keys(validationMetadata).length > 0;
@@ -743,6 +752,31 @@ export default async function JobDetailPage({
         </div>
         <code>{validationTrust.value}</code>
       </section>
+
+      {canRetryCurrentStage(job, latestRun) ? (
+        <section className="panel retry-feedback-card" aria-label="Retry with feedback">
+          <div>
+            <h2>Send Back to Codex</h2>
+            <p>
+              Add reviewer feedback before retrying so Codex knows exactly what to revise.
+            </p>
+            {lastRetryFeedback ? (
+              <blockquote>{lastRetryFeedback}</blockquote>
+            ) : null}
+          </div>
+          <form action={retryCurrentStage}>
+            <input type="hidden" name="jobId" value={job.id} />
+            <textarea
+              name="feedback"
+              placeholder="Make the scenario explicitly verify the text 'Broken Images' appears on the page."
+              required
+            />
+            <button className="secondary-button" type="submit">
+              Retry Codex with Feedback
+            </button>
+          </form>
+        </section>
+      ) : null}
 
       <section className="panel generated-diff-card" aria-label="Generated diff">
         <div className="generated-diff-header">

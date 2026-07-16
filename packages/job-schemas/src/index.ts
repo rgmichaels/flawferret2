@@ -192,6 +192,10 @@ export const createJobRequestSchema = z.object({
   payload: currentAddPlaywrightTestPayloadSchema,
 });
 
+export const retryStageRequestSchema = z.object({
+  feedback: z.string().trim().max(4000).optional(),
+});
+
 export const jobResponseSchema = z.object({
   id: z.string(),
   jobType: jobTypeSchema,
@@ -240,6 +244,7 @@ export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type RunResponse = z.infer<typeof runResponseSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
+export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
 export type JobDiffResponse = z.infer<typeof jobDiffResponseSchema>;
