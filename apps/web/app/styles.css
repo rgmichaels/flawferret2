@@ -1256,6 +1256,105 @@ textarea {
   color: #64748b;
 }
 
+.generated-diff-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.generated-diff-header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.generated-diff-header p {
+  color: #667085;
+  font-size: 13px;
+  margin-bottom: 0;
+}
+
+.generated-diff-header > span {
+  background: #eff6ff;
+  border-radius: 999px;
+  color: #1d4ed8;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 6px 9px;
+  text-transform: uppercase;
+}
+
+.generated-diff-meta {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.generated-diff-meta div {
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.generated-diff-meta dt {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.generated-diff-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.generated-diff-meta code {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #334155;
+  display: inline-block;
+  font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 2px 5px;
+}
+
+.generated-diff-stat,
+.generated-diff-output {
+  background: #0f172a;
+  border-radius: 8px;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.generated-diff-stat {
+  background: #172033;
+  max-height: 180px;
+}
+
+.generated-diff-output {
+  max-height: 520px;
+}
+
+.generated-diff-note {
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 0;
+}
+
 .diagnostics-card {
   display: grid;
   gap: 16px;
@@ -1664,6 +1763,7 @@ textarea {
   }
 
   .diagnostics-grid,
+  .generated-diff-meta,
   .diagnostics-log-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1719,12 +1819,14 @@ textarea {
 
   .execution-mode-card,
   .diagnostics-grid,
+  .generated-diff-meta,
   .diagnostics-log-grid,
   .safety-grid,
   .stage-tracker {
     grid-template-columns: 1fr;
   }
 
+  .generated-diff-header,
   .diagnostics-header {
     flex-direction: column;
   }

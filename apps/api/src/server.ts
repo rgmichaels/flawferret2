@@ -11,6 +11,7 @@ import {
 import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
+  type JobDiffResponse,
   type JobEventResponse,
   type JobResponse,
   type QueueControlResponse,
@@ -24,8 +25,14 @@ import {
   shortJobId,
 } from "@flawferret2/shared";
 import Fastify, { type FastifyInstance } from "fastify";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { z, ZodError } from "zod";
 import { config } from "./config.js";
+
+const execFileAsync = promisify(execFile);
+const DIFF_OUTPUT_LIMIT = 60_000;
+const DIFF_PROCESS_BUFFER = 5_000_000;
 
 const toJobResponse = (job: {
   id: string;
@@ -171,6 +178,122 @@ const toJobEventResponse = (event: {
   metadata: event.metadata ?? null,
   createdAt: event.createdAt.toISOString(),
 });
+
+const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<string, unknown>;
+};
+
+const getMetadataString = (metadata: unknown, key: string) => {
+  const value = getMetadataRecord(metadata)[key];
+
+  return typeof value === "string" && value.length > 0 ? value : null;
+};
+
+const truncateDiffOutput = (value: string) => {
+  if (value.length <= DIFF_OUTPUT_LIMIT) {
+    return {
+      text: value,
+      truncated: false,
+    };
+  }
+
+  return {
+    text: `${value.slice(0, DIFF_OUTPUT_LIMIT)}\n\n[diff truncated at ${DIFF_OUTPUT_LIMIT} characters]`,
+    truncated: true,
+  };
+};
+
+const isSafeGitRevision = (value: string) => value.length > 0 && !value.startsWith("-") && !value.includes("\0");
+
+const emptyJobDiff = ({
+  baseRef = null,
+  localPath = null,
+  reason,
+  workBranch = null,
+}: {
+  baseRef?: string | null;
+  localPath?: string | null;
+  reason: string;
+  workBranch?: string | null;
+}): JobDiffResponse => ({
+  available: false,
+  baseRef,
+  diff: "",
+  localPath,
+  reason,
+  stat: "",
+  truncated: false,
+  workBranch,
+});
+
+const readGeneratedDiff = async (metadata: unknown): Promise<JobDiffResponse> => {
+  const localPath = getMetadataString(metadata, "localPath");
+  const baseRef =
+    getMetadataString(metadata, "baseCommit") ??
+    getMetadataString(metadata, "baseRef") ??
+    getMetadataString(metadata, "targetBranch");
+  const workBranch = getMetadataString(metadata, "workBranch");
+
+  if (!localPath) {
+    return emptyJobDiff({
+      baseRef,
+      reason: "No local checkout path is recorded for this run.",
+      workBranch,
+    });
+  }
+
+  if (!baseRef) {
+    return emptyJobDiff({
+      localPath,
+      reason: "No base commit or branch is recorded for this run.",
+      workBranch,
+    });
+  }
+
+  if (!isSafeGitRevision(baseRef)) {
+    return emptyJobDiff({
+      baseRef,
+      localPath,
+      reason: "Recorded base ref cannot be used for diff preview.",
+      workBranch,
+    });
+  }
+
+  try {
+    const [{ stdout: stat }, { stdout: diff }] = await Promise.all([
+      execFileAsync("git", ["-C", localPath, "diff", "--no-color", "--stat", baseRef, "--"], {
+        maxBuffer: DIFF_PROCESS_BUFFER,
+      }),
+      execFileAsync("git", ["-C", localPath, "diff", "--no-color", "--find-renames", baseRef, "--"], {
+        maxBuffer: DIFF_PROCESS_BUFFER,
+      }),
+    ]);
+    const truncated = truncateDiffOutput(diff);
+    const available = stat.trim().length > 0 || truncated.text.trim().length > 0;
+
+    return {
+      available,
+      baseRef,
+      diff: truncated.text,
+      localPath,
+      reason: available ? null : "No generated diff is available.",
+      stat,
+      truncated: truncated.truncated,
+      workBranch,
+    };
+  } catch (error) {
+    return emptyJobDiff({
+      baseRef,
+      localPath,
+      reason: error instanceof Error ? error.message : "Unable to read generated diff.",
+      workBranch,
+    });
+  }
+};
 
 const jobParamsSchema = z.object({
   id: z.string().uuid(),
@@ -992,6 +1115,41 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return toJobResponseWithRepository(job);
+  });
+
+  server.get("/jobs/:id/diff", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+
+    const job = await prisma.job.findUnique({
+      include: {
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    const latestRun = job.runs[0] ?? null;
+
+    if (!latestRun) {
+      return emptyJobDiff({
+        reason: "No execution run has started for this job.",
+      });
+    }
+
+    return readGeneratedDiff(latestRun.metadata);
   });
 
   server.get("/jobs/:id/events", async (request, reply) => {

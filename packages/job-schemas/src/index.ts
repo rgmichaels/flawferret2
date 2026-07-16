@@ -214,6 +214,17 @@ export const jobEventResponseSchema = z.object({
   createdAt: z.string(),
 });
 
+export const jobDiffResponseSchema = z.object({
+  available: z.boolean(),
+  baseRef: z.string().nullable(),
+  diff: z.string(),
+  localPath: z.string().nullable(),
+  reason: z.string().nullable(),
+  stat: z.string(),
+  truncated: z.boolean(),
+  workBranch: z.string().nullable(),
+});
+
 export type JobType = z.infer<typeof jobTypeSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type JobPriority = z.infer<typeof prioritySchema>;
@@ -229,3 +240,4 @@ export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSc
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
+export type JobDiffResponse = z.infer<typeof jobDiffResponseSchema>;
