@@ -916,6 +916,74 @@ label {
   overflow-wrap: anywhere;
 }
 
+.runner-operations-card {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px;
+}
+
+.runner-warning {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.runner-warning strong {
+  color: #9a3412;
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.runner-warning p {
+  color: #7c2d12;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.runner-command-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.runner-command-grid article {
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.runner-command-grid span {
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.runner-command-grid p {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.runner-command-grid code {
+  background: #f8fafc;
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  color: #172033;
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 8px 9px;
+}
+
 .readiness-grid {
   display: grid;
   gap: 14px;
@@ -1819,6 +1887,10 @@ textarea {
 
   .safety-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .runner-command-grid {
+    grid-template-columns: 1fr;
   }
 
   .content-grid {
