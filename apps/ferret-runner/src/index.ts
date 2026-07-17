@@ -35,6 +35,7 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
 import { config } from "./config.js";
+import { cleanupMergedPullRequestCheckout } from "./local-checkout-cleanup.js";
 import {
   createDraftPullRequest,
   inspectPullRequestLifecycle,
@@ -108,8 +109,8 @@ const sendRunnerSlackMilestone = async ({
     webhookUrl: config.SLACK_WEBHOOK_URL,
   });
 
-  if (!slackResult.sent && slackResult.reason !== "not_configured") {
-    log("Unable to send Slack milestone notification", {
+  if (!slackResult.sent) {
+    log("Slack milestone notification was not sent", {
       jobId,
       reason: slackResult.reason,
     });
@@ -286,6 +287,7 @@ log("Worker starting", {
   hostname: workerHostname,
   codexEnabled: config.FERRET_RUNNER_ENABLE_CODEX,
   prCreationEnabled: config.FERRET_RUNNER_ENABLE_PR_CREATION,
+  slackConfigured: Boolean(config.SLACK_WEBHOOK_URL),
   heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
   pollIntervalMs: config.WORKER_POLL_INTERVAL_MS,
   simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
@@ -1107,6 +1109,8 @@ while (!shouldStop) {
     const previousLifecycleState = getMetadataString(lifecycleMetadata, "lifecycleState");
     const localPath = getMetadataString(runMetadata, "localPath");
     const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
+    const baseBranch = getMetadataString(pullRequestMetadata, "baseBranch");
+    const headBranch = getMetadataString(pullRequestMetadata, "headBranch");
 
     await setWorkerState({
       currentJob: prJob.id,
@@ -1204,9 +1208,25 @@ while (!shouldStop) {
     const lifecycleChanged = previousLifecycleState !== lifecycleState;
 
     if (lifecycleState === "MERGED") {
+      const cleanupResult = await cleanupMergedPullRequestCheckout({
+        baseBranch,
+        headBranch,
+        localPath,
+      });
+      const mergedRunMetadata = {
+        ...lifecycleRunMetadata,
+        pullRequest: {
+          ...getMetadataRecord(lifecycleRunMetadata.pullRequest),
+          cleanup: {
+            ...cleanupResult,
+            completedAt: new Date().toISOString(),
+          },
+        },
+      };
+
       await markRunSucceeded({
         runId: latestRun.id,
-        metadata: lifecycleRunMetadata,
+        metadata: mergedRunMetadata,
       });
 
       const completedJob = await markJobCompleted({
@@ -1227,6 +1247,21 @@ while (!shouldStop) {
         });
       }
 
+      await appendJobEvent({
+        jobId: completedJob.id,
+        eventType: cleanupResult.ok
+          ? "LOCAL_CHECKOUT_CLEANUP_COMPLETED"
+          : "LOCAL_CHECKOUT_CLEANUP_FAILED",
+        message: cleanupResult.ok
+          ? "Local checkout cleanup completed after PR merge."
+          : "Local checkout cleanup failed after PR merge.",
+        metadata: {
+          ...cleanupResult,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
       await sendRunnerSlackMilestone({
         headline: "merged",
         jobId: completedJob.id,
@@ -1236,6 +1271,7 @@ while (!shouldStop) {
 
       log("Completed job after PR merge", {
         jobId: completedJob.id,
+        cleanupOk: cleanupResult.ok,
         prUrl: lifecycleResult.metadata.prUrl,
         runId: latestRun.id,
       });

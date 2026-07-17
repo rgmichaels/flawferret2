@@ -64,6 +64,8 @@ export const appendJobEvent = async ({
     | "PR_CHECKS_FAILED"
     | "PR_MERGED"
     | "PR_CLOSED"
+    | "LOCAL_CHECKOUT_CLEANUP_COMPLETED"
+    | "LOCAL_CHECKOUT_CLEANUP_FAILED"
     | "PR_CREATION_FAILED"
     | "PR_CREATION_APPROVED"
     | "JOB_BLOCKED";

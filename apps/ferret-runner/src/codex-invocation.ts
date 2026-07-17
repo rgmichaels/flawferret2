@@ -44,6 +44,14 @@ const getStringMetadataValue = (metadata: unknown, key: string) => {
   return typeof value === "string" && value.length > 0 ? value : null;
 };
 
+const getMetadataRecord = (metadata: unknown): Record<string, unknown> => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  return metadata as Record<string, unknown>;
+};
+
 const getPayloadValue = (payload: unknown, key: string) => {
   if (!payload || typeof payload !== "object" || !(key in payload)) {
     return "";
@@ -129,6 +137,8 @@ const extractCodexProgress = (line: string) => {
 
 export const buildCodexPrompt = (job: ClaimedCodexJob) => {
   const latestRun = job.runs[0] ?? null;
+  const runMetadata = getMetadataRecord(latestRun?.metadata);
+  const retryFeedback = getStringMetadataValue(runMetadata.retryFeedback, "feedback");
   const workBranch = getStringMetadataValue(latestRun?.metadata, "workBranch") ?? "unknown";
   const targetBranch =
     getPayloadValue(job.payload, "targetBranch") ||
@@ -151,6 +161,13 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     `- Goal: ${getPayloadValue(job.payload, "goal")}`,
     `- Acceptance criteria: ${getPayloadValue(job.payload, "acceptanceCriteria")}`,
     `- Test scope: ${runAffectedTests ? "run affected tests only" : "run the smallest useful verification"}`,
+    ...(retryFeedback
+      ? [
+          "",
+          "Reviewer feedback for this retry:",
+          retryFeedback,
+        ]
+      : []),
     "",
     "Instructions:",
     "- Add or update the minimal Playwright test coverage needed for the request.",

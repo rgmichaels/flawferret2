@@ -1399,6 +1399,39 @@ textarea {
   color: #64748b;
 }
 
+.retry-feedback-card {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 0.85fr) minmax(320px, 1.15fr);
+  padding: 20px;
+}
+
+.retry-feedback-card p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 0;
+}
+
+.retry-feedback-card blockquote {
+  background: #f8fafc;
+  border-left: 3px solid #2563eb;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+}
+
+.retry-feedback-card form {
+  display: grid;
+  gap: 10px;
+}
+
+.retry-feedback-card textarea {
+  min-height: 112px;
+}
+
 .generated-diff-card {
   display: grid;
   gap: 14px;
@@ -1910,6 +1943,10 @@ textarea {
   }
 
   .validation-trust-card {
+    grid-template-columns: 1fr;
+  }
+
+  .retry-feedback-card {
     grid-template-columns: 1fr;
   }
 
