@@ -719,13 +719,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       webhookUrl: config.SLACK_WEBHOOK_URL,
     });
 
-    if (!slackResult.sent && slackResult.reason !== "not_configured") {
+    if (!slackResult.sent) {
       server.log.warn(
         {
           jobId: job.id,
           reason: slackResult.reason,
         },
-        "Unable to send Slack job-created notification",
+        "Slack job-created notification was not sent",
       );
     }
 
