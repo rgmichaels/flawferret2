@@ -8,7 +8,7 @@
     "check": "pnpm typecheck",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc --noEmit",
-    "test": "echo \"ferret-runner test not implemented yet\"",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
