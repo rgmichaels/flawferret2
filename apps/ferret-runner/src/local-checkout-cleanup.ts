@@ -15,7 +15,9 @@ export type LocalCheckoutCleanupResult = {
   updatedBase: boolean;
 };
 
-const runGit = async (localPath: string, args: string[]) => {
+type GitRunner = (localPath: string, args: string[]) => Promise<string>;
+
+const runGit: GitRunner = async (localPath, args) => {
   const { stdout } = await execFileAsync("git", ["-C", localPath, ...args], {
     maxBuffer: 1024 * 1024,
   });
@@ -28,10 +30,12 @@ const isFlawFerretBranch = (branch: string | null) =>
 
 export const cleanupMergedPullRequestCheckout = async ({
   baseBranch,
+  git = runGit,
   headBranch,
   localPath,
 }: {
   baseBranch: string | null;
+  git?: GitRunner;
   headBranch: string | null;
   localPath: string;
 }): Promise<LocalCheckoutCleanupResult> => {
@@ -61,16 +65,16 @@ export const cleanupMergedPullRequestCheckout = async ({
   }
 
   try {
-    await runGit(localPath, ["switch", baseBranch]);
+    await git(localPath, ["switch", baseBranch]);
     result.switchedToBase = true;
 
-    await runGit(localPath, ["pull", "--ff-only"]);
+    await git(localPath, ["pull", "--ff-only"]);
     result.updatedBase = true;
 
-    await runGit(localPath, ["fetch", "--prune"]);
+    await git(localPath, ["fetch", "--prune"]);
     result.pruned = true;
 
-    const matchingLocalBranch = await runGit(localPath, ["branch", "--list", headBranch]);
+    const matchingLocalBranch = await git(localPath, ["branch", "--list", headBranch]);
     if (matchingLocalBranch.length === 0) {
       result.deletedBranch = true;
       return {
@@ -79,7 +83,7 @@ export const cleanupMergedPullRequestCheckout = async ({
       };
     }
 
-    await runGit(localPath, ["branch", "-d", headBranch]);
+    await git(localPath, ["branch", "-d", headBranch]);
     result.deletedBranch = true;
 
     return {
