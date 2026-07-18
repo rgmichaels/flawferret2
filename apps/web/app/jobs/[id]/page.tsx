@@ -296,6 +296,9 @@ const getLastEventMessage = (events: JobEventResponse[], eventTypes: string[]) =
   return event?.message ?? null;
 };
 
+const getLastEvent = (events: JobEventResponse[], eventTypes: string[]) =>
+  [...events].reverse().find((item) => eventTypes.includes(item.eventType)) ?? null;
+
 const isWebUrl = (value: string) => value.startsWith("https://") || value.startsWith("http://");
 
 type PipelineStageState = "blocked" | "complete" | "current" | "skipped" | "waiting";
@@ -529,6 +532,12 @@ export default async function JobDetailPage({
     "VALIDATION_FAILED",
     "PR_CREATION_FAILED",
   ]);
+  const cleanupFailureEvent = getLastEvent(events, ["LOCAL_CHECKOUT_CLEANUP_FAILED"]);
+  const cleanupFailureMetadata = getMetadataRecord(cleanupFailureEvent?.metadata);
+  const cleanupFailureError = getMetadataString(cleanupFailureMetadata, "error");
+  const cleanupFailureLocalPath = getMetadataString(cleanupFailureMetadata, "localPath");
+  const cleanupFailureHeadBranch = getMetadataString(cleanupFailureMetadata, "headBranch");
+  const cleanupFailureBaseBranch = getMetadataString(cleanupFailureMetadata, "baseBranch");
   const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
   const prLifecycleState = getMetadataString(pullRequestLifecycleMetadata, "lifecycleState");
   const prCheckCounts = getNestedMetadata(pullRequestLifecycleMetadata, "checks");
@@ -600,6 +609,7 @@ export default async function JobDetailPage({
             value: "Not run",
           };
   const attentionText =
+    cleanupFailureError ??
     blockedReason ??
     codexError ??
     validationError ??
@@ -1109,6 +1119,33 @@ export default async function JobDetailPage({
             <div className="pipeline-alert">
               <strong>Latest attention item</strong>
               <p>{blockedReason}</p>
+            </div>
+          ) : null}
+
+          {cleanupFailureEvent ? (
+            <div className="pipeline-alert cleanup-alert">
+              <strong>Local cleanup needed</strong>
+              <p>{cleanupFailureError ?? cleanupFailureEvent.message}</p>
+              <dl>
+                <div>
+                  <dt>Checkout</dt>
+                  <dd>
+                    <code>{cleanupFailureLocalPath ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Base</dt>
+                  <dd>
+                    <code>{cleanupFailureBaseBranch ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Generated Branch</dt>
+                  <dd>
+                    <code>{cleanupFailureHeadBranch ?? "Not recorded"}</code>
+                  </dd>
+                </div>
+              </dl>
             </div>
           ) : null}
         </section>
