@@ -120,6 +120,7 @@ export const readinessResponseSchema = z.object({
   counts: z.object({
     activeJobs: z.number().int().nonnegative(),
     blockedJobs: z.number().int().nonnegative(),
+    cleanupFailures: z.number().int().nonnegative(),
     codexApprovalJobs: z.number().int().nonnegative(),
     completedJobs: z.number().int().nonnegative(),
     jobs: z.number().int().nonnegative(),
@@ -148,6 +149,19 @@ export const readinessResponseSchema = z.object({
     slackConfigured: z.boolean(),
     status: z.string().nullable(),
     validationCommandConfigured: z.boolean(),
+  }),
+  cleanup: z.object({
+    latestFailure: z
+      .object({
+        baseBranch: z.string().nullable(),
+        error: z.string().nullable(),
+        headBranch: z.string().nullable(),
+        href: z.string(),
+        jobId: z.string(),
+        localPath: z.string().nullable(),
+        message: z.string(),
+      })
+      .nullable(),
   }),
 });
 

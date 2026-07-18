@@ -1,5 +1,6 @@
 import type { ReadinessResponse } from "@flawferret2/job-schemas";
 import { AppShell } from "../app-shell";
+import { getReadinessNextAction } from "./view-model";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -35,66 +36,6 @@ const formatHeartbeat = (seconds: number | null) => {
   }
 
   return `${Math.floor(minutes / 60)}h ago`;
-};
-
-const getNextAction = (readiness: ReadinessResponse) => {
-  if (readiness.counts.repositories === 0) {
-    return {
-      href: "/repositories",
-      label: "Register a repository",
-      text: "Add a local checkout before queuing work.",
-    };
-  }
-
-  if (readiness.queue.paused) {
-    return {
-      href: "/",
-      label: "Resume the queue",
-      text: "The runner will not claim work while the queue is paused.",
-    };
-  }
-
-  if (readiness.nextAction) {
-    return readiness.nextAction;
-  }
-
-  if (readiness.counts.codexApprovalJobs > 0) {
-    return {
-      href: "/#jobs",
-      label: "Approve Codex",
-      text: "A prepared job is waiting before any model spend happens.",
-    };
-  }
-
-  if (readiness.counts.prApprovalJobs > 0) {
-    return {
-      href: "/#jobs",
-      label: "Approve Draft PR",
-      text: "Validated work is waiting before any branch push or PR creation.",
-    };
-  }
-
-  if (readiness.counts.prCreatedJobs > 0) {
-    return {
-      href: "/#jobs",
-      label: "Review Pull Request",
-      text: "A draft PR exists; checks and merge are still pending.",
-    };
-  }
-
-  if (readiness.counts.blockedJobs > 0) {
-    return {
-      href: "/#jobs",
-      label: "Open a blocked job",
-      text: "Use retry controls or inspect the latest failure reason.",
-    };
-  }
-
-  return {
-    href: "/jobs/new",
-    label: "Queue a test-writing job",
-    text: "The next concrete run starts with an Add Playwright Test job.",
-  };
 };
 
 const statusClass = (ok: boolean) => (ok ? "readiness-ok" : "readiness-warn");
@@ -152,7 +93,7 @@ export default async function ReadinessPage() {
     );
   }
 
-  const nextAction = getNextAction(readiness);
+  const nextAction = getReadinessNextAction(readiness);
   const runnerFresh =
     readiness.runner.heartbeatAgeSeconds !== null &&
     readiness.runner.heartbeatAgeSeconds <= 120;
@@ -345,6 +286,18 @@ export default async function ReadinessPage() {
             <strong>{readiness.counts.blockedJobs}</strong>
             <p>Blocked, failed, or retry jobs needing attention.</p>
           </article>
+          <article className="panel readiness-card">
+            <span className={statusClass(readiness.counts.cleanupFailures === 0)}>Local Cleanup</span>
+            <strong>{readiness.counts.cleanupFailures}</strong>
+            <p>
+              {readiness.cleanup.latestFailure
+                ? readiness.cleanup.latestFailure.error ?? readiness.cleanup.latestFailure.message
+                : "No merged PR checkout cleanup failures."}
+            </p>
+            {readiness.cleanup.latestFailure ? (
+              <a href={readiness.cleanup.latestFailure.href}>Open cleanup item</a>
+            ) : null}
+          </article>
         </section>
 
         <section className="panel readiness-summary">
@@ -373,6 +326,10 @@ export default async function ReadinessPage() {
             <div>
               <dt>Completed</dt>
               <dd>{readiness.counts.completedJobs}</dd>
+            </div>
+            <div>
+              <dt>Cleanup Needed</dt>
+              <dd>{readiness.counts.cleanupFailures}</dd>
             </div>
           </dl>
         </section>

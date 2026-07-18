@@ -7,13 +7,14 @@
     "build": "tsc --noEmit",
     "check": "pnpm typecheck",
     "lint": "tsc --noEmit",
-    "test": "echo \"shared test not implemented yet\"",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "exports": {
     ".": "./src/index.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   }
 }

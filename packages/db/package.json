@@ -11,7 +11,7 @@
     "db:studio": "prisma studio --schema prisma/schema.prisma",
     "db:validate": "prisma validate --schema prisma/schema.prisma",
     "lint": "tsc --noEmit",
-    "test": "echo \"db test not implemented yet\"",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "exports": {
@@ -24,6 +24,7 @@
     "@types/node": "^26.1.1",
     "dotenv": "^17.4.2",
     "prisma": "^6.19.3",
+    "tsx": "^4.23.0",
     "typescript": "^5.9.3"
   }
 }

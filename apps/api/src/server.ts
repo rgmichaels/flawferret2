@@ -462,6 +462,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       repositories,
       repositoryWithValidationCommand,
       jobs,
+      cleanupFailureEvents,
       nextActionJobs,
       latestWorker,
     ] = await Promise.all([
@@ -480,6 +481,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       prisma.job.findMany({
         select: {
           status: true,
+        },
+      }),
+      prisma.jobEvent.findMany({
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          jobId: true,
+          message: true,
+          metadata: true,
+        },
+        where: {
+          eventType: "LOCAL_CHECKOUT_CLEANUP_FAILED",
         },
       }),
       prisma.job.findMany({
@@ -514,6 +528,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
     const countByStatus = (statuses: JobResponse["status"][]) =>
       jobs.filter((job) => statuses.includes(job.status)).length;
+    const latestCleanupFailure = cleanupFailureEvents[0] ?? null;
+    const latestCleanupFailureMetadata = getMetadataRecord(latestCleanupFailure?.metadata);
     const nextActionJob =
       nextActionJobs.sort((left, right) => {
         const leftPriority = nextActionStatusPriority[left.status] ?? 99;
@@ -537,6 +553,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
           "PR_CREATED",
         ]),
         blockedJobs: countByStatus(["BLOCKED", "FAILED", "RETRY"]),
+        cleanupFailures: cleanupFailureEvents.length,
         codexApprovalJobs: countByStatus(["READY_FOR_CODEX"]),
         completedJobs: countByStatus(["COMPLETED"]),
         jobs: jobs.length,
@@ -567,6 +584,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         validationCommandConfigured:
           Boolean(config.FERRET_RUNNER_VALIDATION_COMMAND) ||
           Boolean(repositoryWithValidationCommand),
+      },
+      cleanup: {
+        latestFailure: latestCleanupFailure
+          ? {
+              baseBranch: getMetadataString(latestCleanupFailureMetadata, "baseBranch"),
+              error: getMetadataString(latestCleanupFailureMetadata, "error"),
+              headBranch: getMetadataString(latestCleanupFailureMetadata, "headBranch"),
+              href: `/jobs/${latestCleanupFailure.jobId}`,
+              jobId: latestCleanupFailure.jobId,
+              localPath: getMetadataString(latestCleanupFailureMetadata, "localPath"),
+              message: latestCleanupFailure.message,
+            }
+          : null,
       },
     };
   });
