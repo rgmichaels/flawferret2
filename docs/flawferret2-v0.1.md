@@ -4,7 +4,7 @@
 
 FlawFerret2 is not a browser extension. It is an AI-powered QA orchestration platform whose purpose is to manage engineering work, invoke coding agents, validate results, and deliver GitHub pull requests.
 
-The original FlawFerret browser extension remains the lightweight capture interface. FlawFerret2 becomes the operations platform.
+The FlawFerret browser extension remains the lightweight capture interface. FlawFerret2 is the operations platform.
 
 ## Component Names
 
@@ -35,7 +35,7 @@ Browser Extension
 
 ### Browser Extension
 
-The existing FlawFerret browser extension captures browser context:
+The FlawFerret browser extension captures browser context:
 
 - Current URL
 - Selected DOM element

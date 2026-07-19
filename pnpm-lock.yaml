@@ -49,6 +49,15 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  apps/extension:
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   apps/ferret-runner:
     dependencies:
       '@flawferret2/db':

@@ -2,7 +2,7 @@
 
 FlawFerret2 is an AI-powered QA orchestration platform for turning captured browser context and human intent into validated engineering pull requests.
 
-The original FlawFerret browser extension remains the capture interface. FlawFerret2 is the command center: it stores jobs, coordinates workers, invokes Codex, validates results with Playwright, and opens GitHub pull requests for human review.
+The FlawFerret browser extension is the capture interface. The FlawFerret2 command center stores jobs, coordinates workers, invokes Codex, validates results with Playwright, and opens GitHub pull requests for human review.
 
 ## Milestone 1
 
@@ -119,6 +119,7 @@ The first complete workflow is `ADD_PLAYWRIGHT_TEST`:
 
 ```text
 apps/
+  extension/       Chrome extension capture interface
   web/             Next.js dashboard and job creation UI
   api/             Fastify API
   ferret-runner/   Worker service that orchestrates jobs

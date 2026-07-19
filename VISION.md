@@ -12,9 +12,9 @@ FlawFerret2 is responsible for managing engineering work, orchestrating AI codin
 
 The overall goal is to automate repetitive QA engineering work while keeping humans responsible for prioritization and final approval.
 
-## Relationship to FlawFerret1
+## Relationship to the Browser Extension
 
-FlawFerret1 remains the browser extension.
+The FlawFerret browser extension remains the capture interface.
 
 Its purpose is to capture testing context from a running web application.
 
