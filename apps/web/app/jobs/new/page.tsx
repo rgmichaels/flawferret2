@@ -1,4 +1,9 @@
-import type { QueueControlResponse, RepositoryResponse } from "@flawferret2/job-schemas";
+import {
+  captureContextSchema,
+  type CaptureContext,
+  type QueueControlResponse,
+  type RepositoryResponse,
+} from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import { AppShell } from "../../app-shell";
 
@@ -49,6 +54,8 @@ async function getQueueControl(): Promise<QueueControlResponse> {
 async function queueJob(formData: FormData) {
   "use server";
 
+  const captureContext = parseCaptureContextValue(formData.get("captureContext"));
+
   const response = await fetch(`${apiUrl}/jobs`, {
     method: "POST",
     headers: {
@@ -65,6 +72,7 @@ async function queueJob(formData: FormData) {
         acceptanceCriteria: formData.get("acceptanceCriteria"),
         runAffectedTests: formData.get("runAffectedTests") === "on",
         createDraftPr: formData.get("createDraftPr") === "on",
+        ...(captureContext ? { captureContext } : {}),
       },
     }),
   });
@@ -80,7 +88,80 @@ async function queueJob(formData: FormData) {
 const repositoryLabel = (repository: RepositoryResponse) =>
   `${repository.owner}/${repository.name}`;
 
-export default async function NewJobPage() {
+export const parseCaptureContextValue = (value: unknown) => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    const captureContext = captureContextSchema.safeParse(parsed);
+
+    return captureContext.success ? captureContext.data : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getCaptureLabel = (captureContext: CaptureContext) =>
+  captureContext.accessibleName ??
+  captureContext.name ??
+  captureContext.selectedText ??
+  captureContext.elementKey ??
+  "captured element";
+
+export const getDefaultFeatureArea = (captureContext: CaptureContext | null) => {
+  if (!captureContext) {
+    return "";
+  }
+
+  const label = getCaptureLabel(captureContext);
+  const title = captureContext.title ? ` on ${captureContext.title}` : "";
+
+  return `${label}${title}`;
+};
+
+export const getDefaultGoal = (captureContext: CaptureContext | null) => {
+  if (!captureContext) {
+    return "";
+  }
+
+  const label = getCaptureLabel(captureContext);
+  const page = captureContext.url ? ` on ${captureContext.url}` : "";
+
+  return `Add Playwright coverage for ${label}${page}.`;
+};
+
+export const getDefaultAcceptanceCriteria = (captureContext: CaptureContext | null) => {
+  if (!captureContext) {
+    return "";
+  }
+
+  const criteria = [
+    captureContext.thenLine ?? null,
+    captureContext.url ? `Navigate to ${captureContext.url}.` : null,
+    captureContext.selectors.length > 0
+      ? `Prefer locator ${captureContext.selectors[0]}.`
+      : null,
+    captureContext.outerHTML || captureContext.domSnippet
+      ? "Use the captured DOM snippet to keep the assertion focused."
+      : null,
+  ].filter((line): line is string => Boolean(line));
+
+  return criteria.join("\n");
+};
+
+export default async function NewJobPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ captureContext?: string }>;
+}) {
+  const { captureContext: captureContextParam } = await searchParams;
+  const captureContext = parseCaptureContextValue(captureContextParam);
+  const serializedCaptureContext = captureContext ? JSON.stringify(captureContext) : "";
+  const defaultFeatureArea = getDefaultFeatureArea(captureContext);
+  const defaultGoal = getDefaultGoal(captureContext);
+  const defaultAcceptanceCriteria = getDefaultAcceptanceCriteria(captureContext);
   const [repositories, queueControl] = await Promise.all([
     getRepositories(),
     getQueueControl(),
@@ -107,6 +188,12 @@ export default async function NewJobPage() {
             </div>
           </div>
           <form action={queueJob} className="job-form standalone-form">
+            {captureContext ? (
+              <div className="queue-paused-note">
+                Captured browser context from {captureContext.url ?? "the extension"}.
+              </div>
+            ) : null}
+            <input name="captureContext" type="hidden" value={serializedCaptureContext} />
             <label>
               Test Suite Repository
               <select name="repositoryId" required disabled={repositories.length === 0}>
@@ -132,12 +219,18 @@ export default async function NewJobPage() {
             </label>
             <label>
               Feature Area
-              <input name="featureArea" placeholder="Login flow" required />
+              <input
+                name="featureArea"
+                defaultValue={defaultFeatureArea}
+                placeholder="Login flow"
+                required
+              />
             </label>
             <label>
               Goal
               <textarea
                 name="goal"
+                defaultValue={defaultGoal}
                 placeholder="Verify login fails with an invalid password..."
                 required
               />
@@ -146,6 +239,7 @@ export default async function NewJobPage() {
               Acceptance Criteria
               <textarea
                 name="acceptanceCriteria"
+                defaultValue={defaultAcceptanceCriteria}
                 placeholder="The test should verify the error message..."
                 required
               />

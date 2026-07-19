@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { jobEventTypeSchema, readinessResponseSchema, retryStageRequestSchema } from "./index.js";
+import {
+  captureContextSchema,
+  createJobRequestSchema,
+  jobEventTypeSchema,
+  readinessResponseSchema,
+  retryStageRequestSchema,
+} from "./index.js";
 
 describe("job schemas", () => {
   it("accepts local cleanup event types", () => {
@@ -12,6 +18,70 @@ describe("job schemas", () => {
     assert.deepEqual(retryStageRequestSchema.parse({ feedback: "  try the empty state  " }), {
       feedback: "try the empty state",
     });
+  });
+
+  it("parses browser capture context from the existing extension", () => {
+    const captureContext = captureContextSchema.parse({
+      url: " https://example.test/login ",
+      title: " Login ",
+      role: " button ",
+      name: " Sign in ",
+      outerHTML: " <button>Sign in</button> ",
+      selectors: [" button[type='submit'] ", " text=Sign in "],
+      selectedText: " Sign in ",
+      snapshotUrl: "blob:https://example.test/snapshot",
+      captureRect: {
+        x: 10,
+        y: 20,
+        width: 120,
+        height: 44,
+      },
+      viewport: {
+        width: 1440,
+        height: 900,
+      },
+      devicePixelRatio: 2,
+      notes: " Add a focused assertion. ",
+    });
+
+    assert.equal(captureContext.url, "https://example.test/login");
+    assert.equal(captureContext.role, "button");
+    assert.equal(captureContext.name, "Sign in");
+    assert.deepEqual(captureContext.selectors, ["button[type='submit']", "text=Sign in"]);
+    assert.equal(captureContext.notes, "Add a focused assertion.");
+    assert.deepEqual(captureContext.consoleErrors, []);
+    assert.deepEqual(captureContext.networkEvents, []);
+  });
+
+  it("accepts capture context on new ADD_PLAYWRIGHT_TEST jobs", () => {
+    const request = createJobRequestSchema.parse({
+      jobType: "ADD_PLAYWRIGHT_TEST",
+      priority: "NORMAL",
+      payload: {
+        repositoryId: "11111111-1111-4111-8111-111111111111",
+        targetBranch: "main",
+        featureArea: "Login",
+        goal: "Add coverage for invalid login.",
+        acceptanceCriteria: "Assert the error message is visible.",
+        captureContext: {
+          url: "https://example.test/login",
+          accessibleRole: "button",
+          accessibleName: "Sign in",
+          domSnippet: "<button>Sign in</button>",
+          locatorCandidates: [
+            {
+              strategy: "role",
+              value: "button[name='Sign in']",
+            },
+          ],
+        },
+      },
+    });
+
+    assert.equal(request.payload.captureContext?.accessibleRole, "button");
+    assert.equal(request.payload.captureContext?.locatorCandidates[0]?.strategy, "role");
+    assert.equal(request.payload.runAffectedTests, true);
+    assert.equal(request.payload.createDraftPr, true);
   });
 
   it("parses readiness cleanup attention data", () => {

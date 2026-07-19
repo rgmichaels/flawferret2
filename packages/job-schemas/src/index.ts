@@ -177,6 +177,51 @@ export const runResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const captureRectSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
+
+export const viewportSchema = z.object({
+  width: z.number().positive(),
+  height: z.number().positive(),
+});
+
+export const locatorCandidateSchema = z.object({
+  strategy: z.string().trim().min(1, "Locator strategy is required"),
+  value: z.string().trim().min(1, "Locator value is required"),
+});
+
+export const captureContextSchema = z
+  .object({
+    url: z.string().trim().url("Capture URL must be a valid URL").optional(),
+    title: z.string().trim().optional(),
+    selectedElement: z.string().trim().optional(),
+    elementKey: z.string().trim().optional(),
+    domSnippet: z.string().trim().optional(),
+    outerHTML: z.string().trim().optional(),
+    screenshotAssetId: z.string().trim().optional(),
+    snapshotUrl: z.string().trim().optional(),
+    selectedText: z.string().trim().optional(),
+    imageName: z.string().trim().optional(),
+    consoleErrors: z.array(z.string().trim().min(1)).default([]),
+    networkEvents: z.array(z.string().trim().min(1)).default([]),
+    accessibleRole: z.string().trim().optional(),
+    accessibleName: z.string().trim().optional(),
+    role: z.string().trim().optional(),
+    name: z.string().trim().optional(),
+    selectors: z.array(z.string().trim().min(1)).default([]),
+    locatorCandidates: z.array(locatorCandidateSchema).default([]),
+    thenLine: z.string().trim().optional(),
+    notes: z.string().trim().optional(),
+    captureRect: captureRectSchema.optional(),
+    viewport: viewportSchema.optional(),
+    devicePixelRatio: z.number().positive().optional(),
+  })
+  .strict();
+
 export const currentAddPlaywrightTestPayloadSchema = z.object({
   repositoryId: z.string().uuid("Repository is required"),
   targetBranch: z.string().trim().min(1, "Target branch is required"),
@@ -185,6 +230,7 @@ export const currentAddPlaywrightTestPayloadSchema = z.object({
   acceptanceCriteria: z.string().trim().min(1, "Acceptance criteria are required"),
   runAffectedTests: z.boolean().default(true),
   createDraftPr: z.boolean().default(true),
+  captureContext: captureContextSchema.optional(),
 });
 
 export const legacyAddPlaywrightTestPayloadSchema = z.object({
@@ -195,6 +241,7 @@ export const legacyAddPlaywrightTestPayloadSchema = z.object({
   acceptanceCriteria: z.string().trim().min(1, "Acceptance criteria are required"),
   runAffectedTests: z.boolean().default(true),
   createDraftPr: z.boolean().default(true),
+  captureContext: captureContextSchema.optional(),
 });
 
 export const addPlaywrightTestPayloadSchema = z.union([
@@ -258,6 +305,7 @@ export type RepositoryResponse = z.infer<typeof repositoryResponseSchema>;
 export type QueueControlResponse = z.infer<typeof queueControlResponseSchema>;
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type RunResponse = z.infer<typeof runResponseSchema>;
+export type CaptureContext = z.infer<typeof captureContextSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
