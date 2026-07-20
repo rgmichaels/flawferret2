@@ -31,6 +31,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { z, ZodError } from "zod";
 import { config } from "./config.js";
+import { buildFeatureCatalog, buildFeatureDetail } from "./cucumber-features.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -686,6 +687,77 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return toRepositoryResponse(repository);
+  });
+
+  server.get("/repositories/:id/features", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    try {
+      return await buildFeatureCatalog({
+        repository: toRepositoryResponse(repository),
+      });
+    } catch (error) {
+      return reply.status(409).send({
+        error: "FeatureCatalogUnavailable",
+        message: error instanceof Error ? error.message : "Unable to read feature catalog.",
+      });
+    }
+  });
+
+  server.get("/repositories/:id/features/detail", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+    const query = z
+      .object({
+        path: z.string().trim().min(1),
+      })
+      .parse(request.query);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    try {
+      const detail = await buildFeatureDetail({
+        featurePath: query.path,
+        repository: toRepositoryResponse(repository),
+      });
+
+      if (!detail) {
+        return reply.status(404).send({
+          error: "NotFound",
+          message: "Feature file not found.",
+        });
+      }
+
+      return detail;
+    } catch (error) {
+      return reply.status(409).send({
+        error: "FeatureCatalogUnavailable",
+        message: error instanceof Error ? error.message : "Unable to read feature detail.",
+      });
+    }
   });
 
   server.post("/jobs", async (request, reply) => {
