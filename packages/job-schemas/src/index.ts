@@ -294,6 +294,59 @@ export const jobDiffResponseSchema = z.object({
   workBranch: z.string().nullable(),
 });
 
+export const cucumberStepSchema = z.object({
+  keyword: z.string(),
+  line: z.number().int().positive(),
+  matchedDefinition: z
+    .object({
+      expression: z.string(),
+      line: z.number().int().positive(),
+      path: z.string(),
+    })
+    .nullable(),
+  text: z.string(),
+});
+
+export const cucumberScenarioSchema = z.object({
+  keyword: z.string(),
+  line: z.number().int().positive(),
+  name: z.string(),
+  steps: z.array(cucumberStepSchema),
+  tags: z.array(z.string()),
+  unmatchedStepCount: z.number().int().nonnegative(),
+});
+
+export const cucumberFeatureSummarySchema = z.object({
+  description: z.string().nullable(),
+  feature: z.string(),
+  modifiedAt: z.string(),
+  path: z.string(),
+  scenarioCount: z.number().int().nonnegative(),
+  scenarios: z.array(cucumberScenarioSchema),
+  tags: z.array(z.string()),
+});
+
+export const cucumberAssociatedFileSchema = z.object({
+  kind: z.enum(["feature", "step_definitions", "support", "other"]),
+  path: z.string(),
+});
+
+export const cucumberFeatureCatalogResponseSchema = z.object({
+  features: z.array(cucumberFeatureSummarySchema),
+  localPath: z.string().nullable(),
+  repository: repositoryResponseSchema,
+  root: z.string().nullable(),
+  totalScenarios: z.number().int().nonnegative(),
+});
+
+export const cucumberFeatureDetailResponseSchema = z.object({
+  associatedFiles: z.array(cucumberAssociatedFileSchema),
+  content: z.string(),
+  feature: cucumberFeatureSummarySchema,
+  localPath: z.string().nullable(),
+  repository: repositoryResponseSchema,
+});
+
 export type JobType = z.infer<typeof jobTypeSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type JobPriority = z.infer<typeof prioritySchema>;
@@ -312,3 +365,9 @@ export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
 export type JobDiffResponse = z.infer<typeof jobDiffResponseSchema>;
+export type CucumberScenario = z.infer<typeof cucumberScenarioSchema>;
+export type CucumberStep = z.infer<typeof cucumberStepSchema>;
+export type CucumberFeatureSummary = z.infer<typeof cucumberFeatureSummarySchema>;
+export type CucumberAssociatedFile = z.infer<typeof cucumberAssociatedFileSchema>;
+export type CucumberFeatureCatalogResponse = z.infer<typeof cucumberFeatureCatalogResponseSchema>;
+export type CucumberFeatureDetailResponse = z.infer<typeof cucumberFeatureDetailResponseSchema>;

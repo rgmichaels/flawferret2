@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   captureContextSchema,
+  cucumberFeatureCatalogResponseSchema,
+  cucumberFeatureDetailResponseSchema,
   createJobRequestSchema,
   jobEventTypeSchema,
   readinessResponseSchema,
@@ -136,5 +138,73 @@ describe("job schemas", () => {
 
     assert.equal(readiness.counts.cleanupFailures, 1);
     assert.equal(readiness.cleanup.latestFailure?.error, "branch delete failed");
+  });
+
+  it("parses cucumber feature catalog and detail responses", () => {
+    const repository = {
+      cloneUrl: "https://github.com/rgmichaels/example.git",
+      createdAt: new Date().toISOString(),
+      defaultBranch: "main",
+      id: "repo-1",
+      localPath: "/tmp/example",
+      name: "example",
+      owner: "rgmichaels",
+      provider: "GITHUB" as const,
+      updatedAt: new Date().toISOString(),
+      validationCommand: "pnpm test",
+      webUrl: "https://github.com/rgmichaels/example",
+    };
+    const feature = {
+      description: "Users sign in.",
+      feature: "Login",
+      modifiedAt: new Date().toISOString(),
+      path: "features/login.feature",
+      scenarioCount: 1,
+      scenarios: [
+        {
+          keyword: "Scenario",
+          line: 5,
+          steps: [
+            {
+              keyword: "Given",
+              line: 6,
+              matchedDefinition: {
+                expression: "I am on the login page",
+                line: 3,
+                path: "src/steps/login.steps.ts",
+              },
+              text: "I am on the login page",
+            },
+          ],
+          name: "Valid login",
+          tags: ["@smoke"],
+          unmatchedStepCount: 0,
+        },
+      ],
+      tags: ["@smoke"],
+    };
+
+    const catalog = cucumberFeatureCatalogResponseSchema.parse({
+      features: [feature],
+      localPath: "/tmp/example",
+      repository,
+      root: "features",
+      totalScenarios: 1,
+    });
+    const detail = cucumberFeatureDetailResponseSchema.parse({
+      associatedFiles: [
+        {
+          kind: "feature",
+          path: "features/login.feature",
+        },
+      ],
+      content: "Feature: Login",
+      feature,
+      localPath: "/tmp/example",
+      repository,
+    });
+
+    assert.equal(catalog.features[0].feature, "Login");
+    assert.equal(detail.associatedFiles[0].kind, "feature");
   });
 });
