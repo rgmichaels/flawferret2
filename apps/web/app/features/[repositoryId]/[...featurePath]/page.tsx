@@ -1,5 +1,6 @@
 import type { CucumberFeatureDetailResponse } from "@flawferret2/job-schemas";
 import { AppShell } from "../../../app-shell";
+import { ScenarioExplainer } from "./scenario-explainer";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -78,70 +79,89 @@ export default async function FeatureDetailPage({
         </header>
 
         <div className="page-grid feature-detail-grid">
-          <section className="panel feature-detail-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Scenarios</h2>
-                <p>Parsed from the Cucumber feature file.</p>
+          <div className="feature-detail-main">
+            <section className="panel feature-detail-panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Scenarios</h2>
+                  <p>Parsed from the Cucumber feature file.</p>
+                </div>
+                <span>{detail.feature.scenarioCount} total</span>
               </div>
-              <span>{detail.feature.scenarioCount} total</span>
-            </div>
-            {detail.feature.scenarios.length === 0 ? (
-              <p className="empty">No scenarios found in this feature.</p>
-            ) : (
-              <ol className="scenario-list">
-                {detail.feature.scenarios.map((scenario) => (
-                  <li key={`${scenario.line}-${scenario.name}`}>
-                    <div className="scenario-list-header">
-                      <div>
-                        <strong>{scenario.name}</strong>
-                        <span>
-                          {scenario.keyword} on line {scenario.line}
-                        </span>
-                      </div>
-                      <div className="scenario-badges">
-                        {scenario.unmatchedStepCount > 0 ? (
-                          <span className="unmatched-step-badge">
-                            {scenario.unmatchedStepCount} unmatched
+              {detail.feature.scenarios.length === 0 ? (
+                <p className="empty">No scenarios found in this feature.</p>
+              ) : (
+                <ol className="scenario-list">
+                  {detail.feature.scenarios.map((scenario) => (
+                    <li key={`${scenario.line}-${scenario.name}`}>
+                      <div className="scenario-list-header">
+                        <div>
+                          <strong>{scenario.name}</strong>
+                          <span>
+                            {scenario.keyword} on line {scenario.line}
                           </span>
-                        ) : (
-                          <span className="matched-step-badge">All steps matched</span>
-                        )}
-                        {scenario.tags.length > 0 ? (
-                          <div className="tag-row compact">
-                            {scenario.tags.map((tag) => (
-                              <span key={tag}>{tag}</span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    {scenario.steps.length > 0 ? (
-                      <ol className="scenario-step-list">
-                        {scenario.steps.map((step) => (
-                          <li key={`${step.line}-${step.keyword}-${step.text}`}>
-                            <div>
-                              <span>{step.keyword}</span>
-                              <strong>{step.text}</strong>
+                        </div>
+                        <div className="scenario-badges">
+                          {scenario.unmatchedStepCount > 0 ? (
+                            <span className="unmatched-step-badge">
+                              {scenario.unmatchedStepCount} unmatched
+                            </span>
+                          ) : (
+                            <span className="matched-step-badge">All steps matched</span>
+                          )}
+                          {scenario.tags.length > 0 ? (
+                            <div className="tag-row compact">
+                              {scenario.tags.map((tag) => (
+                                <span key={tag}>{tag}</span>
+                              ))}
                             </div>
-                            {step.matchedDefinition ? (
-                              <code>
-                                {step.matchedDefinition.path}:{step.matchedDefinition.line}
-                              </code>
-                            ) : (
-                              <em>Unmatched step definition</em>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
-                    ) : (
-                      <p className="scenario-empty">No steps parsed for this scenario.</p>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+                          ) : null}
+                        </div>
+                      </div>
+                      <ScenarioExplainer
+                        featurePath={detail.feature.path}
+                        repositoryDefaultBranch={detail.repository.defaultBranch}
+                        repositoryId={detail.repository.id}
+                        scenarioName={scenario.name}
+                        scenarioLine={scenario.line}
+                      />
+                      {scenario.steps.length > 0 ? (
+                        <ol className="scenario-step-list">
+                          {scenario.steps.map((step) => (
+                            <li key={`${step.line}-${step.keyword}-${step.text}`}>
+                              <div>
+                                <span>{step.keyword}</span>
+                                <strong>{step.text}</strong>
+                              </div>
+                              {step.matchedDefinition ? (
+                                <code>
+                                  {step.matchedDefinition.path}:{step.matchedDefinition.line}
+                                </code>
+                              ) : (
+                                <em>Unmatched step definition</em>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <p className="scenario-empty">No steps parsed for this scenario.</p>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <section className="panel feature-source-panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Feature Source</h2>
+                  <p>{detail.localPath}</p>
+                </div>
+              </div>
+              <pre>{detail.content}</pre>
+            </section>
+          </div>
 
           <section className="panel feature-detail-panel">
             <div className="panel-header">
@@ -161,16 +181,6 @@ export default async function FeatureDetailPage({
             </ul>
           </section>
         </div>
-
-        <section className="panel feature-source-panel">
-          <div className="panel-header">
-            <div>
-              <h2>Feature Source</h2>
-              <p>{detail.localPath}</p>
-            </div>
-          </div>
-          <pre>{detail.content}</pre>
-        </section>
       </section>
     </AppShell>
   );

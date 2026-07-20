@@ -347,6 +347,17 @@ export const cucumberFeatureDetailResponseSchema = z.object({
   repository: repositoryResponseSchema,
 });
 
+export const explainCucumberScenarioRequestSchema = z.object({
+  path: z.string().trim().min(1, "Feature path is required"),
+  scenarioLine: z.number().int().positive("Scenario line is required"),
+});
+
+export const explainCucumberScenarioResponseSchema = z.object({
+  explanation: z.string(),
+  provider: z.enum(["openai", "local"]),
+  scenarioLine: z.number().int().positive(),
+});
+
 export type JobType = z.infer<typeof jobTypeSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type JobPriority = z.infer<typeof prioritySchema>;
@@ -371,3 +382,5 @@ export type CucumberFeatureSummary = z.infer<typeof cucumberFeatureSummarySchema
 export type CucumberAssociatedFile = z.infer<typeof cucumberAssociatedFileSchema>;
 export type CucumberFeatureCatalogResponse = z.infer<typeof cucumberFeatureCatalogResponseSchema>;
 export type CucumberFeatureDetailResponse = z.infer<typeof cucumberFeatureDetailResponseSchema>;
+export type ExplainCucumberScenarioRequest = z.infer<typeof explainCucumberScenarioRequestSchema>;
+export type ExplainCucumberScenarioResponse = z.infer<typeof explainCucumberScenarioResponseSchema>;

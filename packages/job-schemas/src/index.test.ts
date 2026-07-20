@@ -5,6 +5,8 @@ import {
   cucumberFeatureCatalogResponseSchema,
   cucumberFeatureDetailResponseSchema,
   createJobRequestSchema,
+  explainCucumberScenarioRequestSchema,
+  explainCucumberScenarioResponseSchema,
   jobEventTypeSchema,
   readinessResponseSchema,
   retryStageRequestSchema,
@@ -206,5 +208,20 @@ describe("job schemas", () => {
 
     assert.equal(catalog.features[0].feature, "Login");
     assert.equal(detail.associatedFiles[0].kind, "feature");
+  });
+
+  it("parses cucumber scenario explanation requests and responses", () => {
+    const request = explainCucumberScenarioRequestSchema.parse({
+      path: "features/login.feature",
+      scenarioLine: 12,
+    });
+    const response = explainCucumberScenarioResponseSchema.parse({
+      explanation: "This test opens login and verifies the error state.",
+      provider: "local",
+      scenarioLine: 12,
+    });
+
+    assert.equal(request.path, "features/login.feature");
+    assert.equal(response.provider, "local");
   });
 });

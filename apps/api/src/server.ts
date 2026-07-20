@@ -12,6 +12,7 @@ import {
 import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
+  explainCucumberScenarioRequestSchema,
   retryStageRequestSchema,
   type JobDiffResponse,
   type JobEventResponse,
@@ -31,6 +32,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { z, ZodError } from "zod";
 import { config } from "./config.js";
+import { explainCucumberScenario } from "./cucumber-explanations.js";
 import { buildFeatureCatalog, buildFeatureDetail } from "./cucumber-features.js";
 
 const execFileAsync = promisify(execFile);
@@ -756,6 +758,57 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       return reply.status(409).send({
         error: "FeatureCatalogUnavailable",
         message: error instanceof Error ? error.message : "Unable to read feature detail.",
+      });
+    }
+  });
+
+  server.post("/repositories/:id/features/explain", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+    const body = explainCucumberScenarioRequestSchema.parse(request.body);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    try {
+      const detail = await buildFeatureDetail({
+        featurePath: body.path,
+        repository: toRepositoryResponse(repository),
+      });
+
+      if (!detail) {
+        return reply.status(404).send({
+          error: "NotFound",
+          message: "Feature file not found.",
+        });
+      }
+
+      const scenario = detail.feature.scenarios.find((item) => item.line === body.scenarioLine);
+
+      if (!scenario) {
+        return reply.status(404).send({
+          error: "NotFound",
+          message: "Scenario not found.",
+        });
+      }
+
+      return await explainCucumberScenario({
+        detail,
+        scenario,
+      });
+    } catch (error) {
+      return reply.status(409).send({
+        error: "ScenarioExplanationUnavailable",
+        message: error instanceof Error ? error.message : "Unable to explain scenario.",
       });
     }
   });
