@@ -1,5 +1,6 @@
 import type {
   CucumberFeatureCatalogResponse,
+  CucumberFeatureSummary,
   RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { AppShell } from "../app-shell";
@@ -38,6 +39,27 @@ async function getFeatureCatalog(repositoryId: string): Promise<CucumberFeatureC
   }
 }
 
+async function getFeatureHasUnmatchedSteps(repositoryId: string, featurePath: string) {
+  try {
+    const response = await fetch(
+      `${apiUrl}/repositories/${repositoryId}/features/detail?path=${encodeURIComponent(featurePath)}`,
+      {
+        cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const detail = (await response.json()) as { feature?: CucumberFeatureSummary };
+
+    return Boolean(detail.feature?.scenarios.some((scenario) => scenario.unmatchedStepCount > 0));
+  } catch {
+    return false;
+  }
+}
+
 const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
 
 const featureDetailHref = (repositoryId: string, path: string) =>
@@ -49,14 +71,90 @@ const formatDate = (value: string) =>
     timeStyle: "short",
   }).format(new Date(value));
 
+const normalizeSearch = (value: string | undefined) => value?.trim().toLowerCase() ?? "";
+
+const getAllTags = (features: CucumberFeatureSummary[]) =>
+  [...new Set(features.flatMap((feature) => feature.tags))].sort((left, right) => left.localeCompare(right));
+
+const featureMatchesSearch = (feature: CucumberFeatureSummary, search: string) => {
+  if (!search) {
+    return true;
+  }
+
+  return [
+    feature.feature,
+    feature.description ?? "",
+    feature.path,
+    feature.tags.join(" "),
+    ...feature.scenarios.flatMap((scenario) => [
+      scenario.name,
+      scenario.tags.join(" "),
+      ...scenario.steps.map((step) => step.text),
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(search);
+};
+
+const filterFeatures = async ({
+  catalog,
+  repositoryId,
+  search,
+  tag,
+  unmatchedOnly,
+}: {
+  catalog: CucumberFeatureCatalogResponse;
+  repositoryId: string;
+  search: string;
+  tag: string;
+  unmatchedOnly: boolean;
+}) => {
+  const baseMatches = catalog.features.filter(
+    (feature) =>
+      featureMatchesSearch(feature, search) &&
+      (!tag || feature.tags.includes(tag) || feature.scenarios.some((scenario) => scenario.tags.includes(tag))),
+  );
+
+  if (!unmatchedOnly) {
+    return baseMatches;
+  }
+
+  const unmatchedFlags = await Promise.all(
+    baseMatches.map(async (feature) => ({
+      feature,
+      hasUnmatchedSteps: await getFeatureHasUnmatchedSteps(repositoryId, feature.path),
+    })),
+  );
+
+  return unmatchedFlags.filter((item) => item.hasUnmatchedSteps).map((item) => item.feature);
+};
+
 export default async function FeaturesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ repositoryId?: string }>;
+  searchParams: Promise<{ repositoryId?: string; q?: string; tag?: string; unmatched?: string }>;
 }) {
-  const [{ repositoryId }, repositories] = await Promise.all([searchParams, getRepositories()]);
+  const [{ q, repositoryId, tag, unmatched }, repositories] = await Promise.all([
+    searchParams,
+    getRepositories(),
+  ]);
   const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0] ?? null;
   const catalog = selectedRepository ? await getFeatureCatalog(selectedRepository.id) : null;
+  const search = normalizeSearch(q);
+  const selectedTag = tag?.trim() ?? "";
+  const unmatchedOnly = unmatched === "true";
+  const allTags = catalog ? getAllTags(catalog.features) : [];
+  const filteredFeatures = catalog
+    ? await filterFeatures({
+        catalog,
+        repositoryId: catalog.repository.id,
+        search,
+        tag: selectedTag,
+        unmatchedOnly,
+      })
+    : [];
+  const filteredScenarios = filteredFeatures.reduce((total, feature) => total + feature.scenarioCount, 0);
 
   return (
     <AppShell active="features">
@@ -84,19 +182,53 @@ export default async function FeaturesPage({
                 ))}
               </select>
             </label>
+            <label>
+              Search
+              <input
+                defaultValue={q ?? ""}
+                name="q"
+                placeholder="Feature, scenario, step, tag, or file"
+                type="search"
+              />
+            </label>
+            <label>
+              Tag
+              <select name="tag" defaultValue={selectedTag}>
+                <option value="">All tags</option>
+                {allTags.map((tagValue) => (
+                  <option key={tagValue} value={tagValue}>
+                    {tagValue}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="checkbox-filter">
+              <input
+                defaultChecked={unmatchedOnly}
+                name="unmatched"
+                type="checkbox"
+                value="true"
+              />
+              Unmatched only
+            </label>
             <button type="submit" disabled={repositories.length === 0}>
-              View Features
+              Apply
             </button>
+            {(q || selectedTag || unmatchedOnly) && selectedRepository ? (
+              <a className="filter-reset" href={`/features?repositoryId=${selectedRepository.id}`}>
+                Reset
+              </a>
+            ) : null}
           </form>
           {catalog ? (
             <dl>
               <div>
                 <dt>Features</dt>
-                <dd>{catalog.features.length}</dd>
+                <dd>{filteredFeatures.length}</dd>
               </div>
               <div>
                 <dt>Scenarios</dt>
-                <dd>{catalog.totalScenarios}</dd>
+                <dd>{filteredScenarios}</dd>
               </div>
               <div>
                 <dt>Root</dt>
@@ -105,6 +237,18 @@ export default async function FeaturesPage({
             </dl>
           ) : null}
         </section>
+
+        {catalog ? (
+          <section className="feature-filter-summary" aria-label="Feature filter summary">
+            <strong>
+              Showing {filteredFeatures.length} of {catalog.features.length} features
+            </strong>
+            <span>{filteredScenarios} of {catalog.totalScenarios} scenarios</span>
+            {search ? <code>Search: {q}</code> : null}
+            {selectedTag ? <code>Tag: {selectedTag}</code> : null}
+            {unmatchedOnly ? <code>Unmatched steps only</code> : null}
+          </section>
+        ) : null}
 
         {!selectedRepository ? (
           <section className="panel detail-empty">
@@ -121,9 +265,14 @@ export default async function FeaturesPage({
             <h2>No feature files found</h2>
             <p>No `.feature` files were found below the registered local checkout.</p>
           </section>
+        ) : filteredFeatures.length === 0 ? (
+          <section className="panel detail-empty">
+            <h2>No matching features</h2>
+            <p>Adjust the search, tag, or unmatched-step filter.</p>
+          </section>
         ) : (
           <section className="feature-grid" aria-label="Cucumber feature files">
-            {catalog.features.map((feature) => (
+            {filteredFeatures.map((feature) => (
               <article className="panel feature-card" key={feature.path}>
                 <div>
                   <span>{feature.path}</span>
