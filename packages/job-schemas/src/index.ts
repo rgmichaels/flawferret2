@@ -274,6 +274,13 @@ export const jobResponseSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const paginatedJobsResponseSchema = z.object({
+  jobs: z.array(jobResponseSchema),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+});
+
 export const jobEventResponseSchema = z.object({
   id: z.string(),
   jobId: z.string(),
@@ -374,6 +381,7 @@ export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSc
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
+export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
 export type JobDiffResponse = z.infer<typeof jobDiffResponseSchema>;
 export type CucumberScenario = z.infer<typeof cucumberScenarioSchema>;

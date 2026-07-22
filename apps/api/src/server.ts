@@ -13,6 +13,7 @@ import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
   explainCucumberScenarioRequestSchema,
+  jobStatusSchema,
   retryStageRequestSchema,
   type JobDiffResponse,
   type JobEventResponse,
@@ -312,6 +313,14 @@ const includeCanceledQuerySchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((value) => value === "true"),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(50).default(10),
+  paginated: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+  sort: z.enum(["status_asc", "status_desc", "updated_asc", "updated_desc"]).default("updated_desc"),
+  status: jobStatusSchema.optional(),
 });
 
 const repositoryParamsSchema = z.object({
@@ -691,6 +700,69 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toRepositoryResponse(repository);
   });
 
+  server.put("/repositories/:id", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+    const body = createRepositoryRequestSchema.parse(request.body);
+    const cloneUrl = githubCloneUrl(body);
+    const webUrl = githubRepositoryUrl(body);
+
+    const existingRepository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!existingRepository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    const repository = await prisma.repository.update({
+      data: {
+        provider: body.provider,
+        owner: body.owner,
+        name: body.name,
+        defaultBranch: body.defaultBranch,
+        cloneUrl,
+        webUrl,
+        localPath: body.localPath,
+        validationCommand: optionalText(body.validationCommand),
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    return toRepositoryResponse(repository);
+  });
+
+  server.delete("/repositories/:id", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+
+    const existingRepository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!existingRepository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    await prisma.repository.delete({
+      where: {
+        id: params.id,
+      },
+    });
+
+    return reply.status(204).send();
+  });
+
   server.get("/repositories/:id/features", async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
@@ -889,30 +961,60 @@ export const buildServer = async (): Promise<FastifyInstance> => {
 
   server.get("/jobs", async (request) => {
     const query = includeCanceledQuerySchema.parse(request.query);
-    const jobs = await prisma.job.findMany({
-      where: query.includeCanceled
-        ? undefined
+    const where: Prisma.JobWhereInput = {
+      ...(query.includeCanceled
+        ? {}
         : {
             status: {
               not: "CANCELED",
             },
+          }),
+      ...(query.status
+        ? {
+            status: query.status,
+          }
+        : {}),
+    };
+    const orderBy: Prisma.JobOrderByWithRelationInput =
+      query.sort === "status_asc"
+        ? { status: "asc" }
+        : query.sort === "status_desc"
+          ? { status: "desc" }
+          : query.sort === "updated_asc"
+            ? { updatedAt: "asc" }
+            : { updatedAt: "desc" };
+    const [jobs, total] = await Promise.all([
+      prisma.job.findMany({
+        where,
+        include: {
+          repository: true,
+          runs: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
           },
-      include: {
-        repository: true,
-        runs: {
-          orderBy: {
-            createdAt: "desc",
-          },
-          take: 1,
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 100,
-    });
+        orderBy,
+        skip: query.paginated ? (query.page - 1) * query.pageSize : 0,
+        take: query.paginated ? query.pageSize : 100,
+      }),
+      prisma.job.count({
+        where,
+      }),
+    ]);
+    const mappedJobs = jobs.map(toJobResponseWithRepository);
 
-    return jobs.map(toJobResponseWithRepository);
+    if (query.paginated) {
+      return {
+        jobs: mappedJobs,
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+      };
+    }
+
+    return mappedJobs;
   });
 
   server.post("/jobs/:id/cancel", async (request, reply) => {

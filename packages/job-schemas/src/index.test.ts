@@ -8,6 +8,7 @@ import {
   explainCucumberScenarioRequestSchema,
   explainCucumberScenarioResponseSchema,
   jobEventTypeSchema,
+  paginatedJobsResponseSchema,
   readinessResponseSchema,
   retryStageRequestSchema,
 } from "./index.js";
@@ -223,5 +224,40 @@ describe("job schemas", () => {
 
     assert.equal(request.path, "features/login.feature");
     assert.equal(response.provider, "local");
+  });
+
+  it("parses paginated job responses", () => {
+    const job = {
+      claimedAt: null,
+      claimedBy: null,
+      completedAt: null,
+      createdAt: new Date().toISOString(),
+      id: "job-1",
+      jobType: "ADD_PLAYWRIGHT_TEST" as const,
+      latestRun: null,
+      payload: {
+        acceptanceCriteria: "Focused coverage is added.",
+        createDraftPr: true,
+        featureArea: "Login",
+        goal: "Add login coverage.",
+        repositoryId: "11111111-1111-4111-8111-111111111111",
+        runAffectedTests: true,
+        targetBranch: "main",
+      },
+      priority: "NORMAL" as const,
+      repository: null,
+      status: "QUEUED" as const,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const response = paginatedJobsResponseSchema.parse({
+      jobs: [job],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    });
+
+    assert.equal(response.jobs[0].id, "job-1");
+    assert.equal(response.total, 1);
   });
 });

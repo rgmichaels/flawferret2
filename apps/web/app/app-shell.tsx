@@ -137,7 +137,7 @@ const navClassName = (active: AppShellProps["active"], item: AppShellProps["acti
   active === item ? "nav-item active" : "nav-item";
 
 type AppShellProps = {
-  active: "dashboard" | "features" | "jobs" | "readiness" | "repositories" | "new-job";
+  active: "dashboard" | "discover" | "features" | "jobs" | "readiness" | "repositories" | "new-job";
   children: ReactNode;
 };
 
@@ -200,6 +200,9 @@ export async function AppShell({ active, children }: AppShellProps) {
 
         <nav className="nav-section" aria-label="Create">
           <span>Create</span>
+          <a className={navClassName(active, "discover")} href="/discover">
+            Discover Tests
+          </a>
           <a className={navClassName(active, "new-job")} href="/jobs/new">
             New Job
           </a>
