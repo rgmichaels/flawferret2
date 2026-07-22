@@ -4,6 +4,35 @@ import { AppShell } from "../app-shell";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+const getApiErrorMessage = async (response: Response, fallback: string) => {
+  try {
+    const body = (await response.json()) as { message?: string; issues?: Array<{ message?: string }> };
+    const issueMessage = body.issues?.map((issue) => issue.message).filter(Boolean).join("; ");
+
+    return issueMessage || body.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const repositoryPayloadFromForm = (formData: FormData) => {
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const [owner, name, ...extraParts] = fullName.split("/");
+
+  if (!owner || !name || extraParts.length > 0) {
+    throw new Error("Repository must use owner/name format.");
+  }
+
+  return {
+    defaultBranch: formData.get("defaultBranch"),
+    localPath: formData.get("localPath"),
+    name,
+    owner,
+    provider: "GITHUB",
+    validationCommand: formData.get("validationCommand"),
+  };
+};
+
 async function getRepositories(): Promise<RepositoryResponse[]> {
   try {
     const response = await fetch(`${apiUrl}/repositories`, {
@@ -23,35 +52,75 @@ async function getRepositories(): Promise<RepositoryResponse[]> {
 async function registerRepository(formData: FormData) {
   "use server";
 
-  const fullName = String(formData.get("fullName") ?? "").trim();
-  const [owner, name, ...extraParts] = fullName.split("/");
-
-  if (!owner || !name || extraParts.length > 0) {
-    throw new Error("Repository must use owner/name format.");
-  }
+  const payload = repositoryPayloadFromForm(formData);
 
   const response = await fetch(`${apiUrl}/repositories`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      provider: "GITHUB",
-      owner,
-      name,
-      defaultBranch: formData.get("defaultBranch"),
-      localPath: formData.get("localPath"),
-      validationCommand: formData.get("validationCommand"),
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
-    throw new Error("Unable to register repository.");
+    throw new Error(await getApiErrorMessage(response, "Unable to register repository."));
   }
 
   revalidatePath("/");
   revalidatePath("/repositories");
   revalidatePath("/jobs/new");
+}
+
+async function updateRepository(formData: FormData) {
+  "use server";
+
+  const repositoryId = String(formData.get("repositoryId") ?? "");
+  const payload = repositoryPayloadFromForm(formData);
+
+  if (!repositoryId) {
+    throw new Error("Repository is required.");
+  }
+
+  const response = await fetch(`${apiUrl}/repositories/${repositoryId}`, {
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "PUT",
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Unable to update repository."));
+  }
+
+  revalidatePath("/");
+  revalidatePath("/repositories");
+  revalidatePath("/jobs/new");
+  revalidatePath("/discover");
+}
+
+async function deleteRepository(formData: FormData) {
+  "use server";
+
+  const repositoryId = String(formData.get("repositoryId") ?? "");
+
+  if (!repositoryId) {
+    throw new Error("Repository is required.");
+  }
+
+  const response = await fetch(`${apiUrl}/repositories/${repositoryId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response, "Unable to delete repository."));
+  }
+
+  revalidatePath("/");
+  revalidatePath("/repositories");
+  revalidatePath("/jobs/new");
+  revalidatePath("/discover");
+  revalidatePath("/features");
 }
 
 const repositoryLabel = (repository: RepositoryResponse) =>
@@ -89,19 +158,55 @@ export default async function RepositoriesPage() {
               <ul className="repository-list">
                 {repositories.map((repository) => (
                   <li key={repository.id}>
-                    <div>
-                      <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
-                      <code>{repository.localPath ?? "No local checkout configured"}</code>
-                      <span>
-                        Validation:{" "}
-                        {repository.validationCommand ? (
-                          <code>{repository.validationCommand}</code>
-                        ) : (
-                          "Change detection only"
-                        )}
-                      </span>
-                    </div>
-                    <span>{repository.defaultBranch}</span>
+                    <details>
+                      <summary>
+                        <div>
+                          <a href={repository.webUrl}>{repositoryLabel(repository)}</a>
+                          <code>{repository.localPath ?? "No local checkout configured"}</code>
+                          <span>
+                            Validation:{" "}
+                            {repository.validationCommand ? (
+                              <code>{repository.validationCommand}</code>
+                            ) : (
+                              "Change detection only"
+                            )}
+                          </span>
+                        </div>
+                        <span>{repository.defaultBranch}</span>
+                      </summary>
+                      <form action={updateRepository} className="repository-edit-form">
+                        <input name="repositoryId" type="hidden" value={repository.id} />
+                        <label>
+                          GitHub Repository
+                          <input name="fullName" defaultValue={repositoryLabel(repository)} required />
+                        </label>
+                        <label>
+                          Default Branch
+                          <input name="defaultBranch" defaultValue={repository.defaultBranch} required />
+                        </label>
+                        <label>
+                          Local Checkout Path
+                          <input name="localPath" defaultValue={repository.localPath ?? ""} required />
+                        </label>
+                        <label>
+                          Validation Command
+                          <input name="validationCommand" defaultValue={repository.validationCommand ?? ""} />
+                        </label>
+                        <div className="repository-edit-actions">
+                          <button type="submit">Save Changes</button>
+                          <button
+                            className="danger-button"
+                            form={`delete-repository-${repository.id}`}
+                            type="submit"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </form>
+                      <form action={deleteRepository} id={`delete-repository-${repository.id}`}>
+                        <input name="repositoryId" type="hidden" value={repository.id} />
+                      </form>
+                    </details>
                   </li>
                 ))}
               </ul>

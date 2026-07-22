@@ -1,6 +1,7 @@
 import type {
   JobResponse,
   JobStatus,
+  PaginatedJobsResponse,
   RepositoryResponse,
   RunStatus,
 } from "@flawferret2/job-schemas";
@@ -49,13 +50,61 @@ const sortOptions = {
 
 type JobSort = keyof typeof sortOptions;
 
-async function getJobs(includeCanceled = false): Promise<JobResponse[]> {
+async function getJobs({
+  includeCanceled = false,
+  page = 1,
+  pageSize = 10,
+  sort = "updated_desc",
+  status = "",
+}: {
+  includeCanceled?: boolean;
+  page?: number;
+  pageSize?: number;
+  sort?: JobSort;
+  status?: JobStatus | "";
+} = {}): Promise<PaginatedJobsResponse> {
   try {
     const jobsUrl = new URL(`${apiUrl}/jobs`);
 
     if (includeCanceled) {
       jobsUrl.searchParams.set("includeCanceled", "true");
     }
+    jobsUrl.searchParams.set("page", String(page));
+    jobsUrl.searchParams.set("pageSize", String(pageSize));
+    jobsUrl.searchParams.set("paginated", "true");
+    jobsUrl.searchParams.set("sort", sort);
+    if (status) {
+      jobsUrl.searchParams.set("status", status);
+    }
+
+    const response = await fetch(jobsUrl, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        jobs: [],
+        page,
+        pageSize,
+        total: 0,
+      };
+    }
+
+    return response.json() as Promise<PaginatedJobsResponse>;
+  } catch {
+    return {
+      jobs: [],
+      page,
+      pageSize,
+      total: 0,
+    };
+  }
+}
+
+async function getJobCounts(): Promise<JobResponse[]> {
+  try {
+    const jobsUrl = new URL(`${apiUrl}/jobs`);
+    jobsUrl.searchParams.set("includeCanceled", "true");
 
     const response = await fetch(jobsUrl, {
       cache: "no-store",
@@ -80,7 +129,7 @@ async function cancelJob(formData: FormData) {
   });
 
   if (!response.ok) {
-    throw new Error("Unable to remove job.");
+    throw new Error("Unable to cancel job.");
   }
 
   revalidatePath("/");
@@ -202,6 +251,7 @@ const getPullRequestUrl = (job: JobResponse) => {
 
 const stageLabels: Partial<Record<JobStatus, string>> = {
   BLOCKED: "Needs operator recovery",
+  CANCELED: "Removed from active queue",
   CODEX_APPROVED: "Codex approved; waiting for runner",
   COMPLETED: "Pipeline finished",
   PR_APPROVED: "Draft PR approved; waiting for runner",
@@ -228,53 +278,101 @@ const getSelectedStatus = (value: string | undefined) =>
 const getSelectedSort = (value: string | undefined): JobSort =>
   value && value in sortOptions ? (value as JobSort) : "updated_desc";
 
-const sortJobs = (jobs: JobResponse[], sort: JobSort) => {
-  const sortedJobs = [...jobs];
+const getSelectedPage = (value: string | undefined) => {
+  const page = Number(value);
 
-  sortedJobs.sort((left, right) => {
-    if (sort === "status_asc" || sort === "status_desc") {
-      const comparison = statusLabels[left.status].localeCompare(statusLabels[right.status]);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+};
 
-      return sort === "status_asc" ? comparison : -comparison;
-    }
+const getSelectedPageSize = (value: string | undefined) => {
+  const pageSize = Number(value);
 
-    const leftTime = new Date(left.updatedAt).getTime();
-    const rightTime = new Date(right.updatedAt).getTime();
+  return [10, 25, 50].includes(pageSize) ? pageSize : 10;
+};
 
-    return sort === "updated_asc" ? leftTime - rightTime : rightTime - leftTime;
-  });
+const buildJobsHref = ({
+  page,
+  pageSize,
+  sort,
+  status,
+}: {
+  page: number;
+  pageSize: number;
+  sort: JobSort;
+  status: JobStatus | "";
+}) => {
+  const params = new URLSearchParams();
 
-  return sortedJobs;
+  if (status) {
+    params.set("status", status);
+  }
+  if (sort !== "updated_desc") {
+    params.set("sort", sort);
+  }
+  if (page !== 1) {
+    params.set("page", String(page));
+  }
+  if (pageSize !== 10) {
+    params.set("pageSize", String(pageSize));
+  }
+
+  const query = params.toString();
+
+  return query ? `/?${query}#jobs` : "/#jobs";
 };
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ sort?: string; status?: string }>;
+  searchParams: Promise<{ page?: string; pageSize?: string; sort?: string; status?: string }>;
 }) {
-  const { sort: sortParam, status: statusParam } = await searchParams;
+  const { page: pageParam, pageSize: pageSizeParam, sort: sortParam, status: statusParam } = await searchParams;
   const selectedStatus = getSelectedStatus(statusParam);
   const selectedSort = getSelectedSort(sortParam);
-  const includeCanceled = selectedStatus === "CANCELED";
-  const jobs = await getJobs(includeCanceled);
-  const filteredJobs = sortJobs(
-    selectedStatus ? jobs.filter((job) => job.status === selectedStatus) : jobs,
-    selectedSort,
-  );
-  const queuedCount = countByStatus(jobs, ["QUEUED"]);
-  const runningCount = countByStatus(jobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
-  const reviewCount = countByStatus(jobs, [
+  const selectedPage = getSelectedPage(pageParam);
+  const selectedPageSize = getSelectedPageSize(pageSizeParam);
+  const [{ jobs, page, pageSize, total }, allJobs] = await Promise.all([
+    getJobs({
+      includeCanceled: true,
+      page: selectedPage,
+      pageSize: selectedPageSize,
+      sort: selectedSort,
+      status: selectedStatus,
+    }),
+    getJobCounts(),
+  ]);
+  const filteredJobs = jobs;
+  const activeJobs = allJobs.filter((job) => job.status !== "CANCELED");
+  const queuedCount = countByStatus(activeJobs, ["QUEUED"]);
+  const runningCount = countByStatus(activeJobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
+  const reviewCount = countByStatus(activeJobs, [
     "READY_FOR_CODEX",
     "CODEX_APPROVED",
     "REVIEW",
     "PR_APPROVED",
     "PR_CREATED",
   ]);
-  const codexApprovalCount = countByStatus(jobs, ["READY_FOR_CODEX"]);
-  const prApprovalCount = countByStatus(jobs, ["REVIEW"]);
-  const prCreatedCount = countByStatus(jobs, ["PR_CREATED"]);
-  const failedCount = countByStatus(jobs, ["FAILED", "BLOCKED", "RETRY"]);
-  const completedCount = countByStatus(jobs, ["COMPLETED"]);
+  const codexApprovalCount = countByStatus(activeJobs, ["READY_FOR_CODEX"]);
+  const prApprovalCount = countByStatus(activeJobs, ["REVIEW"]);
+  const prCreatedCount = countByStatus(activeJobs, ["PR_CREATED"]);
+  const failedCount = countByStatus(activeJobs, ["FAILED", "BLOCKED", "RETRY"]);
+  const completedCount = countByStatus(activeJobs, ["COMPLETED"]);
+  const canceledCount = countByStatus(allJobs, ["CANCELED"]);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const firstShown = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastShown = Math.min(total, page * pageSize);
+  const previousHref = buildJobsHref({
+    page: Math.max(1, page - 1),
+    pageSize,
+    sort: selectedSort,
+    status: selectedStatus,
+  });
+  const nextHref = buildJobsHref({
+    page: Math.min(totalPages, page + 1),
+    pageSize,
+    sort: selectedSort,
+    status: selectedStatus,
+  });
 
   return (
     <AppShell active="dashboard">
@@ -317,6 +415,11 @@ export default async function Home({
             <strong>{completedCount}</strong>
             <small>Finished jobs</small>
           </article>
+          <a className="metric-card canceled" href="/?status=CANCELED#jobs">
+            <span>Canceled</span>
+            <strong>{canceledCount}</strong>
+            <small>Removed from active queue</small>
+          </a>
         </section>
 
         <section className="panel jobs-panel" id="jobs">
@@ -347,12 +450,20 @@ export default async function Home({
                   ))}
                 </select>
               </label>
+              <label>
+                <span>Page Size</span>
+                <select defaultValue={selectedPageSize} name="pageSize">
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </select>
+              </label>
               <button type="submit">Apply</button>
               <a className="filter-reset" href="/#jobs">
                 Reset
               </a>
               <strong>
-                {filteredJobs.length} of {jobs.length} shown
+                {firstShown}-{lastShown} of {total} shown
               </strong>
             </form>
           </div>
@@ -430,7 +541,7 @@ export default async function Home({
                           ) : canCancelJob(job) ? (
                             <form action={cancelJob} className="inline-job-action">
                               <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit">Remove</button>
+                              <button type="submit">Cancel</button>
                             </form>
                           ) : (
                             <span className="muted-action">Locked</span>
@@ -443,6 +554,27 @@ export default async function Home({
               </table>
             </div>
           )}
+          <nav className="pagination-bar" aria-label="Recent jobs pagination">
+            <span>
+              Page {page} of {totalPages}
+            </span>
+            <div>
+              {page > 1 ? (
+                <a className="secondary-button" href={previousHref}>
+                  Previous
+                </a>
+              ) : (
+                <span className="pagination-disabled">Previous</span>
+              )}
+              {page < totalPages ? (
+                <a className="secondary-button" href={nextHref}>
+                  Next
+                </a>
+              ) : (
+                <span className="pagination-disabled">Next</span>
+              )}
+            </div>
+          </nav>
         </section>
       </section>
     </AppShell>

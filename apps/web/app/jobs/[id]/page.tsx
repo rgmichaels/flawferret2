@@ -190,6 +190,22 @@ async function requeueJob(formData: FormData) {
   revalidatePath(`/jobs/${jobId}`);
 }
 
+async function cancelJob(formData: FormData) {
+  "use server";
+
+  const jobId = String(formData.get("jobId") ?? "");
+  const response = await fetch(`${apiUrl}/jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to cancel this job.");
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/jobs/${jobId}`);
+}
+
 async function retryCurrentStage(formData: FormData) {
   "use server";
 
@@ -319,6 +335,9 @@ type ApprovalAction = {
 
 const canRequeueJob = (status: JobStatus) =>
   status === "BLOCKED" || status === "FAILED" || status === "RETRY";
+
+const canCancelJob = (status: JobStatus) =>
+  status === "DRAFT" || status === "QUEUED" || status === "RETRY";
 
 const canRetryCurrentStage = (job: JobResponse, latestRun: RunResponse | null) =>
   Boolean(latestRun) &&
@@ -712,6 +731,14 @@ export default async function JobDetailPage({
               </button>
             </form>
           ) : null}
+          {canCancelJob(job.status) ? (
+            <form action={cancelJob}>
+              <input type="hidden" name="jobId" value={job.id} />
+              <button className="secondary-button danger-button" type="submit">
+                Cancel Job
+              </button>
+            </form>
+          ) : null}
           <span className={`status-pill ${job.status.toLowerCase()}`}>
             {jobStatusLabels[job.status]}
           </span>
@@ -928,7 +955,7 @@ export default async function JobDetailPage({
             </div>
             <div>
               <dt>Acceptance Criteria</dt>
-              <dd>{job.payload.acceptanceCriteria}</dd>
+              <dd className="multiline-value">{job.payload.acceptanceCriteria}</dd>
             </div>
           </dl>
         </section>

@@ -159,8 +159,10 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     "Request:",
     `- Feature area: ${getPayloadValue(job.payload, "featureArea")}`,
     `- Goal: ${getPayloadValue(job.payload, "goal")}`,
-    `- Acceptance criteria: ${getPayloadValue(job.payload, "acceptanceCriteria")}`,
     `- Test scope: ${runAffectedTests ? "run affected tests only" : "run the smallest useful verification"}`,
+    "",
+    "Acceptance criteria:",
+    getPayloadValue(job.payload, "acceptanceCriteria"),
     ...(retryFeedback
       ? [
           "",
