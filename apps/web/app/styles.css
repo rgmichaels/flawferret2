@@ -1587,6 +1587,36 @@ td span {
   margin: 0;
 }
 
+.recommendation-copy .coverage-decision-note {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  padding: 9px 10px;
+}
+
+.recommendation-copy .coverage-decision-note.duplicate {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.coverage-match-path {
+  background: #f8fafc;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  color: #475467;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 750;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 7px 9px;
+}
+
 .recommendation-copy pre {
   background: #f8fafc;
   border: 1px solid #e1e7f0;
@@ -1617,6 +1647,30 @@ td span {
 .impact-pill.medium {
   background: #fef3c7;
   color: #b45309;
+}
+
+.hidden-recommendations {
+  border-top: 1px solid #edf1f6;
+  padding: 14px 20px 20px;
+}
+
+.hidden-recommendations summary {
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  list-style-position: inside;
+}
+
+.hidden-recommendations .recommendation-list {
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.hidden-recommendations .recommendation-list > li:first-child {
+  border-top: 0;
 }
 
 label {
@@ -2794,6 +2848,46 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.review-confidence-bar {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.review-confidence-badge {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.review-confidence-badge.ok {
+  border-color: #bbf7d0;
+}
+
+.review-confidence-badge.warn {
+  border-color: #fde68a;
+}
+
+.review-confidence-badge.muted {
+  background: #f8fafc;
+}
+
+.review-confidence-badge strong {
+  color: #172033;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.review-confidence-badge span {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .review-request-card,
 .review-jira-card,
 .review-approval-panel {
@@ -2860,6 +2954,34 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.review-edit-callout {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.review-edit-callout div {
+  display: grid;
+  gap: 3px;
+}
+
+.review-edit-callout strong {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.review-edit-callout span {
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .review-card-header {
   align-items: center;
   background: #f8fafc;
@@ -2916,6 +3038,70 @@ textarea {
   max-height: 420px;
   overflow: auto;
   padding: 12px;
+}
+
+.review-discovery-summary {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.review-discovery-summary section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.review-discovery-summary h3 {
+  color: #172033;
+  font-size: 13px;
+  margin: 0 0 10px;
+}
+
+.review-discovery-summary dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.review-discovery-summary dl > div {
+  border-bottom: 1px solid #edf2f7;
+  padding-bottom: 9px;
+}
+
+.review-discovery-summary dl > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.review-discovery-summary p,
+.review-discovery-summary pre,
+.review-discovery-summary ul {
+  margin: 0;
+}
+
+.review-discovery-summary pre {
+  background: #ffffff;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  color: #172033;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow: auto;
+  padding: 11px 12px;
+  white-space: pre-wrap;
+}
+
+.review-discovery-summary p,
+.review-discovery-summary li {
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.review-discovery-summary ul {
+  padding-left: 18px;
 }
 
 .review-request-form {
@@ -3209,6 +3395,10 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .review-confidence-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pipeline-grid {
     grid-template-columns: 1fr;
   }
@@ -3301,6 +3491,7 @@ textarea {
   .diagnostics-grid,
   .generated-diff-meta,
   .diagnostics-log-grid,
+  .review-confidence-bar,
   .review-meta,
   .safety-grid,
   .stage-tracker {
@@ -3314,7 +3505,9 @@ textarea {
 
   .generated-diff-header,
   .diagnostics-header,
+  .review-edit-callout,
   .review-card-header {
+    align-items: start;
     flex-direction: column;
   }
 

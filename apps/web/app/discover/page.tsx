@@ -9,6 +9,7 @@ import type {
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AppShell } from "../app-shell";
+import { classifyRecommendationsByCoverage, summarizeRelatedCoverage, type CoverageDecision } from "./coverage-matching";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -205,91 +206,6 @@ const hasKeyword = (value: string, keywords: string[]) => {
 
   return keywords.some((keyword) => normalized.includes(keyword));
 };
-
-const tokenize = (value: string) =>
-  new Set(
-    value
-      .toLowerCase()
-      .replace(/https?:\/\/|www\./g, " ")
-      .replace(/[^a-z0-9]+/g, " ")
-      .split(/\s+/)
-      .filter((token) => token.length > 2 && !["com", "the", "and", "page", "test", "should"].includes(token)),
-  );
-
-const coverageText = (coverage: DiscoverExistingCoverage) =>
-  [coverage.feature, coverage.scenario, coverage.path, ...coverage.tags, ...coverage.steps].join(" ");
-
-const overlapScore = (left: Set<string>, right: Set<string>) => {
-  if (left.size === 0 || right.size === 0) {
-    return 0;
-  }
-
-  return [...left].filter((token) => right.has(token)).length / Math.min(left.size, right.size);
-};
-
-const summarizeRelatedCoverage = ({
-  catalog,
-  notes,
-  pageUrl,
-}: {
-  catalog: CucumberFeatureCatalogResponse | null;
-  notes: string;
-  pageUrl: string;
-}): DiscoverExistingCoverage[] => {
-  if (!catalog || !pageUrl) {
-    return [];
-  }
-
-  const pageTokens = tokenize(`${toPageLabel(pageUrl)} ${pageUrl} ${notes}`);
-
-  return catalog.features
-    .flatMap((feature) =>
-      feature.scenarios.map((scenario) => ({
-        coverage: {
-          feature: feature.feature,
-          path: feature.path,
-          scenario: scenario.name,
-          steps: scenario.steps.map((step) => `${step.keyword} ${step.text}`),
-          tags: [...new Set([...feature.tags, ...scenario.tags])],
-        },
-        score: overlapScore(
-          pageTokens,
-          tokenize(
-            [
-              feature.feature,
-              scenario.name,
-              feature.path,
-              ...scenario.tags,
-              ...scenario.steps.map((step) => step.text),
-            ].join(" "),
-          ),
-        ),
-      })),
-    )
-    .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 12)
-    .map((item) => item.coverage);
-};
-
-const filterCoveredRecommendations = ({
-  existingCoverage,
-  recommendations,
-}: {
-  existingCoverage: DiscoverExistingCoverage[];
-  recommendations: TestRecommendation[];
-}) =>
-  recommendations.filter((recommendation) => {
-    const recommendationTokens = tokenize([recommendation.title, recommendation.reason, ...recommendation.scenario].join(" "));
-
-    return !existingCoverage.some((coverage) => {
-      const coverageTokens = tokenize(coverageText(coverage));
-      const titleMatch = coverage.scenario.toLowerCase() === recommendation.title.toLowerCase();
-      const highOverlap = overlapScore(recommendationTokens, coverageTokens) >= 0.78;
-
-      return titleMatch || highOverlap;
-    });
-  });
 
 const buildRecommendations = ({ notes, pageUrl }: { notes: string; pageUrl: string }): TestRecommendation[] => {
   if (!pageUrl) {
@@ -575,6 +491,13 @@ const buildAcceptanceCriteria = ({
     .filter((line): line is string => line !== null)
     .join("\n");
 
+const formatCoveragePercent = (score: number) => `${Math.round(score * 100)}%`;
+
+const coverageDecisionText = (decision: CoverageDecision) =>
+  decision.matchedCoverage
+    ? `${decision.reason} Match: ${decision.matchedCoverage.feature} > ${decision.matchedCoverage.scenario}.`
+    : decision.reason;
+
 export default async function DiscoverPage({
   searchParams,
 }: {
@@ -592,16 +515,18 @@ export default async function DiscoverPage({
   const selectedRepositoryId = repositoryId || selectedRepository?.id || "";
   const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
   const featureCatalog = pageUrl ? await getFeatureCatalog(selectedRepositoryId) : null;
+  const pageLabel = toPageLabel(pageUrl);
   const existingCoverage = summarizeRelatedCoverage({
     catalog: featureCatalog,
     notes,
+    pageLabel,
     pageUrl,
   });
   const rawLocalRecommendations = buildRecommendations({
     notes,
     pageUrl,
   });
-  const localRecommendations = filterCoveredRecommendations({
+  const localCoverageDecisions = classifyRecommendationsByCoverage({
     existingCoverage,
     recommendations: rawLocalRecommendations,
   });
@@ -610,28 +535,20 @@ export default async function DiscoverPage({
     notes,
     pageUrl,
   });
-  const aiGapRecommendations =
+  const aiCoverageDecisions =
     aiRecommendations?.provider === "openai"
-      ? filterCoveredRecommendations({
+      ? classifyRecommendationsByCoverage({
           existingCoverage,
           recommendations: aiRecommendations.recommendations,
         })
       : [];
-  const recommendations =
-    aiRecommendations?.provider === "openai" && aiGapRecommendations.length > 0
-      ? aiGapRecommendations
-      : localRecommendations;
-  const suppressedAiDuplicateCount =
-    aiRecommendations?.provider === "openai"
-      ? aiRecommendations.recommendations.length - aiGapRecommendations.length
-      : 0;
-  const suppressedLocalDuplicateCount = rawLocalRecommendations.length - localRecommendations.length;
-  const suppressedDuplicateCount =
-    aiRecommendations?.provider === "openai" && aiRecommendations.recommendations.length > 0
-      ? suppressedAiDuplicateCount
-      : suppressedLocalDuplicateCount;
-  const recommendationProvider =
-    aiRecommendations?.provider === "openai" && aiGapRecommendations.length > 0 ? "AI gap analysis" : "local gap analysis";
+  const usingAiRecommendations = aiRecommendations?.provider === "openai" && aiRecommendations.recommendations.length > 0;
+  const coverageDecisions = usingAiRecommendations ? aiCoverageDecisions : localCoverageDecisions;
+  const visibleCoverageDecisions = coverageDecisions.filter((decision) => decision.status === "keep");
+  const hiddenCoverageDecisions = coverageDecisions.filter((decision) => decision.status === "hide");
+  const recommendations = visibleCoverageDecisions.map((decision) => decision.recommendation);
+  const suppressedDuplicateCount = hiddenCoverageDecisions.length;
+  const recommendationProvider = usingAiRecommendations ? "AI gap analysis" : "local gap analysis";
   const queuedCount = Number.parseInt(queued ?? "", 10);
 
   return (
@@ -747,13 +664,14 @@ export default async function DiscoverPage({
           </section>
         ) : null}
 
-        {recommendations.length > 0 ? (
+        {coverageDecisions.length > 0 ? (
           <form action={queueSelectedTests} className="panel recommendation-panel">
             <div className="panel-header">
               <div>
                 <h2>Recommended Tests</h2>
                 <p>
-                  {recommendations.length} behavior-focused candidates for this page. Generated by {recommendationProvider}.
+                  {recommendations.length} behavior-focused {recommendations.length === 1 ? "candidate" : "candidates"} for this
+                  page. Generated by {recommendationProvider}.
                 </p>
               </div>
               <button type="submit">Queue Selected</button>
@@ -772,31 +690,77 @@ export default async function DiscoverPage({
             <input name="targetBranch" type="hidden" value={selectedBranch} />
             <input name="pageUrl" type="hidden" value={pageUrl} />
             <input name="notes" type="hidden" value={notes} />
-            <ol className="recommendation-list">
-              {recommendations.map((recommendation) => (
-                <li key={recommendation.title}>
-                  <label className="recommendation-check">
-                    <input name="recommendation" type="checkbox" value={JSON.stringify(recommendation)} />
-                    <span>Implement Test</span>
-                  </label>
-                  <div className="recommendation-copy">
-                    <div>
-                      <h3>{recommendation.title}</h3>
-                      <span className={`impact-pill ${recommendation.impact.toLowerCase()}`}>
-                        {recommendation.impact} impact
-                      </span>
+            {visibleCoverageDecisions.length > 0 ? (
+              <ol className="recommendation-list">
+                {visibleCoverageDecisions.map((decision) => (
+                  <li key={decision.recommendation.title}>
+                    <label className="recommendation-check">
+                      <input name="recommendation" type="checkbox" value={JSON.stringify(decision.recommendation)} />
+                      <span>Implement Test</span>
+                    </label>
+                    <div className="recommendation-copy">
+                      <div>
+                        <h3>{decision.recommendation.title}</h3>
+                        <span className={`impact-pill ${decision.recommendation.impact.toLowerCase()}`}>
+                          {decision.recommendation.impact} impact
+                        </span>
+                      </div>
+                      <p>{decision.recommendation.reason}</p>
+                      <p className="coverage-decision-note">{coverageDecisionText(decision)}</p>
+                      <pre>{decision.recommendation.scenario.join("\n")}</pre>
+                      <div className="tag-row compact">
+                        {decision.recommendation.tags.map((tag) => (
+                          <span key={tag}>{tag}</span>
+                        ))}
+                      </div>
                     </div>
-                    <p>{recommendation.reason}</p>
-                    <pre>{recommendation.scenario.join("\n")}</pre>
-                    <div className="tag-row compact">
-                      {recommendation.tags.map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="queue-paused-note recommendation-source-note">
+                Every generated recommendation looked similar to existing Cucumber coverage.
+              </p>
+            )}
+            {hiddenCoverageDecisions.length > 0 ? (
+              <details className="hidden-recommendations">
+                <summary>
+                  Show {hiddenCoverageDecisions.length} hidden duplicate-looking{" "}
+                  {hiddenCoverageDecisions.length === 1 ? "suggestion" : "suggestions"}
+                </summary>
+                <ol className="recommendation-list hidden">
+                  {hiddenCoverageDecisions.map((decision) => (
+                    <li key={decision.recommendation.title}>
+                      <label className="recommendation-check">
+                        <input name="recommendation" type="checkbox" value={JSON.stringify(decision.recommendation)} />
+                        <span>Implement Anyway</span>
+                      </label>
+                      <div className="recommendation-copy">
+                        <div>
+                          <h3>{decision.recommendation.title}</h3>
+                          <span className={`impact-pill ${decision.recommendation.impact.toLowerCase()}`}>
+                            {decision.recommendation.impact} impact
+                          </span>
+                        </div>
+                        <p>{decision.recommendation.reason}</p>
+                        <p className="coverage-decision-note duplicate">
+                          Hidden because {coverageDecisionText(decision)} Similarity: {formatCoveragePercent(decision.score)}.
+                        </p>
+                        {decision.matchedCoverage ? (
+                          <code className="coverage-match-path">{decision.matchedCoverage.path}</code>
+                        ) : null}
+                        <pre>{decision.recommendation.scenario.join("\n")}</pre>
+                        <div className="tag-row compact">
+                          {decision.recommendation.tags.map((tag) => (
+                            <span key={tag}>{tag}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            ) : null}
           </form>
         ) : (
           <section className="panel detail-empty">
