@@ -1,4 +1,6 @@
 import type {
+  CucumberFeatureCatalogResponse,
+  DiscoverExistingCoverage,
   DiscoverTestRecommendation,
   DiscoverTestRecommendationsResponse,
   QueueControlResponse,
@@ -54,10 +56,32 @@ async function getQueueControl(): Promise<QueueControlResponse> {
   }
 }
 
+async function getFeatureCatalog(repositoryId: string): Promise<CucumberFeatureCatalogResponse | null> {
+  if (!repositoryId) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/repositories/${repositoryId}/features`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<CucumberFeatureCatalogResponse>;
+  } catch {
+    return null;
+  }
+}
+
 async function getAiRecommendations({
+  existingCoverage,
   notes,
   pageUrl,
 }: {
+  existingCoverage: DiscoverExistingCoverage[];
   notes: string;
   pageUrl: string;
 }): Promise<DiscoverTestRecommendationsResponse | null> {
@@ -68,6 +92,7 @@ async function getAiRecommendations({
   try {
     const response = await fetch(`${apiUrl}/discover/recommendations`, {
       body: JSON.stringify({
+        existingCoverage,
         maxRecommendations: 14,
         notes,
         pageUrl,
@@ -180,6 +205,91 @@ const hasKeyword = (value: string, keywords: string[]) => {
 
   return keywords.some((keyword) => normalized.includes(keyword));
 };
+
+const tokenize = (value: string) =>
+  new Set(
+    value
+      .toLowerCase()
+      .replace(/https?:\/\/|www\./g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 2 && !["com", "the", "and", "page", "test", "should"].includes(token)),
+  );
+
+const coverageText = (coverage: DiscoverExistingCoverage) =>
+  [coverage.feature, coverage.scenario, coverage.path, ...coverage.tags, ...coverage.steps].join(" ");
+
+const overlapScore = (left: Set<string>, right: Set<string>) => {
+  if (left.size === 0 || right.size === 0) {
+    return 0;
+  }
+
+  return [...left].filter((token) => right.has(token)).length / Math.min(left.size, right.size);
+};
+
+const summarizeRelatedCoverage = ({
+  catalog,
+  notes,
+  pageUrl,
+}: {
+  catalog: CucumberFeatureCatalogResponse | null;
+  notes: string;
+  pageUrl: string;
+}): DiscoverExistingCoverage[] => {
+  if (!catalog || !pageUrl) {
+    return [];
+  }
+
+  const pageTokens = tokenize(`${toPageLabel(pageUrl)} ${pageUrl} ${notes}`);
+
+  return catalog.features
+    .flatMap((feature) =>
+      feature.scenarios.map((scenario) => ({
+        coverage: {
+          feature: feature.feature,
+          path: feature.path,
+          scenario: scenario.name,
+          steps: scenario.steps.map((step) => `${step.keyword} ${step.text}`),
+          tags: [...new Set([...feature.tags, ...scenario.tags])],
+        },
+        score: overlapScore(
+          pageTokens,
+          tokenize(
+            [
+              feature.feature,
+              scenario.name,
+              feature.path,
+              ...scenario.tags,
+              ...scenario.steps.map((step) => step.text),
+            ].join(" "),
+          ),
+        ),
+      })),
+    )
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 12)
+    .map((item) => item.coverage);
+};
+
+const filterCoveredRecommendations = ({
+  existingCoverage,
+  recommendations,
+}: {
+  existingCoverage: DiscoverExistingCoverage[];
+  recommendations: TestRecommendation[];
+}) =>
+  recommendations.filter((recommendation) => {
+    const recommendationTokens = tokenize([recommendation.title, recommendation.reason, ...recommendation.scenario].join(" "));
+
+    return !existingCoverage.some((coverage) => {
+      const coverageTokens = tokenize(coverageText(coverage));
+      const titleMatch = coverage.scenario.toLowerCase() === recommendation.title.toLowerCase();
+      const highOverlap = overlapScore(recommendationTokens, coverageTokens) >= 0.78;
+
+      return titleMatch || highOverlap;
+    });
+  });
 
 const buildRecommendations = ({ notes, pageUrl }: { notes: string; pageUrl: string }): TestRecommendation[] => {
   if (!pageUrl) {
@@ -481,22 +591,47 @@ export default async function DiscoverPage({
   const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
   const selectedRepositoryId = repositoryId || selectedRepository?.id || "";
   const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
-  const localRecommendations = buildRecommendations({
+  const featureCatalog = pageUrl ? await getFeatureCatalog(selectedRepositoryId) : null;
+  const existingCoverage = summarizeRelatedCoverage({
+    catalog: featureCatalog,
     notes,
     pageUrl,
+  });
+  const rawLocalRecommendations = buildRecommendations({
+    notes,
+    pageUrl,
+  });
+  const localRecommendations = filterCoveredRecommendations({
+    existingCoverage,
+    recommendations: rawLocalRecommendations,
   });
   const aiRecommendations = await getAiRecommendations({
+    existingCoverage,
     notes,
     pageUrl,
   });
+  const aiGapRecommendations =
+    aiRecommendations?.provider === "openai"
+      ? filterCoveredRecommendations({
+          existingCoverage,
+          recommendations: aiRecommendations.recommendations,
+        })
+      : [];
   const recommendations =
-    aiRecommendations?.provider === "openai" && aiRecommendations.recommendations.length > 0
-      ? aiRecommendations.recommendations
+    aiRecommendations?.provider === "openai" && aiGapRecommendations.length > 0
+      ? aiGapRecommendations
       : localRecommendations;
-  const recommendationProvider =
+  const suppressedAiDuplicateCount =
+    aiRecommendations?.provider === "openai"
+      ? aiRecommendations.recommendations.length - aiGapRecommendations.length
+      : 0;
+  const suppressedLocalDuplicateCount = rawLocalRecommendations.length - localRecommendations.length;
+  const suppressedDuplicateCount =
     aiRecommendations?.provider === "openai" && aiRecommendations.recommendations.length > 0
-      ? "AI"
-      : "Local";
+      ? suppressedAiDuplicateCount
+      : suppressedLocalDuplicateCount;
+  const recommendationProvider =
+    aiRecommendations?.provider === "openai" && aiGapRecommendations.length > 0 ? "AI gap analysis" : "local gap analysis";
   const queuedCount = Number.parseInt(queued ?? "", 10);
 
   return (
@@ -580,6 +715,38 @@ export default async function DiscoverPage({
           )
         ) : null}
 
+        {pageUrl && existingCoverage.length > 0 ? (
+          <section className="panel existing-coverage-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Related Existing Tests</h2>
+                <p>
+                  {existingCoverage.length} nearby Cucumber {existingCoverage.length === 1 ? "scenario was" : "scenarios were"} used
+                  to avoid duplicate recommendations.
+                </p>
+              </div>
+            </div>
+            <ol className="existing-coverage-list">
+              {existingCoverage.slice(0, 8).map((coverage) => (
+                <li key={`${coverage.path}:${coverage.scenario}`}>
+                  <div>
+                    <strong>{coverage.scenario}</strong>
+                    <span>{coverage.feature}</span>
+                  </div>
+                  <code>{coverage.path}</code>
+                  {coverage.tags.length > 0 ? (
+                    <div className="tag-row compact">
+                      {coverage.tags.map((tag) => (
+                        <span key={tag}>{tag}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
+
         {recommendations.length > 0 ? (
           <form action={queueSelectedTests} className="panel recommendation-panel">
             <div className="panel-header">
@@ -593,6 +760,13 @@ export default async function DiscoverPage({
             </div>
             {aiRecommendations?.message ? (
               <p className="queue-paused-note recommendation-source-note">{aiRecommendations.message}</p>
+            ) : null}
+            {suppressedDuplicateCount > 0 ? (
+              <p className="queue-success-note recommendation-source-note">
+                {suppressedDuplicateCount} duplicate-looking{" "}
+                {suppressedDuplicateCount === 1 ? "recommendation was" : "recommendations were"} hidden because related tests
+                already exist.
+              </p>
             ) : null}
             <input name="repositoryId" type="hidden" value={selectedRepositoryId} />
             <input name="targetBranch" type="hidden" value={selectedBranch} />

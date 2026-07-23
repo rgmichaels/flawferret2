@@ -351,7 +351,16 @@ export const discoverTestRecommendationSchema = z.object({
   title: z.string().trim().min(1).max(160),
 });
 
+export const discoverExistingCoverageSchema = z.object({
+  feature: z.string().trim().min(1).max(180),
+  path: z.string().trim().min(1).max(500),
+  scenario: z.string().trim().min(1).max(220),
+  steps: z.array(z.string().trim().min(1).max(300)).max(12),
+  tags: z.array(z.string().trim().min(1).max(80)).max(12),
+});
+
 export const discoverTestRecommendationsRequestSchema = z.object({
+  existingCoverage: z.array(discoverExistingCoverageSchema).max(25).default([]),
   maxRecommendations: z.number().int().min(1).max(20).default(12),
   notes: z.string().trim().max(4000).default(""),
   pageUrl: z.string().trim().url("Page URL must be a valid URL"),
@@ -489,6 +498,7 @@ export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSc
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type UpdateReviewJobRequest = z.infer<typeof updateReviewJobRequestSchema>;
 export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
+export type DiscoverExistingCoverage = z.infer<typeof discoverExistingCoverageSchema>;
 export type DiscoverTestRecommendation = z.infer<typeof discoverTestRecommendationSchema>;
 export type DiscoverTestRecommendationsRequest = z.infer<typeof discoverTestRecommendationsRequestSchema>;
 export type DiscoverTestRecommendationsResponse = z.infer<typeof discoverTestRecommendationsResponseSchema>;

@@ -40,6 +40,7 @@ describe("discover recommendations", () => {
 
   it("uses the configured prompt preface", () => {
     const prompt = buildDiscoverRecommendationsPrompt({
+      existingCoverage: [],
       maxRecommendations: 12,
       notes: "",
       pageContext: "Sign in form with email and password fields.",
@@ -51,11 +52,39 @@ describe("discover recommendations", () => {
     assert.match(prompt, /Return JSON only/);
   });
 
+  it("includes existing Cucumber coverage in the recommendation prompt", () => {
+    const prompt = buildDiscoverRecommendationsPrompt({
+      existingCoverage: [
+        {
+          feature: "Login",
+          path: "features/login.feature",
+          scenario: "Invalid login is rejected",
+          steps: [
+            "Given I am on the login page",
+            "When I submit invalid credentials",
+            "Then I should see an authentication error",
+          ],
+          tags: ["@auth", "@negative"],
+        },
+      ],
+      maxRecommendations: 8,
+      notes: "Avoid duplicate auth coverage.",
+      pageContext: "Login form",
+      pageUrl: "https://example.com/login",
+    });
+
+    assert.match(prompt, /Do not recommend tests that are already covered/);
+    assert.match(prompt, /Related existing Cucumber coverage/);
+    assert.match(prompt, /Invalid login is rejected/);
+    assert.match(prompt, /features\/login\.feature/);
+  });
+
   it("returns local fallback when OpenAI is not configured", async () => {
     delete process.env.OPENAI_API_KEY;
 
     const response = await buildDiscoverRecommendations({
       input: {
+        existingCoverage: [],
         maxRecommendations: 10,
         notes: "",
         pageUrl: "https://example.com/login",
@@ -104,6 +133,15 @@ describe("discover recommendations", () => {
     const response = await buildDiscoverRecommendations({
       fetchImpl: fetchImpl as typeof fetch,
       input: {
+        existingCoverage: [
+          {
+            feature: "Login",
+            path: "features/login.feature",
+            scenario: "Login page loads",
+            steps: ["Given I am on the login page", "Then the login page should load"],
+            tags: ["@smoke"],
+          },
+        ],
         maxRecommendations: 10,
         notes: "Prioritize authentication.",
         pageUrl: "https://example.com/login",
