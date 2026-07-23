@@ -164,6 +164,10 @@ describe("retry routes", () => {
     });
 
     assert.equal(cancelEvent.message, "Job was removed from the active queue.");
+    assert.deepEqual(cancelEvent.metadata, {
+      previousStatus: "QUEUED",
+      reviewAction: "canceled",
+    });
   });
 
   it("updates repository configuration", async () => {
@@ -450,6 +454,13 @@ describe("retry routes", () => {
       });
 
       assert.equal(event.message, "Jira ticket IPCT-99 was created for this job.");
+      assert.deepEqual(event.metadata, {
+        key: "IPCT-99",
+        projectKey: "IPCT",
+        reviewAction: "jira_ticket_created",
+        trackerIntegrationId: integration.id,
+        url: "https://example.atlassian.net/browse/IPCT-99",
+      });
 
       const approvalEvent = await prisma.jobEvent.findFirstOrThrow({
         where: {
@@ -459,6 +470,13 @@ describe("retry routes", () => {
       });
 
       assert.equal(approvalEvent.message, "Job was approved and moved to the active queue.");
+      assert.deepEqual(approvalEvent.metadata, {
+        createJiraTicket: true,
+        jiraIssueKey: "IPCT-99",
+        previousStatus: "NEEDS_REVIEW",
+        reviewAction: "approved",
+        targetBranch: "main",
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -499,7 +517,18 @@ describe("retry routes", () => {
       },
     });
 
-    assert.equal(updateEvent.message, "Review request was edited before approval.");
+    assert.equal(
+      updateEvent.message,
+      "Review request was edited before approval: priority, acceptanceCriteria, featureArea, goal, targetBranch.",
+    );
+    assert.deepEqual(updateEvent.metadata, {
+      changedFields: ["priority", "acceptanceCriteria", "featureArea", "goal", "targetBranch"],
+      newPriority: "HIGH",
+      newTargetBranch: "qa-review",
+      previousPriority: "NORMAL",
+      previousTargetBranch: "main",
+      reviewAction: "edited",
+    });
   });
 
   it("rejects review request edits after jobs leave review", async () => {
