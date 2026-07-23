@@ -312,6 +312,10 @@ export default async function ReadinessPage() {
               <dd>{readiness.counts.activeJobs}</dd>
             </div>
             <div>
+              <dt>Needs Review</dt>
+              <dd>{readiness.counts.needsReviewJobs}</dd>
+            </div>
+            <div>
               <dt>Awaiting Codex Approval</dt>
               <dd>{readiness.counts.codexApprovalJobs}</dd>
             </div>

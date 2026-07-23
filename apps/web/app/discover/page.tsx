@@ -128,6 +128,11 @@ async function queueSelectedTests(formData: FormData) {
 
 const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
 
+const repositoryTrackerLabel = (repository: RepositoryResponse) =>
+  repository.trackerIntegration
+    ? `Jira ${repository.trackerIntegration.projectKey}`
+    : "No tracker";
+
 const toPageLabel = (pageUrl: string) => {
   try {
     const url = new URL(pageUrl);
@@ -478,7 +483,7 @@ export default async function DiscoverPage({
                 <option value="">Select repository</option>
                 {repositories.map((repository) => (
                   <option key={repository.id} value={repository.id}>
-                    {repositoryLabel(repository)}
+                    {repositoryLabel(repository)} - {repositoryTrackerLabel(repository)}
                   </option>
                 ))}
               </select>
@@ -504,6 +509,19 @@ export default async function DiscoverPage({
             </button>
           </form>
         </section>
+
+        {selectedRepository ? (
+          selectedRepository.trackerIntegration ? (
+            <p className="queue-success-note">
+              Queued jobs for {repositoryLabel(selectedRepository)} will create Jira tickets in{" "}
+              {selectedRepository.trackerIntegration.projectKey}.
+            </p>
+          ) : (
+            <p className="queue-paused-note">
+              {repositoryLabel(selectedRepository)} has no work tracker attached, so queued jobs will not create Jira tickets.
+            </p>
+          )
+        ) : null}
 
         {queueControl.paused ? (
           <p className="queue-paused-note">Queue is paused. Selected tests can be queued now and will wait.</p>

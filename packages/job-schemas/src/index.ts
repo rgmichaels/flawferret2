@@ -4,6 +4,7 @@ export const jobTypeSchema = z.enum(["ADD_PLAYWRIGHT_TEST"]);
 
 export const jobStatusSchema = z.enum([
   "DRAFT",
+  "NEEDS_REVIEW",
   "QUEUED",
   "CLAIMED",
   "RUNNING",
@@ -24,6 +25,8 @@ export const prioritySchema = z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]);
 
 export const repositoryProviderSchema = z.enum(["GITHUB"]);
 
+export const trackerProviderSchema = z.enum(["JIRA"]);
+
 export const runStatusSchema = z.enum([
   "STARTED",
   "CODEX_RUNNING",
@@ -37,6 +40,8 @@ export const runStatusSchema = z.enum([
 
 export const jobEventTypeSchema = z.enum([
   "JOB_CREATED",
+  "JOB_APPROVED",
+  "JOB_UPDATED",
   "JOB_CLAIMED",
   "JOB_RUNNING",
   "RUN_STARTED",
@@ -72,6 +77,9 @@ export const jobEventTypeSchema = z.enum([
   "PR_CREATION_FAILED",
   "PR_CREATION_APPROVED",
   "JOB_BLOCKED",
+  "JIRA_TICKET_CREATED",
+  "JIRA_TICKET_CREATION_FAILED",
+  "JIRA_TICKET_CREATION_SKIPPED",
 ]);
 
 export const createRepositoryRequestSchema = z.object({
@@ -89,6 +97,7 @@ export const createRepositoryRequestSchema = z.object({
   defaultBranch: z.string().trim().min(1, "Default branch is required").default("main"),
   localPath: z.string().trim().min(1, "Local checkout path is required"),
   validationCommand: z.string().trim().optional(),
+  trackerIntegrationId: z.string().uuid("Tracker integration must be valid").nullable().optional(),
 });
 
 export const repositoryResponseSchema = z.object({
@@ -101,8 +110,69 @@ export const repositoryResponseSchema = z.object({
   webUrl: z.string(),
   localPath: z.string().nullable(),
   validationCommand: z.string().nullable(),
+  trackerIntegration: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      provider: trackerProviderSchema,
+      projectKey: z.string(),
+    })
+    .nullable(),
+  trackerIntegrationId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+const trackerBaseUrlSchema = z
+  .string()
+  .trim()
+  .url("Tracker URL must be a valid URL")
+  .transform((value) => value.replace(/\/+$/, ""));
+
+const trackerProjectKeySchema = z
+  .string()
+  .trim()
+  .min(1, "Project key is required")
+  .max(32, "Project key is too long")
+  .regex(/^[A-Z][A-Z0-9_]+$/, "Use the short Jira project key, like QA or GHP");
+
+export const createTrackerIntegrationRequestSchema = z.object({
+  provider: trackerProviderSchema.default("JIRA"),
+  name: z.string().trim().min(1, "Integration name is required").max(80, "Integration name is too long"),
+  baseUrl: trackerBaseUrlSchema,
+  email: z.string().trim().email("Jira email must be valid"),
+  apiToken: z.string().trim().min(1, "Jira API token is required"),
+  projectKey: trackerProjectKeySchema,
+  issueType: z.string().trim().min(1, "Issue type is required").default("Task"),
+});
+
+export const updateTrackerIntegrationRequestSchema = createTrackerIntegrationRequestSchema.extend({
+  apiToken: z.string().trim().optional(),
+});
+
+export const trackerIntegrationResponseSchema = z.object({
+  id: z.string(),
+  provider: trackerProviderSchema,
+  name: z.string(),
+  baseUrl: z.string(),
+  email: z.string(),
+  hasApiToken: z.boolean(),
+  projectKey: z.string(),
+  issueType: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const trackerIntegrationTestResponseSchema = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  projectName: z.string().nullable(),
+  projectKey: z.string().nullable(),
+});
+
+const jiraIssueSchema = z.object({
+  key: z.string(),
+  url: z.string(),
 });
 
 export const queueControlResponseSchema = z.object({
@@ -124,6 +194,7 @@ export const readinessResponseSchema = z.object({
     codexApprovalJobs: z.number().int().nonnegative(),
     completedJobs: z.number().int().nonnegative(),
     jobs: z.number().int().nonnegative(),
+    needsReviewJobs: z.number().int().nonnegative(),
     prApprovalJobs: z.number().int().nonnegative(),
     prCreatedJobs: z.number().int().nonnegative(),
     repositories: z.number().int().nonnegative(),
@@ -231,6 +302,7 @@ export const currentAddPlaywrightTestPayloadSchema = z.object({
   runAffectedTests: z.boolean().default(true),
   createDraftPr: z.boolean().default(true),
   captureContext: captureContextSchema.optional(),
+  jiraIssue: jiraIssueSchema.optional(),
 });
 
 export const legacyAddPlaywrightTestPayloadSchema = z.object({
@@ -242,6 +314,7 @@ export const legacyAddPlaywrightTestPayloadSchema = z.object({
   runAffectedTests: z.boolean().default(true),
   createDraftPr: z.boolean().default(true),
   captureContext: captureContextSchema.optional(),
+  jiraIssue: jiraIssueSchema.optional(),
 });
 
 export const addPlaywrightTestPayloadSchema = z.union([
@@ -253,6 +326,16 @@ export const createJobRequestSchema = z.object({
   jobType: jobTypeSchema.default("ADD_PLAYWRIGHT_TEST"),
   priority: prioritySchema.default("NORMAL"),
   payload: currentAddPlaywrightTestPayloadSchema,
+});
+
+export const updateReviewJobRequestSchema = z.object({
+  priority: prioritySchema,
+  payload: z.object({
+    targetBranch: z.string().trim().min(1, "Target branch is required"),
+    featureArea: z.string().trim().min(1, "Feature area is required"),
+    goal: z.string().trim().min(1, "Goal is required"),
+    acceptanceCriteria: z.string().trim().min(1, "Acceptance criteria are required"),
+  }),
 });
 
 export const retryStageRequestSchema = z.object({
@@ -369,16 +452,21 @@ export type JobType = z.infer<typeof jobTypeSchema>;
 export type JobStatus = z.infer<typeof jobStatusSchema>;
 export type JobPriority = z.infer<typeof prioritySchema>;
 export type RepositoryProvider = z.infer<typeof repositoryProviderSchema>;
+export type TrackerProvider = z.infer<typeof trackerProviderSchema>;
 export type RunStatus = z.infer<typeof runStatusSchema>;
 export type JobEventType = z.infer<typeof jobEventTypeSchema>;
 export type CreateRepositoryRequest = z.infer<typeof createRepositoryRequestSchema>;
 export type RepositoryResponse = z.infer<typeof repositoryResponseSchema>;
+export type CreateTrackerIntegrationRequest = z.infer<typeof createTrackerIntegrationRequestSchema>;
+export type TrackerIntegrationResponse = z.infer<typeof trackerIntegrationResponseSchema>;
+export type TrackerIntegrationTestResponse = z.infer<typeof trackerIntegrationTestResponseSchema>;
 export type QueueControlResponse = z.infer<typeof queueControlResponseSchema>;
 export type ReadinessResponse = z.infer<typeof readinessResponseSchema>;
 export type RunResponse = z.infer<typeof runResponseSchema>;
 export type CaptureContext = z.infer<typeof captureContextSchema>;
 export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSchema>;
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
+export type UpdateReviewJobRequest = z.infer<typeof updateReviewJobRequestSchema>;
 export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;

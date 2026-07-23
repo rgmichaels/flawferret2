@@ -21,6 +21,14 @@ export const getReadinessNextAction = (readiness: ReadinessResponse) => {
     return readiness.nextAction;
   }
 
+  if (readiness.counts.needsReviewJobs > 0) {
+    return {
+      href: "/#jobs",
+      label: "Review Job",
+      text: "A generated request is waiting before it enters the active queue.",
+    };
+  }
+
   if (readiness.counts.codexApprovalJobs > 0) {
     return {
       href: "/#jobs",

@@ -1,3 +1,4 @@
+import { getConfiguredModelPromptPreface } from "@flawferret2/shared";
 import type {
   CucumberFeatureDetailResponse,
   CucumberScenario,
@@ -375,6 +376,8 @@ const buildPrompt = ({
   snippets: StepDefinitionSnippet[];
 }) =>
   [
+    getConfiguredModelPromptPreface(),
+    "",
     "Explain this Cucumber scenario in plain English for a manual QA tester.",
     "Focus on what page behavior is exercised and what confidence the test gives.",
     "Do not explain Cucumber syntax. Do not mention implementation details unless they reveal behavior.",

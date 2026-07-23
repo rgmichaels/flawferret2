@@ -8,6 +8,7 @@ import { buildServer } from "./server.js";
 let server: FastifyInstance;
 const jobIds: string[] = [];
 const repositoryIds: string[] = [];
+const trackerIntegrationIds: string[] = [];
 
 const createRepository = async (overrides: Partial<Prisma.RepositoryCreateInput> = {}) => {
   const suffix = randomUUID().slice(0, 8);
@@ -36,7 +37,7 @@ const createJob = async ({
 }: {
   metadata?: Prisma.InputJsonValue;
   runStatus?: "FAILED" | "SUCCEEDED";
-  status: "BLOCKED" | "COMPLETED" | "FAILED" | "PR_APPROVED" | "QUEUED" | "REVIEW" | "RETRY";
+  status: "BLOCKED" | "COMPLETED" | "FAILED" | "NEEDS_REVIEW" | "PR_APPROVED" | "QUEUED" | "REVIEW" | "RETRY";
 }) => {
   const repository = await createRepository();
   const job = await prisma.job.create({
@@ -81,6 +82,13 @@ describe("retry routes", () => {
       where: {
         id: {
           in: jobIds.splice(0),
+        },
+      },
+    });
+    await prisma.trackerIntegration.deleteMany({
+      where: {
+        id: {
+          in: trackerIntegrationIds.splice(0),
         },
       },
     });
@@ -200,6 +208,321 @@ describe("retry routes", () => {
     });
 
     assert.equal(retainedJob.repositoryId, null);
+  });
+
+  it("saves tracker integrations without returning API tokens", async () => {
+    const response = await server.inject({
+      body: {
+        apiToken: "jira-secret",
+        baseUrl: "https://example.atlassian.net/",
+        email: "qa@example.com",
+        issueType: "Task",
+        name: `QA Jira ${randomUUID().slice(0, 8)}`,
+        projectKey: "IPCT",
+        provider: "JIRA",
+      },
+      method: "POST",
+      url: "/tracker-integrations",
+    });
+    const body = response.json();
+
+    trackerIntegrationIds.push(body.id);
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(body.baseUrl, "https://example.atlassian.net");
+    assert.equal(body.hasApiToken, true);
+    assert.equal("apiToken" in body, false);
+  });
+
+  it("updates tracker integrations while preserving blank API tokens", async () => {
+    const integration = await prisma.trackerIntegration.create({
+      data: {
+        apiToken: "existing-token",
+        baseUrl: "https://example.atlassian.net",
+        email: "qa@example.com",
+        issueType: "Task",
+        name: `QA Jira ${randomUUID().slice(0, 8)}`,
+        projectKey: "IPCT",
+      },
+    });
+    trackerIntegrationIds.push(integration.id);
+
+    const response = await server.inject({
+      body: {
+        apiToken: "",
+        baseUrl: "https://example.atlassian.net",
+        email: "qa-updated@example.com",
+        issueType: "Bug",
+        name: integration.name,
+        projectKey: "IPCT",
+        provider: "JIRA",
+      },
+      method: "PUT",
+      url: `/tracker-integrations/${integration.id}`,
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().email, "qa-updated@example.com");
+
+    const savedIntegration = await prisma.trackerIntegration.findUniqueOrThrow({
+      where: {
+        id: integration.id,
+      },
+    });
+
+    assert.equal(savedIntegration.apiToken, "existing-token");
+  });
+
+  it("tests tracker integrations against the saved Jira project", async () => {
+    const originalFetch = globalThis.fetch;
+    const integration = await prisma.trackerIntegration.create({
+      data: {
+        apiToken: "existing-token",
+        baseUrl: "https://example.atlassian.net",
+        email: "qa@example.com",
+        issueType: "Task",
+        name: `QA Jira ${randomUUID().slice(0, 8)}`,
+        projectKey: "IPCT",
+      },
+    });
+    trackerIntegrationIds.push(integration.id);
+    const calls: Array<{ headers: unknown; url: string }> = [];
+
+    globalThis.fetch = async (url, init) => {
+      calls.push({
+        headers: init?.headers,
+        url: String(url),
+      });
+
+      if (String(url).endsWith("/rest/api/3/myself")) {
+        return new Response(JSON.stringify({ accountId: "jira-user" }), {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          status: 200,
+        });
+      }
+
+      return new Response(JSON.stringify({ key: "IPCT", name: "IPCT Project" }), {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        status: 200,
+      });
+    };
+
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/tracker-integrations/${integration.id}/test`,
+      });
+
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.json().ok, true);
+      assert.equal(response.json().projectName, "IPCT Project");
+      assert.equal(calls[0]?.url, "https://example.atlassian.net/rest/api/3/myself");
+      assert.equal(calls[1]?.url, "https://example.atlassian.net/rest/api/3/project/IPCT");
+      assert.match(String((calls[0]?.headers as Record<string, string>).Authorization), /^Basic /);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("reports rejected Jira credentials before checking project access", async () => {
+    const originalFetch = globalThis.fetch;
+    const integration = await prisma.trackerIntegration.create({
+      data: {
+        apiToken: "bad-token",
+        baseUrl: "https://example.atlassian.net",
+        email: "qa@example.com",
+        issueType: "Task",
+        name: `QA Jira ${randomUUID().slice(0, 8)}`,
+        projectKey: "IPCT",
+      },
+    });
+    trackerIntegrationIds.push(integration.id);
+    const calls: string[] = [];
+
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+
+      return new Response("Client must be authenticated to access this resource.", {
+        status: 401,
+      });
+    };
+
+    try {
+      const response = await server.inject({
+        method: "POST",
+        url: `/tracker-integrations/${integration.id}/test`,
+      });
+
+      assert.equal(response.statusCode, 502);
+      assert.equal(response.json().ok, false);
+      assert.match(response.json().message, /credentials were rejected/i);
+      assert.deepEqual(calls, ["https://example.atlassian.net/rest/api/3/myself"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("creates Jira tickets when reviewed jobs are approved for tracked repositories", async () => {
+    const originalFetch = globalThis.fetch;
+    const integration = await prisma.trackerIntegration.create({
+      data: {
+        apiToken: "jira-token",
+        baseUrl: "https://example.atlassian.net",
+        email: "qa@example.com",
+        issueType: "Task",
+        name: `QA Jira ${randomUUID().slice(0, 8)}`,
+        projectKey: "IPCT",
+      },
+    });
+    trackerIntegrationIds.push(integration.id);
+    const repository = await createRepository({
+      trackerIntegration: {
+        connect: {
+          id: integration.id,
+        },
+      },
+    });
+    const calls: string[] = [];
+
+    globalThis.fetch = async (url) => {
+      calls.push(String(url));
+
+      return new Response(JSON.stringify({ id: "10001", key: "IPCT-99", self: "https://example.atlassian.net/rest/api/3/issue/10001" }), {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        status: 201,
+      });
+    };
+
+    try {
+      const response = await server.inject({
+        body: {
+          jobType: "ADD_PLAYWRIGHT_TEST",
+          payload: {
+            acceptanceCriteria: "Assert the important behavior.",
+            createDraftPr: true,
+            featureArea: "Tracked queue",
+            goal: "Add tracked coverage.",
+            repositoryId: repository.id,
+            runAffectedTests: true,
+            targetBranch: "main",
+          },
+          priority: "NORMAL",
+        },
+        method: "POST",
+        url: "/jobs",
+      });
+      const body = response.json();
+      jobIds.push(body.id);
+
+      assert.equal(response.statusCode, 201);
+      assert.equal(body.status, "NEEDS_REVIEW");
+      assert.equal(body.payload.jiraIssue, undefined);
+      assert.deepEqual(calls.filter((url) => url.startsWith("https://example.atlassian.net")), []);
+
+      const approvalResponse = await server.inject({
+        body: {
+          createJiraTicket: true,
+        },
+        method: "POST",
+        url: `/jobs/${body.id}/approve-review`,
+      });
+      const approvedBody = approvalResponse.json();
+
+      assert.equal(approvalResponse.statusCode, 200);
+      assert.equal(approvedBody.status, "QUEUED");
+      assert.equal(approvedBody.payload.jiraIssue.key, "IPCT-99");
+      assert.equal(approvedBody.payload.jiraIssue.url, "https://example.atlassian.net/browse/IPCT-99");
+      assert.deepEqual(calls.filter((url) => url.startsWith("https://example.atlassian.net")), [
+        "https://example.atlassian.net/rest/api/3/issue",
+      ]);
+
+      const event = await prisma.jobEvent.findFirstOrThrow({
+        where: {
+          eventType: "JIRA_TICKET_CREATED",
+          jobId: body.id,
+        },
+      });
+
+      assert.equal(event.message, "Jira ticket IPCT-99 was created for this job.");
+
+      const approvalEvent = await prisma.jobEvent.findFirstOrThrow({
+        where: {
+          eventType: "JOB_APPROVED",
+          jobId: body.id,
+        },
+      });
+
+      assert.equal(approvalEvent.message, "Job was approved and moved to the active queue.");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("updates review requests before they enter the active queue", async () => {
+    const job = await createJob({
+      status: "NEEDS_REVIEW",
+    });
+
+    const response = await server.inject({
+      body: {
+        payload: {
+          acceptanceCriteria: "Assert the edited behavior.",
+          featureArea: "Edited review request",
+          goal: "Use the edited goal.",
+          targetBranch: "qa-review",
+        },
+        priority: "HIGH",
+      },
+      method: "PUT",
+      url: `/jobs/${job.id}/review-request`,
+    });
+    const body = response.json();
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(body.status, "NEEDS_REVIEW");
+    assert.equal(body.priority, "HIGH");
+    assert.equal(body.payload.featureArea, "Edited review request");
+    assert.equal(body.payload.goal, "Use the edited goal.");
+    assert.equal(body.payload.acceptanceCriteria, "Assert the edited behavior.");
+    assert.equal(body.payload.targetBranch, "qa-review");
+
+    const updateEvent = await prisma.jobEvent.findFirstOrThrow({
+      where: {
+        eventType: "JOB_UPDATED",
+        jobId: job.id,
+      },
+    });
+
+    assert.equal(updateEvent.message, "Review request was edited before approval.");
+  });
+
+  it("rejects review request edits after jobs leave review", async () => {
+    const job = await createJob({
+      status: "QUEUED",
+    });
+
+    const response = await server.inject({
+      body: {
+        payload: {
+          acceptanceCriteria: "Assert the edited behavior.",
+          featureArea: "Edited review request",
+          goal: "Use the edited goal.",
+          targetBranch: "qa-review",
+        },
+        priority: "HIGH",
+      },
+      method: "PUT",
+      url: `/jobs/${job.id}/review-request`,
+    });
+
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().message, "Only jobs that need review can be edited.");
   });
 
   it("returns paginated jobs when requested", async () => {

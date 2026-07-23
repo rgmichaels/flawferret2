@@ -17,6 +17,7 @@ const baseReadiness: ReadinessResponse = {
     codexApprovalJobs: 0,
     completedJobs: 0,
     jobs: 0,
+    needsReviewJobs: 0,
     prApprovalJobs: 0,
     prCreatedJobs: 0,
     repositories: 1,

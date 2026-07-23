@@ -24,6 +24,8 @@ const createTempRepository = async () => {
     name: "example",
     owner: "rgmichaels",
     provider: "GITHUB",
+    trackerIntegration: null,
+    trackerIntegrationId: null,
     updatedAt: new Date().toISOString(),
     validationCommand: "pnpm test",
     webUrl: "https://github.com/rgmichaels/example",

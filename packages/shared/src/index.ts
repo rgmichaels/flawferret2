@@ -1,4 +1,63 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
+
 export const serviceName = "flawferret2";
+
+export const TEST_ARCHITECT_PROMPT_PREFACE =
+  "You are a principal Software Development Engineer in Test specializing in Playwright, TypeScript, Cucumber BDD, API testing, and maintainable test architecture. Your primary objective is to improve long-term test reliability, readability, and maintainability rather than simply making tests pass.";
+
+export const MODEL_PROMPT_PREFACE_CONFIG_PATH = "config/model-prompt-preface.txt";
+
+const findUp = (startDirectory: string, relativePath: string) => {
+  let currentDirectory = resolve(startDirectory);
+
+  while (true) {
+    const candidate = join(currentDirectory, relativePath);
+
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+
+    const parentDirectory = dirname(currentDirectory);
+
+    if (parentDirectory === currentDirectory) {
+      return null;
+    }
+
+    currentDirectory = parentDirectory;
+  }
+};
+
+export const getConfiguredModelPromptPreface = ({
+  cwd = process.cwd(),
+  env = process.env,
+}: {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+} = {}) => {
+  const directPreface = env.FF2_MODEL_PROMPT_PREFACE?.trim();
+
+  if (directPreface) {
+    return directPreface;
+  }
+
+  const configuredPath = env.FF2_MODEL_PROMPT_PREFACE_PATH?.trim();
+  const promptPrefacePath = configuredPath
+    ? isAbsolute(configuredPath)
+      ? configuredPath
+      : resolve(cwd, configuredPath)
+    : findUp(cwd, MODEL_PROMPT_PREFACE_CONFIG_PATH);
+
+  if (promptPrefacePath && existsSync(promptPrefacePath)) {
+    const filePreface = readFileSync(promptPrefacePath, "utf8").trim();
+
+    if (filePreface.length > 0) {
+      return filePreface;
+    }
+  }
+
+  return TEST_ARCHITECT_PROMPT_PREFACE;
+};
 
 export type SlackNotificationResult =
   | {
