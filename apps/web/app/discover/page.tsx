@@ -780,7 +780,7 @@ export default async function DiscoverPage({
                 return (
                   <li key={run.id}>
                     <div>
-                      <a href={`/discover?runId=${run.id}`}>{run.pageUrl}</a>
+                      <a href={`/discover/${run.id}`}>{run.pageUrl}</a>
                       <span>
                         {repositoryLabel(run.repository)} on {run.targetBranch}
                       </span>

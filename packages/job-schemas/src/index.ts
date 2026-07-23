@@ -331,6 +331,7 @@ export const createJobRequestSchema = z.object({
 export const updateReviewJobRequestSchema = z.object({
   priority: prioritySchema,
   payload: z.object({
+    repositoryId: z.string().uuid("Repository is required"),
     targetBranch: z.string().trim().min(1, "Target branch is required"),
     featureArea: z.string().trim().min(1, "Feature area is required"),
     goal: z.string().trim().min(1, "Goal is required"),

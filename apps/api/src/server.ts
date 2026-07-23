@@ -1652,9 +1652,23 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: body.payload.repositoryId,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
     const existingPayload = job.payload && typeof job.payload === "object" ? (job.payload as Record<string, unknown>) : {};
     const changedFields = [
       body.priority !== job.priority ? "priority" : null,
+      body.payload.repositoryId !== job.repositoryId ? "repository" : null,
       body.payload.acceptanceCriteria !== existingPayload.acceptanceCriteria ? "acceptanceCriteria" : null,
       body.payload.featureArea !== existingPayload.featureArea ? "featureArea" : null,
       body.payload.goal !== existingPayload.goal ? "goal" : null,
@@ -1665,6 +1679,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       acceptanceCriteria: body.payload.acceptanceCriteria,
       featureArea: body.payload.featureArea,
       goal: body.payload.goal,
+      repositoryId: body.payload.repositoryId,
       targetBranch: body.payload.targetBranch,
     };
 
@@ -1672,6 +1687,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       data: {
         payload: updatedPayload,
         priority: body.priority,
+        repositoryId: body.payload.repositoryId,
       },
       include: {
         repository: {
@@ -1701,8 +1717,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       metadata: {
         changedFields,
         newPriority: body.priority,
+        newRepositoryId: body.payload.repositoryId,
         newTargetBranch: body.payload.targetBranch,
         previousPriority: job.priority,
+        previousRepositoryId: job.repositoryId,
         previousTargetBranch:
           typeof existingPayload.targetBranch === "string" ? existingPayload.targetBranch : null,
         reviewAction: "edited",

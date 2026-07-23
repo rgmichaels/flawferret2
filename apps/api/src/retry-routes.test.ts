@@ -588,6 +588,7 @@ describe("retry routes", () => {
     const job = await createJob({
       status: "NEEDS_REVIEW",
     });
+    const replacementRepository = await createRepository();
 
     const response = await server.inject({
       body: {
@@ -595,6 +596,7 @@ describe("retry routes", () => {
           acceptanceCriteria: "Assert the edited behavior.",
           featureArea: "Edited review request",
           goal: "Use the edited goal.",
+          repositoryId: replacementRepository.id,
           targetBranch: "qa-review",
         },
         priority: "HIGH",
@@ -610,7 +612,9 @@ describe("retry routes", () => {
     assert.equal(body.payload.featureArea, "Edited review request");
     assert.equal(body.payload.goal, "Use the edited goal.");
     assert.equal(body.payload.acceptanceCriteria, "Assert the edited behavior.");
+    assert.equal(body.payload.repositoryId, replacementRepository.id);
     assert.equal(body.payload.targetBranch, "qa-review");
+    assert.equal(body.repository.id, replacementRepository.id);
 
     const updateEvent = await prisma.jobEvent.findFirstOrThrow({
       where: {
@@ -621,13 +625,15 @@ describe("retry routes", () => {
 
     assert.equal(
       updateEvent.message,
-      "Review request was edited before approval: priority, acceptanceCriteria, featureArea, goal, targetBranch.",
+      "Review request was edited before approval: priority, repository, acceptanceCriteria, featureArea, goal, targetBranch.",
     );
     assert.deepEqual(updateEvent.metadata, {
-      changedFields: ["priority", "acceptanceCriteria", "featureArea", "goal", "targetBranch"],
+      changedFields: ["priority", "repository", "acceptanceCriteria", "featureArea", "goal", "targetBranch"],
       newPriority: "HIGH",
+      newRepositoryId: replacementRepository.id,
       newTargetBranch: "qa-review",
       previousPriority: "NORMAL",
+      previousRepositoryId: job.repositoryId,
       previousTargetBranch: "main",
       reviewAction: "edited",
     });
@@ -644,6 +650,7 @@ describe("retry routes", () => {
           acceptanceCriteria: "Assert the edited behavior.",
           featureArea: "Edited review request",
           goal: "Use the edited goal.",
+          repositoryId: job.repositoryId,
           targetBranch: "qa-review",
         },
         priority: "HIGH",

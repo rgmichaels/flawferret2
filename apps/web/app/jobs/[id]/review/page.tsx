@@ -1,4 +1,4 @@
-import type { JobResponse, QueueControlResponse } from "@flawferret2/job-schemas";
+import type { JobResponse, QueueControlResponse, RepositoryResponse } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "../../../app-shell";
@@ -27,6 +27,22 @@ const getJob = async (id: string): Promise<JobResponse | null> => {
     return response.json() as Promise<JobResponse>;
   } catch {
     return null;
+  }
+};
+
+const getRepositories = async (): Promise<RepositoryResponse[]> => {
+  try {
+    const response = await fetch(`${apiUrl}/repositories`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<RepositoryResponse[]>;
+  } catch {
+    return [];
   }
 };
 
@@ -78,6 +94,10 @@ const getAcceptanceCriteria = (job: JobResponse) => getPayloadString(job.payload
 
 const getRepositoryName = (job: JobResponse) =>
   job.repository ? `${job.repository.owner}/${job.repository.name}` : "Unknown repository";
+
+const getRepositoryId = (job: JobResponse) => job.repository?.id || getPayloadString(job.payload, "repositoryId");
+
+const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
 
 const priorities: JobResponse["priority"][] = ["LOW", "NORMAL", "HIGH", "URGENT"];
 
@@ -147,6 +167,7 @@ async function saveReviewRequest(formData: FormData) {
         acceptanceCriteria: String(formData.get("acceptanceCriteria") ?? ""),
         featureArea: String(formData.get("featureArea") ?? ""),
         goal: String(formData.get("goal") ?? ""),
+        repositoryId: String(formData.get("repositoryId") ?? ""),
         targetBranch: String(formData.get("targetBranch") ?? ""),
       },
     }),
@@ -216,7 +237,7 @@ export default async function JobReviewPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const [job, queueControl] = await Promise.all([getJob(id), getQueueControl()]);
+  const [job, queueControl, repositories] = await Promise.all([getJob(id), getQueueControl(), getRepositories()]);
 
   if (!job) {
     return (
@@ -242,6 +263,7 @@ export default async function JobReviewPage({
   const tracker = job.repository?.trackerIntegration ?? null;
   const createJiraByDefault = job.status === "NEEDS_REVIEW" && Boolean(tracker);
   const isEditing = job.status === "NEEDS_REVIEW" && query.edit === "true";
+  const selectedRepositoryId = getRepositoryId(job);
   const discoverSummary = parseDiscoverAcceptanceCriteria(getAcceptanceCriteria(job));
   const confidenceBadges = reviewConfidenceBadges({
     discoverSummary,
@@ -305,9 +327,9 @@ export default async function JobReviewPage({
               </div>
               {job.status === "NEEDS_REVIEW" ? (
                 isEditing ? (
-                  <a className="secondary-button compact-button" href={`/jobs/${job.id}/review`}>
+                  <button className="secondary-button compact-button" form="review-request-form" type="submit">
                     Done
-                  </a>
+                  </button>
                 ) : (
                   <a className="secondary-button compact-button" href={`/jobs/${job.id}/review?edit=true`}>
                     Edit
@@ -316,9 +338,20 @@ export default async function JobReviewPage({
               ) : null}
             </div>
             {isEditing ? (
-              <form action={saveReviewRequest} className="review-request-form">
+              <form action={saveReviewRequest} className="review-request-form" id="review-request-form">
                 <input name="jobId" type="hidden" value={job.id} />
                 <div className="review-form-grid">
+                  <label>
+                    Repository
+                    <select name="repositoryId" required defaultValue={selectedRepositoryId}>
+                      <option value="">Select repository</option>
+                      {repositories.map((repository) => (
+                        <option key={repository.id} value={repository.id}>
+                          {repositoryLabel(repository)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label>
                     Feature Area
                     <input name="featureArea" required defaultValue={getJobTitle(job)} />
