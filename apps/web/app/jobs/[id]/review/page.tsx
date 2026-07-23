@@ -1,7 +1,8 @@
-import type { JobResponse } from "@flawferret2/job-schemas";
+import type { JobResponse, QueueControlResponse } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "../../../app-shell";
+import { parseDiscoverAcceptanceCriteria } from "../../review-request";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -29,6 +30,32 @@ const getJob = async (id: string): Promise<JobResponse | null> => {
   }
 };
 
+const getQueueControl = async (): Promise<QueueControlResponse> => {
+  try {
+    const response = await fetch(`${apiUrl}/queue`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return {
+        paused: false,
+        pausedAt: null,
+        resumedAt: null,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    return response.json() as Promise<QueueControlResponse>;
+  } catch {
+    return {
+      paused: false,
+      pausedAt: null,
+      resumedAt: null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+};
+
 const getPayloadString = (payload: unknown, key: string) => {
   if (!payload || typeof payload !== "object" || !(key in payload)) {
     return "";
@@ -53,6 +80,43 @@ const getRepositoryName = (job: JobResponse) =>
   job.repository ? `${job.repository.owner}/${job.repository.name}` : "Unknown repository";
 
 const priorities: JobResponse["priority"][] = ["LOW", "NORMAL", "HIGH", "URGENT"];
+
+type ReviewConfidenceBadge = {
+  detail: string;
+  label: string;
+  tone: "muted" | "ok" | "warn";
+};
+
+const reviewConfidenceBadges = ({
+  discoverSummary,
+  queueControl,
+  tracker,
+}: {
+  discoverSummary: ReturnType<typeof parseDiscoverAcceptanceCriteria>;
+  queueControl: QueueControlResponse;
+  tracker: NonNullable<JobResponse["repository"]>["trackerIntegration"] | null;
+}): ReviewConfidenceBadge[] => [
+  {
+    detail: discoverSummary ? "Structured request from Discover Tests." : "Manual or non-Discover request.",
+    label: discoverSummary ? "AI generated" : "Manual request",
+    tone: discoverSummary ? "ok" : "muted",
+  },
+  {
+    detail: discoverSummary ? "Existing coverage was checked during Discover." : "No Discover coverage check recorded.",
+    label: discoverSummary ? "Existing coverage checked" : "Coverage check unavailable",
+    tone: discoverSummary ? "ok" : "muted",
+  },
+  {
+    detail: tracker ? `Ticket can be created in ${tracker.projectKey} on approval.` : "No tracker attached to this repository.",
+    label: tracker ? "Jira on approval" : "No Jira on approval",
+    tone: tracker ? "ok" : "warn",
+  },
+  {
+    detail: queueControl.paused ? "Approved work will wait until the queue resumes." : "Approved work can be picked up by the runner.",
+    label: queueControl.paused ? "Queue paused" : "Queue active",
+    tone: queueControl.paused ? "warn" : "ok",
+  },
+];
 
 const buildJiraPreviewLines = (job: JobResponse) => {
   const goal = getJobGoal(job);
@@ -152,7 +216,7 @@ export default async function JobReviewPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const job = await getJob(id);
+  const [job, queueControl] = await Promise.all([getJob(id), getQueueControl()]);
 
   if (!job) {
     return (
@@ -178,6 +242,12 @@ export default async function JobReviewPage({
   const tracker = job.repository?.trackerIntegration ?? null;
   const createJiraByDefault = job.status === "NEEDS_REVIEW" && Boolean(tracker);
   const isEditing = job.status === "NEEDS_REVIEW" && query.edit === "true";
+  const discoverSummary = parseDiscoverAcceptanceCriteria(getAcceptanceCriteria(job));
+  const confidenceBadges = reviewConfidenceBadges({
+    discoverSummary,
+    queueControl,
+    tracker,
+  });
 
   return (
     <AppShell active="jobs">
@@ -216,6 +286,15 @@ export default async function JobReviewPage({
             <dd>#{job.id.slice(0, 8)}</dd>
           </div>
         </dl>
+
+        <section className="review-confidence-bar" aria-label="Review confidence">
+          {confidenceBadges.map((badge) => (
+            <div className={`review-confidence-badge ${badge.tone}`} key={badge.label}>
+              <strong>{badge.label}</strong>
+              <span>{badge.detail}</span>
+            </div>
+          ))}
+        </section>
 
         <div className="review-workspace-grid">
           <section className="panel detail-card review-request-card">
@@ -300,7 +379,69 @@ export default async function JobReviewPage({
                 </div>
                 <div>
                   <dt>Acceptance Criteria</dt>
-                  <dd className="multiline-value review-text-block">{getAcceptanceCriteria(job)}</dd>
+                  <dd>
+                    {discoverSummary ? (
+                      <div className="review-discovery-summary">
+                        <section>
+                          <h3>Discovery Source</h3>
+                          <dl>
+                            <div>
+                              <dt>Source</dt>
+                              <dd>{discoverSummary.source}</dd>
+                            </div>
+                            <div>
+                              <dt>Page URL</dt>
+                              <dd>
+                                <a href={discoverSummary.pageUrl}>{discoverSummary.pageUrl}</a>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Impact</dt>
+                              <dd>{discoverSummary.impact || "Not specified"}</dd>
+                            </div>
+                            <div>
+                              <dt>Tags</dt>
+                              <dd>
+                                {discoverSummary.tags.length > 0 ? (
+                                  <span className="tag-row">
+                                    {discoverSummary.tags.map((tag) => (
+                                      <span key={tag}>{tag}</span>
+                                    ))}
+                                  </span>
+                                ) : (
+                                  "None"
+                                )}
+                              </dd>
+                            </div>
+                            {discoverSummary.notes ? (
+                              <div>
+                                <dt>Notes</dt>
+                                <dd>{discoverSummary.notes}</dd>
+                              </div>
+                            ) : null}
+                          </dl>
+                        </section>
+                        <section>
+                          <h3>Suggested Scenario</h3>
+                          <pre>{discoverSummary.scenario.join("\n")}</pre>
+                        </section>
+                        <section>
+                          <h3>Why This Matters</h3>
+                          <p>{discoverSummary.why}</p>
+                        </section>
+                        <section>
+                          <h3>Implementation Guidance</h3>
+                          <ul>
+                            {discoverSummary.guidance.map((item) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        </section>
+                      </div>
+                    ) : (
+                      <div className="multiline-value review-text-block">{getAcceptanceCriteria(job)}</div>
+                    )}
+                  </dd>
                 </div>
               </dl>
             )}
@@ -317,6 +458,17 @@ export default async function JobReviewPage({
               {job.status === "NEEDS_REVIEW" ? (
                 <form action={approveReview} className="approval-form">
                   <input name="jobId" type="hidden" value={job.id} />
+                  {!isEditing ? (
+                    <div className="review-edit-callout">
+                      <div>
+                        <strong>Edit before approving</strong>
+                        <span>Adjust the goal, branch, priority, or acceptance criteria before this enters the queue.</span>
+                      </div>
+                      <a className="secondary-button compact-button" href={`/jobs/${job.id}/review?edit=true`}>
+                        Edit Request
+                      </a>
+                    </div>
+                  ) : null}
                   <label className="checkbox-filter">
                     <input
                       defaultChecked={createJiraByDefault}
