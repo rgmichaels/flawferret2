@@ -13,6 +13,7 @@ import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
   createTrackerIntegrationRequestSchema,
+  discoverTestRecommendationsRequestSchema,
   explainCucumberScenarioRequestSchema,
   jobStatusSchema,
   retryStageRequestSchema,
@@ -40,6 +41,7 @@ import { z, ZodError } from "zod";
 import { config } from "./config.js";
 import { explainCucumberScenario } from "./cucumber-explanations.js";
 import { buildFeatureCatalog, buildFeatureDetail } from "./cucumber-features.js";
+import { buildDiscoverRecommendations } from "./discover-recommendations.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -692,6 +694,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       ok: true,
       service: "flawferret2-api",
     };
+  });
+
+  server.post("/discover/recommendations", async (request) => {
+    const body = discoverTestRecommendationsRequestSchema.parse(request.body);
+
+    return buildDiscoverRecommendations({
+      input: body,
+    });
   });
 
   server.get("/readiness", async () => {

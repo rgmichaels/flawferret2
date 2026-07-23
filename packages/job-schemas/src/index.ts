@@ -342,6 +342,27 @@ export const retryStageRequestSchema = z.object({
   feedback: z.string().trim().max(4000).optional(),
 });
 
+export const discoverTestRecommendationSchema = z.object({
+  acceptance: z.array(z.string().trim().min(1)).min(1).max(8),
+  impact: z.enum(["High", "Medium"]),
+  reason: z.string().trim().min(1).max(800),
+  scenario: z.array(z.string().trim().min(1)).min(1).max(8),
+  tags: z.array(z.string().trim().regex(/^@[A-Za-z0-9_-]+$/)).min(1).max(8),
+  title: z.string().trim().min(1).max(160),
+});
+
+export const discoverTestRecommendationsRequestSchema = z.object({
+  maxRecommendations: z.number().int().min(1).max(20).default(12),
+  notes: z.string().trim().max(4000).default(""),
+  pageUrl: z.string().trim().url("Page URL must be a valid URL"),
+});
+
+export const discoverTestRecommendationsResponseSchema = z.object({
+  message: z.string().nullable(),
+  provider: z.enum(["openai", "local"]),
+  recommendations: z.array(discoverTestRecommendationSchema).max(20),
+});
+
 export const jobResponseSchema = z.object({
   id: z.string(),
   jobType: jobTypeSchema,
@@ -468,6 +489,9 @@ export type AddPlaywrightTestPayload = z.infer<typeof addPlaywrightTestPayloadSc
 export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type UpdateReviewJobRequest = z.infer<typeof updateReviewJobRequestSchema>;
 export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
+export type DiscoverTestRecommendation = z.infer<typeof discoverTestRecommendationSchema>;
+export type DiscoverTestRecommendationsRequest = z.infer<typeof discoverTestRecommendationsRequestSchema>;
+export type DiscoverTestRecommendationsResponse = z.infer<typeof discoverTestRecommendationsResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;

@@ -8,6 +8,7 @@ import type {
   RunStatus,
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
+import { AppShell } from "../../app-shell";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -526,15 +527,22 @@ export default async function JobDetailPage({
 
   if (!job) {
     return (
-      <main className="detail-shell">
-        <a className="back-link" href="/">
-          Back to dashboard
-        </a>
-        <section className="panel detail-empty">
-          <h1>Job not found</h1>
-          <p>The requested job does not exist or the API is unavailable.</p>
+      <AppShell active="jobs">
+        <section className="workspace">
+          <header className="topbar">
+            <div>
+              <p className="eyebrow">Job Detail</p>
+              <h1>Job not found</h1>
+            </div>
+            <a className="primary-link" href="/#jobs">
+              Back to jobs
+            </a>
+          </header>
+          <section className="panel detail-empty">
+            <p>The requested job does not exist or the API is unavailable.</p>
+          </section>
         </section>
-      </main>
+      </AppShell>
     );
   }
 
@@ -693,63 +701,60 @@ export default async function JobDetailPage({
   ];
 
   return (
-    <main className="detail-shell">
-      <a className="back-link" href="/">
-        Back to dashboard
-      </a>
-
-      <header className="detail-hero">
-        <div>
-          <p className="eyebrow">Job Detail</p>
-          <h1>{job.payload.featureArea}</h1>
-          <p>{job.payload.goal}</p>
-        </div>
-        <div className="detail-actions">
-          {job.status === "NEEDS_REVIEW" ? (
-            <a className="primary-link" href={`/jobs/${job.id}/review`}>
-              Review Job
-            </a>
-          ) : null}
-          {approvalAction ? (
-            <section className="approval-card" aria-label={approvalAction.title}>
-              <span>{approvalAction.riskLabel}</span>
-              <strong>{approvalAction.title}</strong>
-              <p>{approvalAction.description}</p>
-              <form action={approvalAction.formAction}>
+    <AppShell active="jobs">
+      <section className="workspace job-detail-shell">
+        <header className="topbar job-detail-topbar">
+          <div>
+            <p className="eyebrow">Job Detail</p>
+            <h1>{job.payload.featureArea}</h1>
+            <p>{job.payload.goal}</p>
+          </div>
+          <div className="detail-actions">
+            {job.status === "NEEDS_REVIEW" ? (
+              <a className="primary-link" href={`/jobs/${job.id}/review`}>
+                Review Job
+              </a>
+            ) : null}
+            {approvalAction ? (
+              <section className="approval-card" aria-label={approvalAction.title}>
+                <span>{approvalAction.riskLabel}</span>
+                <strong>{approvalAction.title}</strong>
+                <p>{approvalAction.description}</p>
+                <form action={approvalAction.formAction}>
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <button type="submit">{approvalAction.buttonLabel}</button>
+                </form>
+              </section>
+            ) : null}
+            {canRetryCurrentStage(job, latestRun) ? (
+              <form action={retryCurrentStage}>
                 <input type="hidden" name="jobId" value={job.id} />
-                <button type="submit">{approvalAction.buttonLabel}</button>
+                <button className="secondary-button" type="submit">
+                  Retry Current Stage
+                </button>
               </form>
-            </section>
-          ) : null}
-          {canRetryCurrentStage(job, latestRun) ? (
-            <form action={retryCurrentStage}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button className="secondary-button" type="submit">
-                Retry Current Stage
-              </button>
-            </form>
-          ) : null}
-          {canRequeueJob(job.status) ? (
-            <form action={requeueJob}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button className="secondary-button" type="submit">
-                Retry Setup
-              </button>
-            </form>
-          ) : null}
-          {canCancelJob(job.status) ? (
-            <form action={cancelJob}>
-              <input type="hidden" name="jobId" value={job.id} />
-              <button className="secondary-button danger-button" type="submit">
-                Cancel Job
-              </button>
-            </form>
-          ) : null}
-          <span className={`status-pill ${job.status.toLowerCase()}`}>
-            {jobStatusLabels[job.status]}
-          </span>
-        </div>
-      </header>
+            ) : null}
+            {canRequeueJob(job.status) ? (
+              <form action={requeueJob}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <button className="secondary-button" type="submit">
+                  Retry Setup
+                </button>
+              </form>
+            ) : null}
+            {canCancelJob(job.status) ? (
+              <form action={cancelJob}>
+                <input type="hidden" name="jobId" value={job.id} />
+                <button className="secondary-button danger-button" type="submit">
+                  Cancel Job
+                </button>
+              </form>
+            ) : null}
+            <span className={`status-pill ${job.status.toLowerCase()}`}>
+              {jobStatusLabels[job.status]}
+            </span>
+          </div>
+        </header>
 
       <section className="panel execution-mode-card" aria-label="Execution mode">
         <div>
@@ -1191,7 +1196,7 @@ export default async function JobDetailPage({
           ) : null}
         </section>
 
-        <section className="panel detail-card">
+        <section className="panel detail-card timeline-card">
           <h2>Timeline</h2>
           {events.length === 0 ? (
             <p className="empty compact-empty">No events have been recorded yet.</p>
@@ -1210,6 +1215,7 @@ export default async function JobDetailPage({
           )}
         </section>
       </div>
-    </main>
+      </section>
+    </AppShell>
   );
 }

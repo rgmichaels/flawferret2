@@ -1486,6 +1486,10 @@ td span {
   padding: 0;
 }
 
+.recommendation-source-note {
+  margin: 14px 20px 0;
+}
+
 .recommendation-list > li {
   border-top: 1px solid #edf1f6;
   display: grid;
@@ -2549,6 +2553,143 @@ textarea {
   padding: 2px 5px;
 }
 
+.job-detail-shell {
+  gap: 18px;
+}
+
+.job-detail-topbar {
+  align-items: start;
+  border-left: 4px solid #2563eb;
+  gap: 18px;
+}
+
+.job-detail-topbar h1 {
+  max-width: 980px;
+}
+
+.job-detail-topbar p:last-child {
+  color: #4a5870;
+  line-height: 1.35;
+  margin: 8px 0 0;
+  max-width: 980px;
+}
+
+.job-detail-shell .detail-actions {
+  align-items: end;
+  align-self: stretch;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  max-width: 420px;
+}
+
+.job-detail-shell .detail-actions .status-pill {
+  order: -1;
+}
+
+.job-detail-shell .approval-card {
+  flex: 1 1 280px;
+  max-width: 360px;
+}
+
+.job-detail-shell .execution-mode-card {
+  background: #ffffff;
+  gap: 12px;
+}
+
+.job-detail-shell .execution-mode-card div {
+  background: #fbfdff;
+}
+
+.job-detail-shell .stage-tracker {
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  overflow-x: auto;
+}
+
+.job-detail-shell .stage-card {
+  background: #ffffff;
+  min-height: 136px;
+}
+
+.job-detail-shell .stage-card.blocked {
+  background: #fffafa;
+}
+
+.job-detail-shell .stage-card.waiting {
+  background: #fbfdff;
+}
+
+.job-detail-shell .validation-trust-card {
+  background: #ffffff;
+}
+
+.job-detail-shell .generated-diff-card,
+.job-detail-shell .diagnostics-card,
+.job-detail-shell .detail-card,
+.job-detail-shell .validation-trust-card,
+.job-detail-shell .stage-tracker,
+.job-detail-shell .execution-mode-card {
+  border-color: #cad6e8;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+}
+
+.job-detail-shell .generated-diff-header,
+.job-detail-shell .diagnostics-header {
+  border-bottom: 1px solid #e6ebf3;
+  margin: -20px -20px 0;
+  padding: 18px 20px;
+}
+
+.job-detail-shell .detail-card h2 {
+  border-bottom: 1px solid #e6ebf3;
+  margin: -22px -22px 0;
+  padding: 18px 22px;
+}
+
+.job-detail-shell .detail-card dl {
+  margin-top: 18px;
+}
+
+.job-detail-shell .detail-card dd.multiline-value {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.job-detail-shell .detail-grid {
+  grid-template-columns: minmax(320px, 0.9fr) minmax(320px, 1.1fr);
+}
+
+.job-detail-shell .pipeline-card {
+  grid-column: 1 / -1;
+}
+
+.job-detail-shell .timeline-card {
+  grid-column: 1 / -1;
+}
+
+.job-detail-shell .pipeline-section {
+  background: #fbfdff;
+}
+
+.job-detail-shell .timeline {
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.job-detail-shell .run-list li {
+  background: #fbfdff;
+}
+
 .review-shell {
   gap: 18px;
 }
@@ -3004,6 +3145,14 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .job-detail-shell .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .job-detail-shell .stage-tracker {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+
   .review-workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -3063,6 +3212,13 @@ textarea {
     flex-direction: column;
   }
 
+  .job-detail-shell .detail-actions {
+    align-items: start;
+    justify-content: flex-start;
+    max-width: 100%;
+    width: 100%;
+  }
+
   .review-topbar-actions {
     align-items: start;
     justify-items: start;
@@ -3105,6 +3261,11 @@ textarea {
   .safety-grid,
   .stage-tracker {
     grid-template-columns: 1fr;
+  }
+
+  .job-detail-shell .stage-tracker {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
   }
 
   .generated-diff-header,

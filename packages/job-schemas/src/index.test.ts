@@ -6,6 +6,8 @@ import {
   cucumberFeatureDetailResponseSchema,
   createTrackerIntegrationRequestSchema,
   createJobRequestSchema,
+  discoverTestRecommendationsRequestSchema,
+  discoverTestRecommendationsResponseSchema,
   explainCucumberScenarioRequestSchema,
   explainCucumberScenarioResponseSchema,
   jobEventTypeSchema,
@@ -229,6 +231,30 @@ describe("job schemas", () => {
 
     assert.equal(request.path, "features/login.feature");
     assert.equal(response.provider, "local");
+  });
+
+  it("parses page discovery recommendation requests and responses", () => {
+    const request = discoverTestRecommendationsRequestSchema.parse({
+      notes: "Focus auth and keyboard behavior.",
+      pageUrl: "https://example.com/login",
+    });
+    const response = discoverTestRecommendationsResponseSchema.parse({
+      message: null,
+      provider: "openai",
+      recommendations: [
+        {
+          acceptance: ["Assert invalid credentials show an error."],
+          impact: "High",
+          reason: "Authentication failures are critical regression paths.",
+          scenario: ["Given I am on the login page", "When I submit invalid credentials", "Then I should see an error"],
+          tags: ["@auth", "@negative"],
+          title: "Invalid login is rejected",
+        },
+      ],
+    });
+
+    assert.equal(request.maxRecommendations, 12);
+    assert.equal(response.recommendations[0].tags[0], "@auth");
   });
 
   it("parses paginated job responses", () => {
