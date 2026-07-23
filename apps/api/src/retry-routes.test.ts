@@ -157,6 +157,80 @@ describe("retry routes", () => {
     assert.equal((event.metadata as { devSample?: boolean }).devSample, true);
   });
 
+  it("persists page discovery runs and marks queued recommendations", async () => {
+    const repository = await createRepository();
+    const recommendation = {
+      acceptance: ["Assert invalid credentials show an error."],
+      impact: "High",
+      reason: "Authentication failures are critical regression paths.",
+      scenario: ["Given I am on the login page", "When I submit invalid credentials", "Then I should see an error"],
+      tags: ["@auth", "@negative"],
+      title: "Invalid login is rejected",
+    };
+    const coverage = {
+      feature: "Login",
+      path: "features/login.feature",
+      scenario: "Invalid login",
+      steps: ["Given I am on the login page"],
+      tags: ["@auth"],
+    };
+
+    const createResponse = await server.inject({
+      body: {
+        hiddenDecisions: [],
+        notes: "Focus auth.",
+        pageUrl: "https://example.com/login",
+        provider: "AI gap analysis",
+        relatedCoverage: [coverage],
+        repositoryId: repository.id,
+        targetBranch: "main",
+        visibleDecisions: [
+          {
+            matchedCoverage: coverage,
+            recommendation,
+            reason: "High value path.",
+            score: 0.25,
+            status: "keep",
+          },
+        ],
+      },
+      method: "POST",
+      url: "/discover/runs",
+    });
+    const createdRun = createResponse.json();
+
+    assert.equal(createResponse.statusCode, 201);
+    assert.equal(createdRun.repository.id, repository.id);
+    assert.equal(createdRun.visibleDecisions[0].recommendation.title, "Invalid login is rejected");
+
+    const listResponse = await server.inject({
+      method: "GET",
+      url: "/discover/runs",
+    });
+
+    assert.equal(listResponse.statusCode, 200);
+    assert.equal(listResponse.json().some((run: { id: string }) => run.id === createdRun.id), true);
+
+    const detailResponse = await server.inject({
+      method: "GET",
+      url: `/discover/runs/${createdRun.id}`,
+    });
+
+    assert.equal(detailResponse.statusCode, 200);
+    assert.equal(detailResponse.json().pageUrl, "https://example.com/login");
+
+    const queuedResponse = await server.inject({
+      body: {
+        queuedTitles: ["Invalid login is rejected"],
+      },
+      method: "PUT",
+      url: `/discover/runs/${createdRun.id}/queued`,
+    });
+
+    assert.equal(queuedResponse.statusCode, 200);
+    assert.deepEqual(queuedResponse.json().queuedTitles, ["Invalid login is rejected"]);
+  });
+
   it("rejects requeue requests for non-retryable statuses", async () => {
     const job = await createJob({
       status: "COMPLETED",

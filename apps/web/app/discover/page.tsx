@@ -1,6 +1,8 @@
 import type {
   CucumberFeatureCatalogResponse,
+  CreateDiscoverRunRequest,
   DiscoverExistingCoverage,
+  DiscoverRunResponse,
   DiscoverTestRecommendation,
   DiscoverTestRecommendationsResponse,
   QueueControlResponse,
@@ -115,9 +117,82 @@ async function getAiRecommendations({
   }
 }
 
+async function getDiscoverRuns(): Promise<DiscoverRunResponse[]> {
+  try {
+    const response = await fetch(`${apiUrl}/discover/runs`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<DiscoverRunResponse[]>;
+  } catch {
+    return [];
+  }
+}
+
+async function getDiscoverRun(runId: string): Promise<DiscoverRunResponse | null> {
+  if (!runId) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/discover/runs/${runId}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<DiscoverRunResponse>;
+  } catch {
+    return null;
+  }
+}
+
+async function createDiscoverRun(input: CreateDiscoverRunRequest): Promise<DiscoverRunResponse> {
+  const response = await fetch(`${apiUrl}/discover/runs`, {
+    body: JSON.stringify(input),
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to save discovery run.");
+  }
+
+  return response.json() as Promise<DiscoverRunResponse>;
+}
+
+async function markDiscoverRunQueued(runId: string, queuedTitles: string[]) {
+  if (!runId || queuedTitles.length === 0) {
+    return;
+  }
+
+  const response = await fetch(`${apiUrl}/discover/runs/${runId}/queued`, {
+    body: JSON.stringify({ queuedTitles }),
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "PUT",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to mark discovery recommendations as queued.");
+  }
+}
+
 async function queueSelectedTests(formData: FormData) {
   "use server";
 
+  const discoverRunId = String(formData.get("discoverRunId") ?? "");
   const repositoryId = String(formData.get("repositoryId") ?? "");
   const targetBranch = String(formData.get("targetBranch") ?? "main");
   const pageUrl = String(formData.get("pageUrl") ?? "");
@@ -126,20 +201,28 @@ async function queueSelectedTests(formData: FormData) {
   const queuedCount = selectedRecommendations.length;
 
   if (queuedCount === 0) {
-    redirect(
-      `/discover?${new URLSearchParams({
-        notes,
-        pageUrl,
-        repositoryId,
-        targetBranch,
-        queued: "0",
-      }).toString()}`,
-    );
+    const params = new URLSearchParams({
+      queued: "0",
+    });
+
+    if (discoverRunId) {
+      params.set("runId", discoverRunId);
+    } else {
+      params.set("notes", notes);
+      params.set("pageUrl", pageUrl);
+      params.set("repositoryId", repositoryId);
+      params.set("targetBranch", targetBranch);
+    }
+
+    redirect(`/discover?${params.toString()}`);
   }
 
+  const recommendations = selectedRecommendations.map(
+    (serializedRecommendation) => JSON.parse(serializedRecommendation) as TestRecommendation,
+  );
+
   await Promise.all(
-    selectedRecommendations.map(async (serializedRecommendation) => {
-      const recommendation = JSON.parse(serializedRecommendation) as TestRecommendation;
+    recommendations.map(async (recommendation) => {
       const response = await fetch(`${apiUrl}/jobs`, {
         body: JSON.stringify({
           jobType: "ADD_PLAYWRIGHT_TEST",
@@ -170,17 +253,27 @@ async function queueSelectedTests(formData: FormData) {
     }),
   );
 
+  await markDiscoverRunQueued(
+    discoverRunId,
+    recommendations.map((recommendation) => recommendation.title),
+  );
+
   revalidatePath("/");
   revalidatePath("/discover");
-  redirect(
-    `/discover?${new URLSearchParams({
-      notes,
-      pageUrl,
-      repositoryId,
-      targetBranch,
-      queued: String(queuedCount),
-    }).toString()}`,
-  );
+  const params = new URLSearchParams({
+    queued: String(queuedCount),
+  });
+
+  if (discoverRunId) {
+    params.set("runId", discoverRunId);
+  } else {
+    params.set("notes", notes);
+    params.set("pageUrl", pageUrl);
+    params.set("repositoryId", repositoryId);
+    params.set("targetBranch", targetBranch);
+  }
+
+  redirect(`/discover?${params.toString()}`);
 }
 
 const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
@@ -493,28 +586,27 @@ const buildAcceptanceCriteria = ({
 
 const formatCoveragePercent = (score: number) => `${Math.round(score * 100)}%`;
 
+const formatRunDate = (value: string) =>
+  new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+
 const coverageDecisionText = (decision: CoverageDecision) =>
   decision.matchedCoverage
     ? `${decision.reason} Match: ${decision.matchedCoverage.feature} > ${decision.matchedCoverage.scenario}.`
     : decision.reason;
 
-export default async function DiscoverPage({
-  searchParams,
+const buildDiscoverAnalysis = async ({
+  notes,
+  pageUrl,
+  repositoryId,
 }: {
-  searchParams: Promise<{
-    notes?: string;
-    pageUrl?: string;
-    queued?: string;
-    repositoryId?: string;
-    targetBranch?: string;
-  }>;
-}) {
-  const [{ notes = "", pageUrl = "", queued, repositoryId = "", targetBranch = "main" }, repositories, queueControl] =
-    await Promise.all([searchParams, getRepositories(), getQueueControl()]);
-  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
-  const selectedRepositoryId = repositoryId || selectedRepository?.id || "";
-  const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
-  const featureCatalog = pageUrl ? await getFeatureCatalog(selectedRepositoryId) : null;
+  notes: string;
+  pageUrl: string;
+  repositoryId: string;
+}) => {
+  const featureCatalog = await getFeatureCatalog(repositoryId);
   const pageLabel = toPageLabel(pageUrl);
   const existingCoverage = summarizeRelatedCoverage({
     catalog: featureCatalog,
@@ -544,11 +636,78 @@ export default async function DiscoverPage({
       : [];
   const usingAiRecommendations = aiRecommendations?.provider === "openai" && aiRecommendations.recommendations.length > 0;
   const coverageDecisions = usingAiRecommendations ? aiCoverageDecisions : localCoverageDecisions;
-  const visibleCoverageDecisions = coverageDecisions.filter((decision) => decision.status === "keep");
-  const hiddenCoverageDecisions = coverageDecisions.filter((decision) => decision.status === "hide");
+
+  return {
+    hiddenDecisions: coverageDecisions.filter((decision) => decision.status === "hide"),
+    provider: usingAiRecommendations ? "AI gap analysis" : "local gap analysis",
+    relatedCoverage: existingCoverage,
+    visibleDecisions: coverageDecisions.filter((decision) => decision.status === "keep"),
+  };
+};
+
+async function analyzePage(formData: FormData) {
+  "use server";
+
+  const repositoryId = String(formData.get("repositoryId") ?? "");
+  const targetBranch = String(formData.get("targetBranch") ?? "main");
+  const pageUrl = String(formData.get("pageUrl") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+  const analysis = await buildDiscoverAnalysis({
+    notes,
+    pageUrl,
+    repositoryId,
+  });
+  const run = await createDiscoverRun({
+    hiddenDecisions: analysis.hiddenDecisions,
+    notes,
+    pageUrl,
+    provider: analysis.provider,
+    relatedCoverage: analysis.relatedCoverage,
+    repositoryId,
+    targetBranch,
+    visibleDecisions: analysis.visibleDecisions,
+  });
+
+  revalidatePath("/discover");
+  redirect(`/discover?runId=${run.id}`);
+}
+
+export default async function DiscoverPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    notes?: string;
+    pageUrl?: string;
+    queued?: string;
+    repositoryId?: string;
+    runId?: string;
+    targetBranch?: string;
+  }>;
+}) {
+  const query = await searchParams;
+  const [{ notes = "", pageUrl = "", queued, repositoryId = "", runId = "", targetBranch = "main" }, repositories, queueControl, recentRuns, activeRun] =
+    await Promise.all([
+      Promise.resolve(query),
+      getRepositories(),
+      getQueueControl(),
+      getDiscoverRuns(),
+      getDiscoverRun(query.runId ?? ""),
+    ]);
+  const activeRepositoryId = activeRun?.repositoryId ?? repositoryId;
+  const selectedRepository =
+    repositories.find((repository) => repository.id === activeRepositoryId) ?? activeRun?.repository ?? repositories[0];
+  const selectedRepositoryId = repositoryId || selectedRepository?.id || "";
+  const selectedBranch = activeRun?.targetBranch ?? (targetBranch || selectedRepository?.defaultBranch || "main");
+  const activePageUrl = activeRun?.pageUrl ?? pageUrl;
+  const activeNotes = activeRun?.notes ?? notes;
+  const existingCoverage = activeRun?.relatedCoverage ?? [];
+  const visibleCoverageDecisions = activeRun?.visibleDecisions ?? [];
+  const hiddenCoverageDecisions = activeRun?.hiddenDecisions ?? [];
+  const coverageDecisions = [...visibleCoverageDecisions, ...hiddenCoverageDecisions];
   const recommendations = visibleCoverageDecisions.map((decision) => decision.recommendation);
   const suppressedDuplicateCount = hiddenCoverageDecisions.length;
-  const recommendationProvider = usingAiRecommendations ? "AI gap analysis" : "local gap analysis";
+  const recommendationProvider = activeRun?.provider ?? "";
+  const queuedTitleSet = new Set(activeRun?.queuedTitles ?? []);
   const queuedCount = Number.parseInt(queued ?? "", 10);
 
   return (
@@ -571,7 +730,7 @@ export default async function DiscoverPage({
               <p>Generate high-impact test ideas, select the valuable ones, and queue them for implementation.</p>
             </div>
           </div>
-          <form action="/discover" className="job-form discover-form">
+          <form action={analyzePage} className="job-form discover-form">
             <label>
               Test Suite Repository
               <select name="repositoryId" defaultValue={selectedRepositoryId} required disabled={repositories.length === 0}>
@@ -589,13 +748,13 @@ export default async function DiscoverPage({
             </label>
             <label className="wide-field">
               Page URL
-              <input name="pageUrl" defaultValue={pageUrl} placeholder="https://example.com/login" required type="url" />
+              <input name="pageUrl" defaultValue={activePageUrl} placeholder="https://example.com/login" required type="url" />
             </label>
             <label className="wide-field">
               Notes
               <textarea
                 name="notes"
-                defaultValue={notes}
+                defaultValue={activeNotes}
                 placeholder="Focus on authentication, validation, empty states, or the riskiest user flows."
               />
             </label>
@@ -604,6 +763,42 @@ export default async function DiscoverPage({
             </button>
           </form>
         </section>
+
+        {recentRuns.length > 0 ? (
+          <section className="panel discover-history-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Recent Discoveries</h2>
+                <p>Reopen saved page analyses without regenerating recommendations.</p>
+              </div>
+            </div>
+            <ol className="discover-history-list">
+              {recentRuns.map((run) => {
+                const candidateCount = run.visibleDecisions.length;
+                const hiddenCount = run.hiddenDecisions.length;
+
+                return (
+                  <li key={run.id}>
+                    <div>
+                      <a href={`/discover?runId=${run.id}`}>{run.pageUrl}</a>
+                      <span>
+                        {repositoryLabel(run.repository)} on {run.targetBranch}
+                      </span>
+                    </div>
+                    <div className="discover-history-meta">
+                      <span>{run.provider}</span>
+                      <span>
+                        {candidateCount} visible / {hiddenCount} hidden
+                      </span>
+                      {run.queuedTitles.length > 0 ? <span>{run.queuedTitles.length} queued</span> : null}
+                      <time dateTime={run.createdAt}>{formatRunDate(run.createdAt)}</time>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </section>
+        ) : null}
 
         {selectedRepository ? (
           selectedRepository.trackerIntegration ? (
@@ -632,7 +827,7 @@ export default async function DiscoverPage({
           )
         ) : null}
 
-        {pageUrl && existingCoverage.length > 0 ? (
+        {activePageUrl && existingCoverage.length > 0 ? (
           <section className="panel existing-coverage-panel">
             <div className="panel-header">
               <div>
@@ -676,9 +871,6 @@ export default async function DiscoverPage({
               </div>
               <button type="submit">Queue Selected</button>
             </div>
-            {aiRecommendations?.message ? (
-              <p className="queue-paused-note recommendation-source-note">{aiRecommendations.message}</p>
-            ) : null}
             {suppressedDuplicateCount > 0 ? (
               <p className="queue-success-note recommendation-source-note">
                 {suppressedDuplicateCount} duplicate-looking{" "}
@@ -688,8 +880,9 @@ export default async function DiscoverPage({
             ) : null}
             <input name="repositoryId" type="hidden" value={selectedRepositoryId} />
             <input name="targetBranch" type="hidden" value={selectedBranch} />
-            <input name="pageUrl" type="hidden" value={pageUrl} />
-            <input name="notes" type="hidden" value={notes} />
+            <input name="pageUrl" type="hidden" value={activePageUrl} />
+            <input name="notes" type="hidden" value={activeNotes} />
+            {activeRun ? <input name="discoverRunId" type="hidden" value={activeRun.id} /> : null}
             {visibleCoverageDecisions.length > 0 ? (
               <ol className="recommendation-list">
                 {visibleCoverageDecisions.map((decision) => (
@@ -704,6 +897,9 @@ export default async function DiscoverPage({
                         <span className={`impact-pill ${decision.recommendation.impact.toLowerCase()}`}>
                           {decision.recommendation.impact} impact
                         </span>
+                        {queuedTitleSet.has(decision.recommendation.title) ? (
+                          <span className="queued-pill">Queued</span>
+                        ) : null}
                       </div>
                       <p>{decision.recommendation.reason}</p>
                       <p className="coverage-decision-note">{coverageDecisionText(decision)}</p>
@@ -741,6 +937,9 @@ export default async function DiscoverPage({
                           <span className={`impact-pill ${decision.recommendation.impact.toLowerCase()}`}>
                             {decision.recommendation.impact} impact
                           </span>
+                          {queuedTitleSet.has(decision.recommendation.title) ? (
+                            <span className="queued-pill">Queued</span>
+                          ) : null}
                         </div>
                         <p>{decision.recommendation.reason}</p>
                         <p className="coverage-decision-note duplicate">

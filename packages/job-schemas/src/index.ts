@@ -359,6 +359,14 @@ export const discoverExistingCoverageSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(80)).max(12),
 });
 
+export const discoverCoverageDecisionSchema = z.object({
+  matchedCoverage: discoverExistingCoverageSchema.nullable(),
+  recommendation: discoverTestRecommendationSchema,
+  reason: z.string().trim().min(1).max(500),
+  score: z.number().min(0).max(1),
+  status: z.enum(["keep", "hide"]),
+});
+
 export const discoverTestRecommendationsRequestSchema = z.object({
   existingCoverage: z.array(discoverExistingCoverageSchema).max(25).default([]),
   maxRecommendations: z.number().int().min(1).max(20).default(12),
@@ -370,6 +378,37 @@ export const discoverTestRecommendationsResponseSchema = z.object({
   message: z.string().nullable(),
   provider: z.enum(["openai", "local"]),
   recommendations: z.array(discoverTestRecommendationSchema).max(20),
+});
+
+export const createDiscoverRunRequestSchema = z.object({
+  hiddenDecisions: z.array(discoverCoverageDecisionSchema).max(40),
+  notes: z.string().trim().max(4000).default(""),
+  pageUrl: z.string().trim().url("Page URL must be a valid URL"),
+  provider: z.string().trim().min(1).max(80),
+  relatedCoverage: z.array(discoverExistingCoverageSchema).max(25),
+  repositoryId: z.string().uuid("Repository is required"),
+  targetBranch: z.string().trim().min(1, "Target branch is required"),
+  visibleDecisions: z.array(discoverCoverageDecisionSchema).max(40),
+});
+
+export const updateDiscoverRunQueuedRequestSchema = z.object({
+  queuedTitles: z.array(z.string().trim().min(1).max(160)).max(40),
+});
+
+export const discoverRunResponseSchema = z.object({
+  createdAt: z.string(),
+  hiddenDecisions: z.array(discoverCoverageDecisionSchema),
+  id: z.string(),
+  notes: z.string(),
+  pageUrl: z.string(),
+  provider: z.string(),
+  queuedTitles: z.array(z.string()),
+  relatedCoverage: z.array(discoverExistingCoverageSchema),
+  repository: repositoryResponseSchema,
+  repositoryId: z.string(),
+  targetBranch: z.string(),
+  updatedAt: z.string(),
+  visibleDecisions: z.array(discoverCoverageDecisionSchema),
 });
 
 export const jobResponseSchema = z.object({
@@ -499,9 +538,13 @@ export type CreateJobRequest = z.infer<typeof createJobRequestSchema>;
 export type UpdateReviewJobRequest = z.infer<typeof updateReviewJobRequestSchema>;
 export type RetryStageRequest = z.infer<typeof retryStageRequestSchema>;
 export type DiscoverExistingCoverage = z.infer<typeof discoverExistingCoverageSchema>;
+export type DiscoverCoverageDecision = z.infer<typeof discoverCoverageDecisionSchema>;
 export type DiscoverTestRecommendation = z.infer<typeof discoverTestRecommendationSchema>;
 export type DiscoverTestRecommendationsRequest = z.infer<typeof discoverTestRecommendationsRequestSchema>;
 export type DiscoverTestRecommendationsResponse = z.infer<typeof discoverTestRecommendationsResponseSchema>;
+export type CreateDiscoverRunRequest = z.infer<typeof createDiscoverRunRequestSchema>;
+export type UpdateDiscoverRunQueuedRequest = z.infer<typeof updateDiscoverRunQueuedRequestSchema>;
+export type DiscoverRunResponse = z.infer<typeof discoverRunResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
