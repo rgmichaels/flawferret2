@@ -1587,6 +1587,36 @@ td span {
   margin: 0;
 }
 
+.recommendation-copy .coverage-decision-note {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  padding: 9px 10px;
+}
+
+.recommendation-copy .coverage-decision-note.duplicate {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #9a3412;
+}
+
+.coverage-match-path {
+  background: #f8fafc;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  color: #475467;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 750;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 7px 9px;
+}
+
 .recommendation-copy pre {
   background: #f8fafc;
   border: 1px solid #e1e7f0;
@@ -1617,6 +1647,30 @@ td span {
 .impact-pill.medium {
   background: #fef3c7;
   color: #b45309;
+}
+
+.hidden-recommendations {
+  border-top: 1px solid #edf1f6;
+  padding: 14px 20px 20px;
+}
+
+.hidden-recommendations summary {
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  list-style-position: inside;
+}
+
+.hidden-recommendations .recommendation-list {
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.hidden-recommendations .recommendation-list > li:first-child {
+  border-top: 0;
 }
 
 label {
