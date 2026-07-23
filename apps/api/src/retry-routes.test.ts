@@ -129,6 +129,34 @@ describe("retry routes", () => {
     assert.equal(resetEvent.message, "Job was requeued for setup retry.");
   });
 
+  it("creates a dev sample Discover review job", async () => {
+    const response = await server.inject({
+      method: "POST",
+      url: "/dev/sample-review-job",
+    });
+    const body = response.json();
+
+    jobIds.push(body.id);
+    repositoryIds.push(body.repository.id);
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(body.status, "NEEDS_REVIEW");
+    assert.equal(body.priority, "HIGH");
+    assert.equal(body.payload.acceptanceCriteria.includes("Source: Page discovery recommendation"), true);
+    assert.equal(body.payload.acceptanceCriteria.includes("Suggested scenario:"), true);
+    assert.equal(body.repository.name, "flawferret2-dev-sample");
+
+    const event = await prisma.jobEvent.findFirstOrThrow({
+      where: {
+        eventType: "JOB_CREATED",
+        jobId: body.id,
+      },
+    });
+
+    assert.equal(event.message, "Dev sample Discover review job was created.");
+    assert.equal((event.metadata as { devSample?: boolean }).devSample, true);
+  });
+
   it("rejects requeue requests for non-retryable statuses", async () => {
     const job = await createJob({
       status: "COMPLETED",

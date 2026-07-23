@@ -36,6 +36,7 @@ import {
 } from "@flawferret2/shared";
 import Fastify, { type FastifyInstance } from "fastify";
 import { execFile } from "node:child_process";
+import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { z, ZodError } from "zod";
 import { config } from "./config.js";
@@ -1275,6 +1276,109 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: error instanceof Error ? error.message : "Unable to explain scenario.",
       });
     }
+  });
+
+  server.post("/dev/sample-review-job", async (_request, reply) => {
+    if (process.env.NODE_ENV === "production") {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Not found.",
+      });
+    }
+
+    const repository = await prisma.repository.upsert({
+      create: {
+        cloneUrl: "https://github.com/rgmichaels/flawferret2.git",
+        defaultBranch: "main",
+        localPath: resolve(process.cwd(), "../.."),
+        name: "flawferret2-dev-sample",
+        owner: "rgmichaels",
+        validationCommand: "pnpm check",
+        webUrl: "https://github.com/rgmichaels/flawferret2",
+      },
+      include: {
+        trackerIntegration: true,
+      },
+      update: {
+        defaultBranch: "main",
+        localPath: resolve(process.cwd(), "../.."),
+        validationCommand: "pnpm check",
+      },
+      where: {
+        provider_owner_name: {
+          name: "flawferret2-dev-sample",
+          owner: "rgmichaels",
+          provider: "GITHUB",
+        },
+      },
+    });
+
+    const acceptanceCriteria = [
+      "Source: Page discovery recommendation",
+      "Page URL: https://the-internet.herokuapp.com/forgot_password",
+      "Impact: High",
+      "Tags: @smoke @page-load",
+      "Discovery notes: Dev sample for visually checking review, Jira preview, and timeline audit details.",
+      "",
+      "Suggested scenario:",
+      "Given I am on the forgot password page",
+      "Then the forgot password page should load with stable content",
+      "",
+      "Why this matters:",
+      "A focused load smoke test catches routing, rendering, and broken deployment issues quickly.",
+      "",
+      "Implementation guidance:",
+      "- Assert a stable heading or landmark is visible.",
+      "- Keep the scenario focused on page-load behavior.",
+      "- Reuse existing page objects and step definitions where sensible.",
+      "- Run affected tests.",
+    ].join("\n");
+    const payload = {
+      acceptanceCriteria,
+      createDraftPr: true,
+      featureArea: "Dev sample: forgot password page loads with stable content",
+      goal: "Implement page-discovery test coverage: forgot password page loads with stable content.",
+      repositoryId: repository.id,
+      runAffectedTests: true,
+      targetBranch: repository.defaultBranch,
+    };
+    const job = await prisma.job.create({
+      data: {
+        jobType: "ADD_PLAYWRIGHT_TEST",
+        payload,
+        priority: "HIGH",
+        repositoryId: repository.id,
+        status: "NEEDS_REVIEW",
+      },
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    await appendJobEvent({
+      jobId: job.id,
+      eventType: "JOB_CREATED",
+      message: "Dev sample Discover review job was created.",
+      metadata: {
+        devSample: true,
+        pageUrl: "https://the-internet.herokuapp.com/forgot_password",
+        repository: `${repository.owner}/${repository.name}`,
+        source: "dev_sample_review_job",
+        targetBranch: repository.defaultBranch,
+      },
+    });
+
+    return reply.status(201).send(toJobResponseWithRepository(job));
   });
 
   server.post("/jobs", async (request, reply) => {

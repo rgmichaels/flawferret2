@@ -6,6 +6,7 @@ import type {
   RunStatus,
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { AppShell } from "./app-shell";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -164,6 +165,23 @@ async function approvePr(formData: FormData) {
   }
 
   revalidatePath("/");
+}
+
+async function createSampleReviewJob() {
+  "use server";
+
+  const response = await fetch(`${apiUrl}/dev/sample-review-job`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to create a sample review job.");
+  }
+
+  const job = (await response.json()) as JobResponse;
+
+  revalidatePath("/");
+  redirect(`/jobs/${job.id}/review`);
 }
 
 const countByStatus = (jobs: JobResponse[], statuses: JobStatus[]) =>
@@ -379,6 +397,7 @@ export default async function Home({
     sort: selectedSort,
     status: selectedStatus,
   });
+  const showDevTools = process.env.NODE_ENV !== "production";
 
   return (
     <AppShell active="dashboard">
@@ -388,9 +407,18 @@ export default async function Home({
             <p className="eyebrow">Milestone 3</p>
             <h1>Dashboard</h1>
           </div>
-          <a className="primary-link" href="/jobs/new">
-            New Job
-          </a>
+          <div className="topbar-actions">
+            {showDevTools ? (
+              <form action={createSampleReviewJob}>
+                <button className="secondary-button" type="submit">
+                  Sample Review
+                </button>
+              </form>
+            ) : null}
+            <a className="primary-link" href="/jobs/new">
+              New Job
+            </a>
+          </div>
         </header>
 
         <section className="metric-grid" aria-label="Job status summary">
