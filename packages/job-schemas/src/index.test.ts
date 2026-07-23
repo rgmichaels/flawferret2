@@ -4,6 +4,7 @@ import {
   captureContextSchema,
   cucumberFeatureCatalogResponseSchema,
   cucumberFeatureDetailResponseSchema,
+  createTrackerIntegrationRequestSchema,
   createJobRequestSchema,
   explainCucumberScenarioRequestSchema,
   explainCucumberScenarioResponseSchema,
@@ -11,6 +12,7 @@ import {
   paginatedJobsResponseSchema,
   readinessResponseSchema,
   retryStageRequestSchema,
+  trackerIntegrationResponseSchema,
 } from "./index.js";
 
 describe("job schemas", () => {
@@ -112,6 +114,7 @@ describe("job schemas", () => {
         codexApprovalJobs: 0,
         completedJobs: 1,
         jobs: 1,
+        needsReviewJobs: 0,
         prApprovalJobs: 0,
         prCreatedJobs: 0,
         repositories: 1,
@@ -153,6 +156,8 @@ describe("job schemas", () => {
       name: "example",
       owner: "rgmichaels",
       provider: "GITHUB" as const,
+      trackerIntegration: null,
+      trackerIntegrationId: null,
       updatedAt: new Date().toISOString(),
       validationCommand: "pnpm test",
       webUrl: "https://github.com/rgmichaels/example",
@@ -259,5 +264,35 @@ describe("job schemas", () => {
 
     assert.equal(response.jobs[0].id, "job-1");
     assert.equal(response.total, 1);
+  });
+
+  it("parses tracker integration requests without exposing API tokens in responses", () => {
+    const request = createTrackerIntegrationRequestSchema.parse({
+      apiToken: " secret-token ",
+      baseUrl: " https://example.atlassian.net/ ",
+      email: "qa@example.com",
+      issueType: "Task",
+      name: " QA Jira ",
+      projectKey: "IPCT",
+    });
+
+    assert.equal(request.baseUrl, "https://example.atlassian.net");
+    assert.equal(request.name, "QA Jira");
+    assert.equal(request.apiToken, "secret-token");
+
+    const response = trackerIntegrationResponseSchema.parse({
+      baseUrl: request.baseUrl,
+      createdAt: new Date().toISOString(),
+      email: request.email,
+      hasApiToken: true,
+      id: "tracker-1",
+      issueType: request.issueType,
+      name: request.name,
+      projectKey: request.projectKey,
+      provider: "JIRA",
+      updatedAt: new Date().toISOString(),
+    });
+
+    assert.equal("apiToken" in response, false);
   });
 });

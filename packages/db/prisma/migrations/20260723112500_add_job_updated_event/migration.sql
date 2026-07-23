@@ -1,0 +1,1 @@
+ALTER TYPE "JobEventType" ADD VALUE 'JOB_UPDATED';

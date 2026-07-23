@@ -12,15 +12,20 @@ import {
 import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
+  createTrackerIntegrationRequestSchema,
   explainCucumberScenarioRequestSchema,
   jobStatusSchema,
   retryStageRequestSchema,
+  updateTrackerIntegrationRequestSchema,
+  updateReviewJobRequestSchema,
   type JobDiffResponse,
   type JobEventResponse,
   type JobResponse,
   type QueueControlResponse,
   type RepositoryResponse,
   type RunResponse,
+  type TrackerIntegrationResponse,
+  type TrackerIntegrationTestResponse,
 } from "@flawferret2/job-schemas";
 import {
   getJobGoal,
@@ -112,6 +117,15 @@ const toRepositoryResponse = (repository: {
   webUrl: string;
   localPath: string | null;
   validationCommand: string | null;
+  trackerIntegration:
+    | {
+        id: string;
+        name: string;
+        provider: TrackerIntegrationResponse["provider"];
+        projectKey: string;
+      }
+    | null;
+  trackerIntegrationId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): RepositoryResponse => ({
@@ -124,8 +138,41 @@ const toRepositoryResponse = (repository: {
   webUrl: repository.webUrl,
   localPath: repository.localPath,
   validationCommand: repository.validationCommand,
+  trackerIntegration: repository.trackerIntegration
+    ? {
+        id: repository.trackerIntegration.id,
+        name: repository.trackerIntegration.name,
+        provider: repository.trackerIntegration.provider,
+        projectKey: repository.trackerIntegration.projectKey,
+      }
+    : null,
+  trackerIntegrationId: repository.trackerIntegrationId,
   createdAt: repository.createdAt.toISOString(),
   updatedAt: repository.updatedAt.toISOString(),
+});
+
+const toTrackerIntegrationResponse = (integration: {
+  id: string;
+  provider: TrackerIntegrationResponse["provider"];
+  name: string;
+  baseUrl: string;
+  email: string;
+  apiToken: string;
+  projectKey: string;
+  issueType: string;
+  createdAt: Date;
+  updatedAt: Date;
+}): TrackerIntegrationResponse => ({
+  id: integration.id,
+  provider: integration.provider,
+  name: integration.name,
+  baseUrl: integration.baseUrl,
+  email: integration.email,
+  hasApiToken: integration.apiToken.trim().length > 0,
+  projectKey: integration.projectKey,
+  issueType: integration.issueType,
+  createdAt: integration.createdAt.toISOString(),
+  updatedAt: integration.updatedAt.toISOString(),
 });
 
 const toJobResponseWithRepository = (job: {
@@ -145,6 +192,15 @@ const toJobResponseWithRepository = (job: {
         webUrl: string;
         localPath: string | null;
         validationCommand: string | null;
+        trackerIntegration:
+          | {
+              id: string;
+              name: string;
+              provider: TrackerIntegrationResponse["provider"];
+              projectKey: string;
+            }
+          | null;
+        trackerIntegrationId: string | null;
         createdAt: Date;
         updatedAt: Date;
       })
@@ -327,6 +383,14 @@ const repositoryParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
+const trackerIntegrationParamsSchema = z.object({
+  id: z.string().uuid(),
+});
+
+const approveReviewRequestSchema = z.object({
+  createJiraTicket: z.boolean().default(false),
+});
+
 const retryableStatuses = ["BLOCKED", "FAILED", "RETRY"] as const;
 
 const optionalText = (value: string | undefined) => {
@@ -335,16 +399,176 @@ const optionalText = (value: string | undefined) => {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 };
 
+const jiraAuthHeader = ({ apiToken, email }: { apiToken: string; email: string }) =>
+  `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`;
+
+const testJiraIntegration = async (integration: {
+  apiToken: string;
+  baseUrl: string;
+  email: string;
+  projectKey: string;
+}): Promise<TrackerIntegrationTestResponse> => {
+  const authHeaders = {
+    Accept: "application/json",
+    Authorization: jiraAuthHeader(integration),
+  };
+  const authResponse = await fetch(`${integration.baseUrl}/rest/api/3/myself`, {
+    headers: authHeaders,
+  });
+
+  if (!authResponse.ok) {
+    const text = await authResponse.text();
+
+    return {
+      ok: false,
+      message:
+        authResponse.status === 401
+          ? "Jira credentials were rejected. Check that the email matches the Atlassian account that created the API token."
+          : `Jira authentication check failed with ${authResponse.status}: ${text || authResponse.statusText}`,
+      projectKey: integration.projectKey,
+      projectName: null,
+    };
+  }
+
+  const response = await fetch(`${integration.baseUrl}/rest/api/3/project/${integration.projectKey}`, {
+    headers: authHeaders,
+  });
+  const text = await response.text();
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      message: `Jira project check failed with ${response.status}: ${text || response.statusText}`,
+      projectKey: integration.projectKey,
+      projectName: null,
+    };
+  }
+
+  try {
+    const body = JSON.parse(text) as { key?: string; name?: string };
+
+    return {
+      ok: true,
+      message: `Connected to Jira project ${body.key ?? integration.projectKey}.`,
+      projectKey: body.key ?? integration.projectKey,
+      projectName: body.name ?? null,
+    };
+  } catch {
+    return {
+      ok: true,
+      message: `Connected to Jira project ${integration.projectKey}.`,
+      projectKey: integration.projectKey,
+      projectName: null,
+    };
+  }
+};
+
+const jiraTextNode = (text: string) => ({
+  text,
+  type: "text",
+});
+
+const jiraParagraph = (text: string) => ({
+  content: [jiraTextNode(text)],
+  type: "paragraph",
+});
+
+const jiraBulletItem = (text: string) => ({
+  content: [jiraParagraph(text)],
+  type: "listItem",
+});
+
+const createJiraIssueForJob = async ({
+  integration,
+  jobId,
+  payload,
+  repository,
+}: {
+  integration: {
+    apiToken: string;
+    baseUrl: string;
+    email: string;
+    issueType: string;
+    projectKey: string;
+  };
+  jobId: string;
+  payload: {
+    acceptanceCriteria: string;
+    targetBranch: string;
+  };
+  repository: {
+    name: string;
+    owner: string;
+  };
+}) => {
+  const title = getJobTitle(payload);
+  const goal = getJobGoal(payload);
+  const issueResponse = await fetch(`${integration.baseUrl}/rest/api/3/issue`, {
+    body: JSON.stringify({
+      fields: {
+        description: {
+          content: [
+            jiraParagraph("FlawFerret queued this automated test implementation request."),
+            {
+              content: [
+                jiraBulletItem(`FlawFerret job: ${shortJobId(jobId)}`),
+                jiraBulletItem(`Repository: ${repository.owner}/${repository.name}`),
+                jiraBulletItem(`Target branch: ${payload.targetBranch}`),
+                ...(goal ? [jiraBulletItem(`Goal: ${goal}`)] : []),
+              ],
+              type: "bulletList",
+            },
+            jiraParagraph("Acceptance criteria:"),
+            jiraParagraph(payload.acceptanceCriteria),
+          ],
+          type: "doc",
+          version: 1,
+        },
+        issuetype: {
+          name: integration.issueType,
+        },
+        project: {
+          key: integration.projectKey,
+        },
+        summary: title,
+      },
+    }),
+    headers: {
+      Accept: "application/json",
+      Authorization: jiraAuthHeader(integration),
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+  const text = await issueResponse.text();
+
+  if (!issueResponse.ok) {
+    throw new Error(`Jira issue creation failed with ${issueResponse.status}: ${text || issueResponse.statusText}`);
+  }
+
+  const issue = JSON.parse(text) as { key: string; self: string };
+
+  return {
+    key: issue.key,
+    url: `${integration.baseUrl}/browse/${issue.key}`,
+  };
+};
+
 const nextActionStatusPriority: Partial<Record<JobResponse["status"], number>> = {
-  READY_FOR_CODEX: 0,
-  REVIEW: 1,
-  PR_CREATED: 2,
-  BLOCKED: 3,
-  FAILED: 4,
-  RETRY: 5,
+  NEEDS_REVIEW: 0,
+  READY_FOR_CODEX: 1,
+  REVIEW: 2,
+  PR_CREATED: 3,
+  BLOCKED: 4,
+  FAILED: 5,
+  RETRY: 6,
 };
 
 const getJobActionLabel = (status: JobResponse["status"]) => {
+  if (status === "NEEDS_REVIEW") {
+    return "Review Job";
+  }
+
   if (status === "READY_FOR_CODEX") {
     return "Approve Codex";
   }
@@ -361,6 +585,10 @@ const getJobActionLabel = (status: JobResponse["status"]) => {
 };
 
 const getJobActionText = (status: JobResponse["status"]) => {
+  if (status === "NEEDS_REVIEW") {
+    return "A generated request is waiting before it enters the active queue.";
+  }
+
   if (status === "READY_FOR_CODEX") {
     return "A prepared job is waiting before any model spend happens.";
   }
@@ -520,7 +748,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         },
         where: {
           status: {
-            in: ["READY_FOR_CODEX", "REVIEW", "PR_CREATED", "BLOCKED", "FAILED", "RETRY"],
+            in: ["NEEDS_REVIEW", "READY_FOR_CODEX", "REVIEW", "PR_CREATED", "BLOCKED", "FAILED", "RETRY"],
           },
         },
       }),
@@ -569,13 +797,17 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         codexApprovalJobs: countByStatus(["READY_FOR_CODEX"]),
         completedJobs: countByStatus(["COMPLETED"]),
         jobs: jobs.length,
+        needsReviewJobs: countByStatus(["NEEDS_REVIEW"]),
         prApprovalJobs: countByStatus(["REVIEW"]),
         prCreatedJobs: countByStatus(["PR_CREATED"]),
         repositories,
       },
       nextAction: nextActionJob
         ? {
-            href: `/jobs/${nextActionJob.id}`,
+            href:
+              nextActionJob.status === "NEEDS_REVIEW"
+                ? `/jobs/${nextActionJob.id}/review`
+                : `/jobs/${nextActionJob.id}`,
             jobId: nextActionJob.id,
             label: getJobActionLabel(nextActionJob.status),
             text: getJobActionText(nextActionJob.status),
@@ -631,8 +863,137 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toQueueControlResponse(queueControl);
   });
 
+  server.get("/tracker-integrations", async () => {
+    const integrations = await prisma.trackerIntegration.findMany({
+      orderBy: [
+        {
+          provider: "asc",
+        },
+        {
+          name: "asc",
+        },
+      ],
+    });
+
+    return integrations.map(toTrackerIntegrationResponse);
+  });
+
+  server.post("/tracker-integrations", async (request, reply) => {
+    const body = createTrackerIntegrationRequestSchema.parse(request.body);
+
+    const integration = await prisma.trackerIntegration.upsert({
+      where: {
+        provider_name: {
+          provider: body.provider,
+          name: body.name,
+        },
+      },
+      create: {
+        apiToken: body.apiToken,
+        baseUrl: body.baseUrl,
+        email: body.email,
+        issueType: body.issueType,
+        name: body.name,
+        projectKey: body.projectKey,
+        provider: body.provider,
+      },
+      update: {
+        apiToken: body.apiToken,
+        baseUrl: body.baseUrl,
+        email: body.email,
+        issueType: body.issueType,
+        projectKey: body.projectKey,
+      },
+    });
+
+    return reply.status(201).send(toTrackerIntegrationResponse(integration));
+  });
+
+  server.put("/tracker-integrations/:id", async (request, reply) => {
+    const params = trackerIntegrationParamsSchema.parse(request.params);
+    const body = updateTrackerIntegrationRequestSchema.parse(request.body);
+
+    const existingIntegration = await prisma.trackerIntegration.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!existingIntegration) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Tracker integration not found.",
+      });
+    }
+
+    const integration = await prisma.trackerIntegration.update({
+      data: {
+        apiToken: body.apiToken && body.apiToken.length > 0 ? body.apiToken : existingIntegration.apiToken,
+        baseUrl: body.baseUrl,
+        email: body.email,
+        issueType: body.issueType,
+        name: body.name,
+        projectKey: body.projectKey,
+        provider: body.provider,
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    return toTrackerIntegrationResponse(integration);
+  });
+
+  server.delete("/tracker-integrations/:id", async (request, reply) => {
+    const params = trackerIntegrationParamsSchema.parse(request.params);
+
+    const existingIntegration = await prisma.trackerIntegration.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!existingIntegration) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Tracker integration not found.",
+      });
+    }
+
+    await prisma.trackerIntegration.delete({
+      where: {
+        id: params.id,
+      },
+    });
+
+    return reply.status(204).send();
+  });
+
+  server.post("/tracker-integrations/:id/test", async (request, reply) => {
+    const params = trackerIntegrationParamsSchema.parse(request.params);
+    const integration = await prisma.trackerIntegration.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!integration) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Tracker integration not found.",
+      });
+    }
+
+    const result = await testJiraIntegration(integration);
+
+    return reply.status(result.ok ? 200 : 502).send(result);
+  });
+
   server.get("/repositories", async () => {
     const repositories = await prisma.repository.findMany({
+      include: {
+        trackerIntegration: true,
+      },
       orderBy: [
         {
           owner: "asc",
@@ -668,6 +1029,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         webUrl,
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
+        trackerIntegrationId: body.trackerIntegrationId ?? null,
       },
       update: {
         defaultBranch: body.defaultBranch,
@@ -675,6 +1037,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         webUrl,
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
+        trackerIntegrationId: body.trackerIntegrationId ?? null,
+      },
+      include: {
+        trackerIntegration: true,
       },
     });
 
@@ -685,6 +1051,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const repository = await prisma.repository.findUnique({
+      include: {
+        trackerIntegration: true,
+      },
       where: {
         id: params.id,
       },
@@ -729,6 +1098,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         webUrl,
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
+        trackerIntegrationId: body.trackerIntegrationId ?? null,
+      },
+      include: {
+        trackerIntegration: true,
       },
       where: {
         id: params.id,
@@ -767,6 +1140,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const repository = await prisma.repository.findUnique({
+      include: {
+        trackerIntegration: true,
+      },
       where: {
         id: params.id,
       },
@@ -800,6 +1176,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       .parse(request.query);
 
     const repository = await prisma.repository.findUnique({
+      include: {
+        trackerIntegration: true,
+      },
       where: {
         id: params.id,
       },
@@ -839,6 +1218,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const body = explainCucumberScenarioRequestSchema.parse(request.body);
 
     const repository = await prisma.repository.findUnique({
+      include: {
+        trackerIntegration: true,
+      },
       where: {
         id: params.id,
       },
@@ -889,6 +1271,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const body = createJobRequestSchema.parse(request.body);
 
     const repository = await prisma.repository.findUnique({
+      include: {
+        trackerIntegration: true,
+      },
       where: {
         id: body.payload.repositoryId,
       },
@@ -904,13 +1289,17 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const job = await prisma.job.create({
       data: {
         jobType: body.jobType,
-        status: "QUEUED",
+        status: "NEEDS_REVIEW",
         priority: body.priority,
         repositoryId: repository.id,
         payload: body.payload,
       },
       include: {
-        repository: true,
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
         runs: {
           orderBy: {
             createdAt: "desc",
@@ -923,7 +1312,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     await appendJobEvent({
       jobId: job.id,
       eventType: "JOB_CREATED",
-      message: "Job was queued from the web interface.",
+      message: "Job was created for review from the web interface.",
       metadata: {
         jobType: body.jobType,
         priority: body.priority,
@@ -936,7 +1325,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const jobGoal = getJobGoal(job.payload);
     const slackResult = await sendSlackNotification({
       text: [
-        `Job ${shortJobId(job.id)} created - ${jobTitle}`,
+        `Job ${shortJobId(job.id)} needs review - ${jobTitle}`,
         `Repository: ${repository.owner}/${repository.name}`,
         `Target branch: ${body.payload.targetBranch}`,
         jobGoal ? `Goal: ${jobGoal}` : null,
@@ -957,6 +1346,224 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return reply.status(201).send(toJobResponseWithRepository(job));
+  });
+
+  server.put("/jobs/:id/review-request", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const body = updateReviewJobRequestSchema.parse(request.body);
+
+    const job = await prisma.job.findUnique({
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    if (job.status !== "NEEDS_REVIEW") {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only jobs that need review can be edited.",
+      });
+    }
+
+    const existingPayload = job.payload && typeof job.payload === "object" ? (job.payload as Record<string, unknown>) : {};
+    const updatedPayload: Prisma.InputJsonObject = {
+      ...existingPayload,
+      acceptanceCriteria: body.payload.acceptanceCriteria,
+      featureArea: body.payload.featureArea,
+      goal: body.payload.goal,
+      targetBranch: body.payload.targetBranch,
+    };
+
+    const updatedJob = await prisma.job.update({
+      data: {
+        payload: updatedPayload,
+        priority: body.priority,
+      },
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+      where: {
+        id: job.id,
+      },
+    });
+
+    await appendJobEvent({
+      jobId: job.id,
+      eventType: "JOB_UPDATED",
+      message: "Review request was edited before approval.",
+      metadata: {
+        priority: body.priority,
+        targetBranch: body.payload.targetBranch,
+      },
+    });
+
+    return toJobResponseWithRepository(updatedJob);
+  });
+
+  server.post("/jobs/:id/approve-review", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const body = approveReviewRequestSchema.parse(request.body ?? {});
+
+    const job = await prisma.job.findUnique({
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!job) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Job not found.",
+      });
+    }
+
+    if (job.status !== "NEEDS_REVIEW") {
+      return reply.status(409).send({
+        error: "Conflict",
+        message: "Only jobs that need review can be approved for the queue.",
+      });
+    }
+
+    const payload = job.payload as {
+      acceptanceCriteria: string;
+      jiraIssue?: {
+        key: string;
+        url: string;
+      };
+      targetBranch: string;
+    };
+    let approvedPayload: Prisma.InputJsonValue = payload;
+
+    if (body.createJiraTicket && job.repository?.trackerIntegration && !payload.jiraIssue) {
+      try {
+        const jiraIssue = await createJiraIssueForJob({
+          integration: job.repository.trackerIntegration,
+          jobId: job.id,
+          payload,
+          repository: job.repository,
+        });
+        approvedPayload = {
+          ...payload,
+          jiraIssue,
+        };
+
+        await appendJobEvent({
+          jobId: job.id,
+          eventType: "JIRA_TICKET_CREATED",
+          message: `Jira ticket ${jiraIssue.key} was created for this job.`,
+          metadata: {
+            key: jiraIssue.key,
+            url: jiraIssue.url,
+          },
+        });
+      } catch (error) {
+        await appendJobEvent({
+          jobId: job.id,
+          eventType: "JIRA_TICKET_CREATION_FAILED",
+          message: "Jira ticket creation failed.",
+          metadata: {
+            error: error instanceof Error ? error.message : "Unknown Jira error",
+            trackerIntegrationId: job.repository.trackerIntegration.id,
+          },
+        });
+      }
+    } else if (body.createJiraTicket && !job.repository?.trackerIntegration) {
+      await appendJobEvent({
+        jobId: job.id,
+        eventType: "JIRA_TICKET_CREATION_SKIPPED",
+        message: "No tracker integration is attached to this repository.",
+        metadata: {
+          repositoryId: job.repositoryId,
+        },
+      });
+    } else if (!body.createJiraTicket) {
+      await appendJobEvent({
+        jobId: job.id,
+        eventType: "JIRA_TICKET_CREATION_SKIPPED",
+        message: "Reviewer approved this job without creating a Jira ticket.",
+        metadata: {
+          repositoryId: job.repositoryId,
+        },
+      });
+    }
+
+    const approvedJob = await prisma.job.update({
+      data: {
+        payload: approvedPayload,
+        status: "QUEUED",
+      },
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+      where: {
+        id: job.id,
+      },
+    });
+
+    await appendJobEvent({
+      jobId: job.id,
+      eventType: "JOB_APPROVED",
+      message: "Job was approved and moved to the active queue.",
+      metadata: {
+        createJiraTicket: body.createJiraTicket,
+        previousStatus: job.status,
+      },
+    });
+
+    return toJobResponseWithRepository(approvedJob);
   });
 
   server.get("/jobs", async (request) => {
@@ -987,7 +1594,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       prisma.job.findMany({
         where,
         include: {
-          repository: true,
+          repository: {
+            include: {
+              trackerIntegration: true,
+            },
+          },
           runs: {
             orderBy: {
               createdAt: "desc",
@@ -1033,12 +1644,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
-    const cancelableStatuses = ["DRAFT", "QUEUED", "RETRY"] as const;
+    const cancelableStatuses = ["DRAFT", "NEEDS_REVIEW", "QUEUED", "RETRY"] as const;
 
     if (!cancelableStatuses.includes(job.status as (typeof cancelableStatuses)[number])) {
       return reply.status(409).send({
         error: "Conflict",
-        message: "Only draft, queued, or retry jobs can be canceled.",
+        message: "Only draft, needs-review, queued, or retry jobs can be canceled.",
       });
     }
 
@@ -1058,7 +1669,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     if (cancelResult.count === 0) {
       return reply.status(409).send({
         error: "Conflict",
-        message: "Only draft, queued, or retry jobs can be canceled.",
+        message: "Only draft, needs-review, queued, or retry jobs can be canceled.",
       });
     }
 
@@ -1067,7 +1678,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         id: params.id,
       },
       include: {
-        repository: true,
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
         runs: {
           orderBy: {
             createdAt: "desc",
@@ -1121,7 +1736,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         id: params.id,
       },
       include: {
-        repository: true,
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
         runs: {
           orderBy: {
             createdAt: "desc",
@@ -1174,7 +1793,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         id: params.id,
       },
       include: {
-        repository: true,
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
         runs: {
           orderBy: {
             createdAt: "desc",
@@ -1229,7 +1852,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         status: "QUEUED",
       },
       include: {
-        repository: true,
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
         runs: {
           orderBy: {
             createdAt: "desc",
@@ -1375,7 +2002,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
           status: target.jobStatus,
         },
         include: {
-          repository: true,
+          repository: {
+            include: {
+              trackerIntegration: true,
+            },
+          },
           runs: {
             orderBy: {
               createdAt: "desc",
@@ -1408,7 +2039,11 @@ export const buildServer = async (): Promise<FastifyInstance> => {
 
     const job = await prisma.job.findUnique({
       include: {
-        repository: true,
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
         runs: {
           orderBy: {
             createdAt: "desc",

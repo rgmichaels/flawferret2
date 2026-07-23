@@ -351,6 +351,35 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
 }
 
+.notice {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+}
+
+.notice strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.notice span {
+  color: #475569;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.notice.success {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.notice.error {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
 .form-page-panel {
   max-width: 760px;
 }
@@ -615,7 +644,8 @@ td span {
   text-transform: uppercase;
 }
 
-.status-pill.queued {
+.status-pill.queued,
+.status-pill.needs_review {
   background: #dbeafe;
   color: #1d4ed8;
 }
@@ -696,6 +726,13 @@ td span {
   margin: 0;
 }
 
+.job-action-stack {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .inline-job-action button {
   background: #ffffff;
   border: 1px solid #cbd5e1;
@@ -705,7 +742,13 @@ td span {
 }
 
 .inline-job-action button:hover {
-  border-color: #ef4444;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.inline-job-action button.danger-inline-button,
+.inline-job-action button.danger-inline-button:hover {
+  border-color: #fecaca;
   color: #b91c1c;
 }
 
@@ -820,7 +863,8 @@ td span {
   min-width: 0;
 }
 
-.repository-list a {
+.repository-list a,
+.repository-list summary strong {
   color: #172033;
   font-size: 13px;
   font-weight: 800;
@@ -2505,6 +2549,222 @@ textarea {
   padding: 2px 5px;
 }
 
+.review-shell {
+  gap: 18px;
+}
+
+.review-topbar {
+  align-items: start;
+  border-left: 4px solid #2563eb;
+  border-color: #cad6e8;
+  gap: 18px;
+}
+
+.review-topbar h1 {
+  max-width: 920px;
+}
+
+.review-topbar p:last-child {
+  color: #4a5870;
+  line-height: 1.35;
+  margin: 8px 0 0;
+  max-width: 960px;
+}
+
+.review-topbar-actions {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.review-meta {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(120px, 0.55fr));
+  margin: 0;
+}
+
+.review-meta div {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.review-meta dt {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+
+.review-meta dd {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 850;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-request-card,
+.review-jira-card,
+.review-approval-panel {
+  border-color: #cad6e8;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+}
+
+.review-workspace-grid {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.62fr);
+}
+
+.review-side-rail {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  position: sticky;
+  top: 20px;
+}
+
+.review-request-card {
+  background: #ffffff;
+}
+
+.review-jira-card {
+  background: #fbfdff;
+}
+
+.review-approval-panel {
+  background: #ffffff;
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+}
+
+.approval-form {
+  display: grid;
+  gap: 14px;
+  max-width: 100%;
+}
+
+.approval-form .checkbox-filter {
+  align-items: center;
+  background: #f8fafc;
+  border-color: #bfdbfe;
+  display: inline-flex;
+  justify-content: flex-start;
+  line-height: 1.25;
+  max-width: 100%;
+  min-height: auto;
+  padding: 12px;
+  width: 100%;
+}
+
+.approval-form .checkbox-filter input {
+  flex: 0 0 auto;
+  inline-size: auto;
+  width: auto;
+}
+
+.approval-form .checkbox-filter span {
+  overflow-wrap: anywhere;
+}
+
+.review-card-header {
+  align-items: center;
+  background: #f8fafc;
+  border-bottom: 1px solid #e6ebf3;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin: -22px -22px 0;
+  padding: 18px 22px;
+}
+
+.review-card-header h2 {
+  margin-bottom: 0;
+}
+
+.review-card-header p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+
+.compact-button {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.review-request-summary,
+.review-ticket-summary {
+  margin-top: 16px;
+}
+
+.review-request-summary > div,
+.review-ticket-summary > div {
+  border-bottom: 1px solid #edf2f7;
+  padding-bottom: 12px;
+}
+
+.review-request-summary > div:last-child,
+.review-ticket-summary > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.review-text-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 8px;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.review-request-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.review-form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.review-form-grid label:first-child {
+  grid-column: 1 / -1;
+}
+
+.review-request-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.review-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.review-cancel-form {
+  margin: 0;
+}
+
 .pipeline-card {
   grid-column: 1 / -1;
 }
@@ -2744,6 +3004,18 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .review-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-side-rail {
+    position: static;
+  }
+
+  .review-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pipeline-grid {
     grid-template-columns: 1fr;
   }
@@ -2791,6 +3063,11 @@ textarea {
     flex-direction: column;
   }
 
+  .review-topbar-actions {
+    align-items: start;
+    justify-items: start;
+  }
+
   .metric-grid {
     grid-template-columns: 1fr;
   }
@@ -2824,14 +3101,24 @@ textarea {
   .diagnostics-grid,
   .generated-diff-meta,
   .diagnostics-log-grid,
+  .review-meta,
   .safety-grid,
   .stage-tracker {
     grid-template-columns: 1fr;
   }
 
   .generated-diff-header,
-  .diagnostics-header {
+  .diagnostics-header,
+  .review-card-header {
     flex-direction: column;
+  }
+
+  .review-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-form-grid label:first-child {
+    grid-column: auto;
   }
 
   .operations-safety-header,

@@ -18,6 +18,7 @@ const statusLabels: Record<JobStatus, string> = {
   COMPLETED: "Completed",
   DRAFT: "Draft",
   FAILED: "Failed",
+  NEEDS_REVIEW: "Needs Review",
   QUEUED: "Queued",
   READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
@@ -254,6 +255,7 @@ const stageLabels: Partial<Record<JobStatus, string>> = {
   CANCELED: "Removed from active queue",
   CODEX_APPROVED: "Codex approved; waiting for runner",
   COMPLETED: "Pipeline finished",
+  NEEDS_REVIEW: "Waiting for QA review",
   PR_APPROVED: "Draft PR approved; waiting for runner",
   PR_CREATED: "Draft PR created; checks and merge pending",
   READY_FOR_CODEX: "Waiting for Codex approval",
@@ -266,7 +268,9 @@ const getStageLabel = (job: JobResponse) =>
   stageLabels[job.status] ?? (job.latestRun ? runStatusLabels[job.latestRun.status] : "Setup pending");
 
 const canCancelJob = (job: JobResponse) =>
-  job.status === "DRAFT" || job.status === "QUEUED" || job.status === "RETRY";
+  job.status === "DRAFT" || job.status === "NEEDS_REVIEW" || job.status === "QUEUED" || job.status === "RETRY";
+
+const canReviewJob = (job: JobResponse) => job.status === "NEEDS_REVIEW";
 
 const canApproveCodex = (job: JobResponse) => job.status === "READY_FOR_CODEX";
 
@@ -344,9 +348,11 @@ export default async function Home({
   const filteredJobs = jobs;
   const activeJobs = allJobs.filter((job) => job.status !== "CANCELED");
   const queuedCount = countByStatus(activeJobs, ["QUEUED"]);
+  const needsReviewCount = countByStatus(activeJobs, ["NEEDS_REVIEW"]);
   const runningCount = countByStatus(activeJobs, ["CLAIMED", "RUNNING", "VALIDATING"]);
   const reviewCount = countByStatus(activeJobs, [
     "READY_FOR_CODEX",
+    "NEEDS_REVIEW",
     "CODEX_APPROVED",
     "REVIEW",
     "PR_APPROVED",
@@ -402,7 +408,7 @@ export default async function Home({
             <span>Approval</span>
             <strong>{reviewCount}</strong>
             <small>
-              {codexApprovalCount} Codex / {prApprovalCount} PR waiting / {prCreatedCount} PR open
+              {needsReviewCount} review / {codexApprovalCount} Codex / {prApprovalCount} PR / {prCreatedCount} PR open
             </small>
           </article>
           <article className="metric-card failed">
@@ -528,24 +534,39 @@ export default async function Home({
                           )}
                         </td>
                         <td>
-                          {canApproveCodex(job) ? (
-                            <form action={approveCodex} className="inline-job-action">
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit">Approve Codex</button>
-                            </form>
-                          ) : canApprovePr(job) ? (
-                            <form action={approvePr} className="inline-job-action">
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit">Approve PR</button>
-                            </form>
-                          ) : canCancelJob(job) ? (
-                            <form action={cancelJob} className="inline-job-action">
-                              <input type="hidden" name="jobId" value={job.id} />
-                              <button type="submit">Cancel</button>
-                            </form>
-                          ) : (
-                            <span className="muted-action">Locked</span>
-                          )}
+                          <div className="job-action-stack">
+                            {canApproveCodex(job) ? (
+                              <form action={approveCodex} className="inline-job-action">
+                                <input type="hidden" name="jobId" value={job.id} />
+                                <button type="submit">Approve Codex</button>
+                              </form>
+                            ) : null}
+                            {canApprovePr(job) ? (
+                              <form action={approvePr} className="inline-job-action">
+                                <input type="hidden" name="jobId" value={job.id} />
+                                <button type="submit">Approve PR</button>
+                              </form>
+                            ) : null}
+                            {canReviewJob(job) ? (
+                              <a className="artifact-link" href={`/jobs/${job.id}/review`}>
+                                Review
+                              </a>
+                            ) : null}
+                            {canCancelJob(job) ? (
+                              <form action={cancelJob} className="inline-job-action">
+                                <input type="hidden" name="jobId" value={job.id} />
+                                <button className="danger-inline-button" type="submit">
+                                  Cancel
+                                </button>
+                              </form>
+                            ) : null}
+                            {!canApproveCodex(job) &&
+                            !canApprovePr(job) &&
+                            !canReviewJob(job) &&
+                            !canCancelJob(job) ? (
+                              <span className="muted-action">Locked</span>
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );

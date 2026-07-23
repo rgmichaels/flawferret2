@@ -34,6 +34,8 @@ export const appendJobEvent = async ({
   jobId: string;
   eventType:
     | "JOB_CREATED"
+    | "JOB_APPROVED"
+    | "JOB_UPDATED"
     | "JOB_CLAIMED"
     | "JOB_RUNNING"
     | "RUN_STARTED"
@@ -68,7 +70,10 @@ export const appendJobEvent = async ({
     | "LOCAL_CHECKOUT_CLEANUP_FAILED"
     | "PR_CREATION_FAILED"
     | "PR_CREATION_APPROVED"
-    | "JOB_BLOCKED";
+    | "JOB_BLOCKED"
+    | "JIRA_TICKET_CREATED"
+    | "JIRA_TICKET_CREATION_FAILED"
+    | "JIRA_TICKET_CREATION_SKIPPED";
   message: string;
   metadata?: Prisma.InputJsonValue;
 }) =>

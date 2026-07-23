@@ -13,6 +13,7 @@ enum JobType {
 
 enum JobStatus {
   DRAFT
+  NEEDS_REVIEW
   QUEUED
   CLAIMED
   RUNNING
@@ -47,6 +48,10 @@ enum RepositoryProvider {
   GITHUB
 }
 
+enum TrackerProvider {
+  JIRA
+}
+
 enum RunStatus {
   STARTED
   CODEX_RUNNING
@@ -60,6 +65,8 @@ enum RunStatus {
 
 enum JobEventType {
   JOB_CREATED
+  JOB_APPROVED
+  JOB_UPDATED
   JOB_CLAIMED
   JOB_RUNNING
   RUN_STARTED
@@ -95,6 +102,9 @@ enum JobEventType {
   PR_CREATION_FAILED
   PR_CREATION_APPROVED
   JOB_BLOCKED
+  JIRA_TICKET_CREATED
+  JIRA_TICKET_CREATION_FAILED
+  JIRA_TICKET_CREATION_SKIPPED
 }
 
 model QueueControl {
@@ -108,21 +118,41 @@ model QueueControl {
 }
 
 model Repository {
-  id                String             @id @default(uuid()) @db.Uuid
-  provider          RepositoryProvider @default(GITHUB)
-  owner             String
-  name              String
-  defaultBranch     String             @default("main") @map("default_branch")
-  cloneUrl          String             @map("clone_url")
-  webUrl            String             @map("web_url")
-  localPath         String?            @map("local_path")
-  validationCommand String?            @map("validation_command")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  jobs              Job[]
+  id                   String              @id @default(uuid()) @db.Uuid
+  provider             RepositoryProvider  @default(GITHUB)
+  owner                String
+  name                 String
+  defaultBranch        String              @default("main") @map("default_branch")
+  cloneUrl             String              @map("clone_url")
+  webUrl               String              @map("web_url")
+  localPath            String?             @map("local_path")
+  validationCommand    String?             @map("validation_command")
+  trackerIntegrationId String?             @map("tracker_integration_id") @db.Uuid
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  jobs                 Job[]
+  trackerIntegration   TrackerIntegration? @relation(fields: [trackerIntegrationId], references: [id], onDelete: SetNull)
 
   @@unique([provider, owner, name])
+  @@index([trackerIntegrationId])
   @@map("repositories")
+}
+
+model TrackerIntegration {
+  id           String          @id @default(uuid()) @db.Uuid
+  provider     TrackerProvider @default(JIRA)
+  name         String
+  baseUrl      String          @map("base_url")
+  email        String
+  apiToken     String          @map("api_token")
+  projectKey   String          @map("project_key")
+  issueType    String          @default("Task") @map("issue_type")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  repositories Repository[]
+
+  @@unique([provider, name])
+  @@map("tracker_integrations")
 }
 
 model Job {

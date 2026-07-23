@@ -123,6 +123,7 @@ const jobStatusLabels: Record<JobStatus, string> = {
   COMPLETED: "Completed",
   DRAFT: "Draft",
   FAILED: "Failed",
+  NEEDS_REVIEW: "Needs Review",
   QUEUED: "Queued",
   READY_FOR_CODEX: "Ready for Codex",
   RETRY: "Retry",
@@ -337,7 +338,7 @@ const canRequeueJob = (status: JobStatus) =>
   status === "BLOCKED" || status === "FAILED" || status === "RETRY";
 
 const canCancelJob = (status: JobStatus) =>
-  status === "DRAFT" || status === "QUEUED" || status === "RETRY";
+  status === "DRAFT" || status === "NEEDS_REVIEW" || status === "QUEUED" || status === "RETRY";
 
 const canRetryCurrentStage = (job: JobResponse, latestRun: RunResponse | null) =>
   Boolean(latestRun) &&
@@ -704,6 +705,11 @@ export default async function JobDetailPage({
           <p>{job.payload.goal}</p>
         </div>
         <div className="detail-actions">
+          {job.status === "NEEDS_REVIEW" ? (
+            <a className="primary-link" href={`/jobs/${job.id}/review`}>
+              Review Job
+            </a>
+          ) : null}
           {approvalAction ? (
             <section className="approval-card" aria-label={approvalAction.title}>
               <span>{approvalAction.riskLabel}</span>
@@ -953,6 +959,14 @@ export default async function JobDetailPage({
               <dt>Created</dt>
               <dd>{formatDateTime(job.createdAt)}</dd>
             </div>
+            {"jiraIssue" in job.payload && job.payload.jiraIssue ? (
+              <div>
+                <dt>Jira</dt>
+                <dd>
+                  <a href={job.payload.jiraIssue.url}>{job.payload.jiraIssue.key}</a>
+                </dd>
+              </div>
+            ) : null}
             <div>
               <dt>Acceptance Criteria</dt>
               <dd className="multiline-value">{job.payload.acceptanceCriteria}</dd>

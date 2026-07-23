@@ -1,4 +1,5 @@
 import type { ClaimedCodexJob } from "@flawferret2/db";
+import { getConfiguredModelPromptPreface } from "@flawferret2/shared";
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -147,6 +148,8 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
   const runAffectedTests = getPayloadBoolean(job.payload, "runAffectedTests", true);
 
   return [
+    getConfiguredModelPromptPreface(),
+    "",
     "You are working on a FlawFerret2 ADD_PLAYWRIGHT_TEST job.",
     "",
     "Repository:",

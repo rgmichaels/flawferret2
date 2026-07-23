@@ -1,4 +1,4 @@
-import type { RepositoryResponse } from "@flawferret2/job-schemas";
+import type { RepositoryResponse, TrackerIntegrationResponse } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import { AppShell } from "../app-shell";
 
@@ -29,6 +29,7 @@ const repositoryPayloadFromForm = (formData: FormData) => {
     name,
     owner,
     provider: "GITHUB",
+    trackerIntegrationId: String(formData.get("trackerIntegrationId") ?? "") || null,
     validationCommand: formData.get("validationCommand"),
   };
 };
@@ -44,6 +45,22 @@ async function getRepositories(): Promise<RepositoryResponse[]> {
     }
 
     return response.json() as Promise<RepositoryResponse[]>;
+  } catch {
+    return [];
+  }
+}
+
+async function getTrackerIntegrations(): Promise<TrackerIntegrationResponse[]> {
+  try {
+    const response = await fetch(`${apiUrl}/tracker-integrations`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<TrackerIntegrationResponse[]>;
   } catch {
     return [];
   }
@@ -127,7 +144,10 @@ const repositoryLabel = (repository: RepositoryResponse) =>
   `${repository.owner}/${repository.name}`;
 
 export default async function RepositoriesPage() {
-  const repositories = await getRepositories();
+  const [repositories, trackerIntegrations] = await Promise.all([
+    getRepositories(),
+    getTrackerIntegrations(),
+  ]);
 
   return (
     <AppShell active="repositories">
@@ -171,6 +191,12 @@ export default async function RepositoriesPage() {
                               "Change detection only"
                             )}
                           </span>
+                          <span>
+                            Tracker:{" "}
+                            {repository.trackerIntegration
+                              ? `${repository.trackerIntegration.name} (${repository.trackerIntegration.projectKey})`
+                              : "None"}
+                          </span>
                         </div>
                         <span>{repository.defaultBranch}</span>
                       </summary>
@@ -191,6 +217,20 @@ export default async function RepositoriesPage() {
                         <label>
                           Validation Command
                           <input name="validationCommand" defaultValue={repository.validationCommand ?? ""} />
+                        </label>
+                        <label>
+                          Work Tracker
+                          <select name="trackerIntegrationId" defaultValue={repository.trackerIntegrationId ?? ""}>
+                            <option value="">None</option>
+                            {trackerIntegrations.map((integration) => (
+                              <option key={integration.id} value={integration.id}>
+                                {integration.name} ({integration.projectKey})
+                              </option>
+                            ))}
+                          </select>
+                          <span className="field-hint">
+                            Queued jobs for this repository will create Jira tickets when a tracker is selected.
+                          </span>
                         </label>
                         <div className="repository-edit-actions">
                           <button type="submit">Save Changes</button>
@@ -246,6 +286,20 @@ export default async function RepositoriesPage() {
                 />
                 <span className="field-hint">
                   Defaults to Playwright. Edit or clear it if this repo needs a different check.
+                </span>
+              </label>
+              <label>
+                Work Tracker
+                <select name="trackerIntegrationId" defaultValue="">
+                  <option value="">None</option>
+                  {trackerIntegrations.map((integration) => (
+                    <option key={integration.id} value={integration.id}>
+                      {integration.name} ({integration.projectKey})
+                    </option>
+                  ))}
+                </select>
+                <span className="field-hint">
+                  Select Jira here when jobs for this repo should create tickets automatically.
                 </span>
               </label>
               <button type="submit">Register Repository</button>
