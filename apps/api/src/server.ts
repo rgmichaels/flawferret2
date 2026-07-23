@@ -1396,6 +1396,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     const existingPayload = job.payload && typeof job.payload === "object" ? (job.payload as Record<string, unknown>) : {};
+    const changedFields = [
+      body.priority !== job.priority ? "priority" : null,
+      body.payload.acceptanceCriteria !== existingPayload.acceptanceCriteria ? "acceptanceCriteria" : null,
+      body.payload.featureArea !== existingPayload.featureArea ? "featureArea" : null,
+      body.payload.goal !== existingPayload.goal ? "goal" : null,
+      body.payload.targetBranch !== existingPayload.targetBranch ? "targetBranch" : null,
+    ].filter((field): field is string => Boolean(field));
     const updatedPayload: Prisma.InputJsonObject = {
       ...existingPayload,
       acceptanceCriteria: body.payload.acceptanceCriteria,
@@ -1430,10 +1437,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     await appendJobEvent({
       jobId: job.id,
       eventType: "JOB_UPDATED",
-      message: "Review request was edited before approval.",
+      message:
+        changedFields.length > 0
+          ? `Review request was edited before approval: ${changedFields.join(", ")}.`
+          : "Review request was saved before approval with no detected field changes.",
       metadata: {
-        priority: body.priority,
-        targetBranch: body.payload.targetBranch,
+        changedFields,
+        newPriority: body.priority,
+        newTargetBranch: body.payload.targetBranch,
+        previousPriority: job.priority,
+        previousTargetBranch:
+          typeof existingPayload.targetBranch === "string" ? existingPayload.targetBranch : null,
+        reviewAction: "edited",
       },
     });
 
@@ -1506,6 +1521,9 @@ export const buildServer = async (): Promise<FastifyInstance> => {
           message: `Jira ticket ${jiraIssue.key} was created for this job.`,
           metadata: {
             key: jiraIssue.key,
+            projectKey: job.repository.trackerIntegration.projectKey,
+            reviewAction: "jira_ticket_created",
+            trackerIntegrationId: job.repository.trackerIntegration.id,
             url: jiraIssue.url,
           },
         });
@@ -1516,6 +1534,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
           message: "Jira ticket creation failed.",
           metadata: {
             error: error instanceof Error ? error.message : "Unknown Jira error",
+            projectKey: job.repository.trackerIntegration.projectKey,
+            reviewAction: "jira_ticket_creation_failed",
             trackerIntegrationId: job.repository.trackerIntegration.id,
           },
         });
@@ -1527,6 +1547,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: "No tracker integration is attached to this repository.",
         metadata: {
           repositoryId: job.repositoryId,
+          requestedByReviewer: true,
+          reviewAction: "jira_ticket_skipped_no_tracker",
         },
       });
     } else if (!body.createJiraTicket) {
@@ -1536,6 +1558,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: "Reviewer approved this job without creating a Jira ticket.",
         metadata: {
           repositoryId: job.repositoryId,
+          requestedByReviewer: false,
+          reviewAction: "jira_ticket_skipped_by_reviewer",
         },
       });
     }
@@ -1569,7 +1593,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       message: "Job was approved and moved to the active queue.",
       metadata: {
         createJiraTicket: body.createJiraTicket,
+        jiraIssueKey: (approvedPayload as { jiraIssue?: { key?: string } }).jiraIssue?.key ?? null,
         previousStatus: job.status,
+        reviewAction: "approved",
+        targetBranch: payload.targetBranch,
       },
     });
 
@@ -1705,9 +1732,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     await appendJobEvent({
       jobId: canceledJob.id,
       eventType: "JOB_CANCELED",
-      message: "Job was removed from the active queue.",
+      message:
+        job.status === "NEEDS_REVIEW"
+          ? "Job was canceled while waiting for review."
+          : "Job was removed from the active queue.",
       metadata: {
         previousStatus: job.status,
+        reviewAction: job.status === "NEEDS_REVIEW" ? "review_canceled" : "canceled",
       },
     });
 

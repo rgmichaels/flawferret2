@@ -99,11 +99,111 @@ const formatDateTime = (value: string) =>
   }).format(new Date(value));
 
 const formatEventType = (value: string) =>
+  ({
+    JOB_APPROVED: "Review Approved",
+    JOB_CANCELED: "Job Canceled",
+    JOB_UPDATED: "Review Edited",
+    JIRA_TICKET_CREATED: "Jira Ticket Created",
+    JIRA_TICKET_CREATION_FAILED: "Jira Ticket Failed",
+    JIRA_TICKET_CREATION_SKIPPED: "Jira Ticket Skipped",
+  })[value] ??
   value
     .toLowerCase()
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+
+const getMetadataValue = (metadata: unknown, key: string) => getMetadataRecord(metadata)[key];
+
+const getTimelineMetadataItems = (event: JobEventResponse) => {
+  const metadata = getMetadataRecord(event.metadata);
+  const changedFields = Array.isArray(metadata.changedFields)
+    ? metadata.changedFields.filter((field): field is string => typeof field === "string")
+    : [];
+  const items: Array<{ href?: string; label: string; value: string }> = [];
+
+  if (changedFields.length > 0) {
+    items.push({
+      label: "Changed",
+      value: changedFields.join(", "),
+    });
+  }
+
+  const previousStatus = getMetadataValue(metadata, "previousStatus");
+
+  if (typeof previousStatus === "string") {
+    items.push({
+      label: "From",
+      value: formatEventType(previousStatus),
+    });
+  }
+
+  const previousPriority = getMetadataValue(metadata, "previousPriority");
+  const newPriority = getMetadataValue(metadata, "newPriority");
+
+  if (typeof previousPriority === "string" && typeof newPriority === "string" && previousPriority !== newPriority) {
+    items.push({
+      label: "Priority",
+      value: `${previousPriority} -> ${newPriority}`,
+    });
+  }
+
+  const previousTargetBranch = getMetadataValue(metadata, "previousTargetBranch");
+  const newTargetBranch = getMetadataValue(metadata, "newTargetBranch");
+  const targetBranch = getMetadataValue(metadata, "targetBranch");
+
+  if (typeof previousTargetBranch === "string" && typeof newTargetBranch === "string" && previousTargetBranch !== newTargetBranch) {
+    items.push({
+      label: "Branch",
+      value: `${previousTargetBranch} -> ${newTargetBranch}`,
+    });
+  } else if (typeof targetBranch === "string") {
+    items.push({
+      label: "Branch",
+      value: targetBranch,
+    });
+  }
+
+  const createJiraTicket = getMetadataValue(metadata, "createJiraTicket");
+
+  if (typeof createJiraTicket === "boolean") {
+    items.push({
+      label: "Jira requested",
+      value: createJiraTicket ? "Yes" : "No",
+    });
+  }
+
+  const jiraIssueKey = getMetadataValue(metadata, "jiraIssueKey") ?? getMetadataValue(metadata, "key");
+  const jiraIssueUrl = getMetadataValue(metadata, "url");
+
+  if (typeof jiraIssueKey === "string") {
+    items.push({
+      href: typeof jiraIssueUrl === "string" ? jiraIssueUrl : undefined,
+      label: "Jira",
+      value: jiraIssueKey,
+    });
+  }
+
+  const projectKey = getMetadataValue(metadata, "projectKey");
+
+  if (typeof projectKey === "string") {
+    items.push({
+      label: "Project",
+      value: projectKey,
+    });
+  }
+
+  const error = getMetadataValue(metadata, "error");
+
+  if (typeof error === "string") {
+    items.push({
+      label: "Error",
+      value: error,
+    });
+  }
+
+  return items;
+};
 
 const runStatusLabels: Record<RunStatus, string> = {
   CODEX_RUNNING: "Codex Running",
@@ -1202,15 +1302,31 @@ export default async function JobDetailPage({
             <p className="empty compact-empty">No events have been recorded yet.</p>
           ) : (
             <ol className="timeline">
-              {events.map((event) => (
-                <li key={event.id}>
-                  <div>
-                    <strong>{formatEventType(event.eventType)}</strong>
-                    <time dateTime={event.createdAt}>{formatDateTime(event.createdAt)}</time>
-                  </div>
-                  <p>{event.message}</p>
-                </li>
-              ))}
+              {events.map((event) => {
+                const metadataItems = getTimelineMetadataItems(event);
+
+                return (
+                  <li key={event.id}>
+                    <div>
+                      <strong>{formatEventType(event.eventType)}</strong>
+                      <time dateTime={event.createdAt}>{formatDateTime(event.createdAt)}</time>
+                    </div>
+                    <p>{event.message}</p>
+                    {metadataItems.length > 0 ? (
+                      <dl className="timeline-metadata">
+                        {metadataItems.map((item) => (
+                          <div key={`${item.label}:${item.value}`}>
+                            <dt>{item.label}</dt>
+                            <dd>
+                              {item.href ? <a href={item.href}>{item.value}</a> : item.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </section>
