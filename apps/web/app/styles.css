@@ -222,6 +222,18 @@ textarea {
   padding: 20px 24px;
 }
 
+.topbar-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.topbar-actions form {
+  margin: 0;
+}
+
 .eyebrow {
   color: #2563eb;
   font-size: 12px;
@@ -3481,6 +3493,10 @@ textarea {
   .detail-hero {
     align-items: start;
     flex-direction: column;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
   }
 
   .job-detail-shell .detail-actions {
