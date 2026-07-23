@@ -235,7 +235,19 @@ describe("job schemas", () => {
 
   it("parses page discovery recommendation requests and responses", () => {
     const request = discoverTestRecommendationsRequestSchema.parse({
+      existingCoverage: [
+        {
+          feature: " Login ",
+          path: " features/login.feature ",
+          scenario: " Invalid login ",
+          steps: [" Given I am on the login page "],
+          tags: [" @auth "],
+        },
+      ],
       notes: "Focus auth and keyboard behavior.",
+      pageUrl: "https://example.com/login",
+    });
+    const defaultRequest = discoverTestRecommendationsRequestSchema.parse({
       pageUrl: "https://example.com/login",
     });
     const response = discoverTestRecommendationsResponseSchema.parse({
@@ -254,6 +266,8 @@ describe("job schemas", () => {
     });
 
     assert.equal(request.maxRecommendations, 12);
+    assert.equal(request.existingCoverage[0].feature, "Login");
+    assert.deepEqual(defaultRequest.existingCoverage, []);
     assert.equal(response.recommendations[0].tags[0], "@auth");
   });
 

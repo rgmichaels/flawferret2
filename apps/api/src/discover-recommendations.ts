@@ -1,4 +1,5 @@
 import {
+  type DiscoverExistingCoverage,
   discoverTestRecommendationSchema,
   type DiscoverTestRecommendation,
   type DiscoverTestRecommendationsResponse,
@@ -9,6 +10,7 @@ const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const MAX_PAGE_CONTEXT_CHARS = 18_000;
 
 type DiscoverRecommendationsInput = {
+  existingCoverage: DiscoverExistingCoverage[];
   maxRecommendations: number;
   notes: string;
   pageUrl: string;
@@ -141,6 +143,7 @@ const fetchPageContext = async ({
 };
 
 export const buildDiscoverRecommendationsPrompt = ({
+  existingCoverage,
   maxRecommendations,
   notes,
   pageContext,
@@ -154,6 +157,8 @@ export const buildDiscoverRecommendationsPrompt = ({
     "You are helping a manual QA tester discover high-impact Playwright/Cucumber automation candidates for a web page.",
     `Recommend ${maxRecommendations} focused tests. Prefer user-visible behavior, failure-prone workflows, accessibility, edge cases, and regression-prone states.`,
     "Each recommendation must be small enough to become one Cucumber scenario/job.",
+    "Do not recommend tests that are already covered by the existing Cucumber scenarios listed below.",
+    "If similar coverage exists, recommend a meaningfully different gap or edge case.",
     "",
     "Return JSON only with this shape:",
     JSON.stringify(
@@ -183,6 +188,21 @@ export const buildDiscoverRecommendationsPrompt = ({
     "",
     `Page URL: ${pageUrl}`,
     notes ? `Tester notes: ${notes}` : "Tester notes: none",
+    "",
+    "Related existing Cucumber coverage:",
+    existingCoverage.length > 0
+      ? existingCoverage
+          .map((item, index) =>
+            [
+              `${index + 1}. ${item.feature} - ${item.scenario}`,
+              `Path: ${item.path}`,
+              item.tags.length > 0 ? `Tags: ${item.tags.join(" ")}` : "Tags: none",
+              "Steps:",
+              ...item.steps.map((step) => `- ${step}`),
+            ].join("\n"),
+          )
+          .join("\n\n")
+      : "No related existing scenarios were found.",
     "",
     "Visible page/context text:",
     pageContext || "No page text was available. Infer from the URL and tester notes.",
