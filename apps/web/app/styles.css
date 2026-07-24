@@ -1479,6 +1479,7 @@ td span {
 
 .discover-panel,
 .existing-coverage-panel,
+.discover-history-panel,
 .recommendation-panel {
   overflow: hidden;
 }
@@ -1489,6 +1490,134 @@ td span {
 
 .discover-form .wide-field {
   grid-column: 1 / -1;
+}
+
+.discover-history-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.discover-history-list > li {
+  align-items: start;
+  border-top: 1px solid #edf1f6;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px 20px;
+}
+
+.discover-history-list a {
+  color: #2563eb;
+  display: block;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.discover-history-list a:hover {
+  text-decoration: underline;
+}
+
+.discover-history-list > li > div:first-child span {
+  color: #667085;
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  margin-top: 4px;
+}
+
+.discover-history-meta {
+  align-items: end;
+  color: #667085;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 850;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 520px;
+}
+
+.discover-history-meta span,
+.discover-history-meta time {
+  background: #f8fafc;
+  border: 1px solid #e1e7f0;
+  border-radius: 999px;
+  padding: 5px 8px;
+}
+
+.discover-run-shell {
+  max-width: 1500px;
+}
+
+.discover-run-topbar h1 {
+  overflow-wrap: anywhere;
+}
+
+.discover-run-topbar p:last-child {
+  color: #667085;
+  font-size: 15px;
+  font-weight: 650;
+  margin: 4px 0 0;
+}
+
+.discover-run-summary-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.discover-run-summary-card {
+  border-top: 4px solid #2f6bed;
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+}
+
+.discover-run-summary-card span,
+.discover-run-request-list dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.discover-run-summary-card strong {
+  color: #101828;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.discover-run-request-card {
+  overflow: hidden;
+}
+
+.discover-run-request-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.discover-run-request-list > div {
+  border-top: 1px solid #edf1f6;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 180px minmax(0, 1fr);
+  padding: 14px 20px;
+}
+
+.discover-run-request-list dd {
+  color: #172033;
+  font-size: 14px;
+  font-weight: 750;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .recommendation-list {
@@ -1659,6 +1788,17 @@ td span {
 .impact-pill.medium {
   background: #fef3c7;
   color: #b45309;
+}
+
+.queued-pill {
+  background: #dcfce7;
+  border-radius: 999px;
+  color: #15803d;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 8px;
+  text-transform: uppercase;
 }
 
 .hidden-recommendations {
@@ -3448,6 +3588,10 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .discover-run-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pipeline-grid {
     grid-template-columns: 1fr;
   }
@@ -3531,8 +3675,15 @@ textarea {
   }
 
   .discover-form,
+  .discover-history-list > li,
+  .discover-run-request-list > div,
+  .discover-run-summary-grid,
   .recommendation-list > li {
     grid-template-columns: 1fr;
+  }
+
+  .discover-history-meta {
+    justify-content: flex-start;
   }
 
   .readiness-hero {

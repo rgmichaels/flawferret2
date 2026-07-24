@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   captureContextSchema,
+  createDiscoverRunRequestSchema,
   cucumberFeatureCatalogResponseSchema,
   cucumberFeatureDetailResponseSchema,
-  createTrackerIntegrationRequestSchema,
   createJobRequestSchema,
+  createTrackerIntegrationRequestSchema,
+  discoverCoverageDecisionSchema,
+  discoverRunResponseSchema,
   discoverTestRecommendationsRequestSchema,
   discoverTestRecommendationsResponseSchema,
   explainCucumberScenarioRequestSchema,
@@ -15,6 +18,7 @@ import {
   readinessResponseSchema,
   retryStageRequestSchema,
   trackerIntegrationResponseSchema,
+  updateDiscoverRunQueuedRequestSchema,
 } from "./index.js";
 
 describe("job schemas", () => {
@@ -269,6 +273,78 @@ describe("job schemas", () => {
     assert.equal(request.existingCoverage[0].feature, "Login");
     assert.deepEqual(defaultRequest.existingCoverage, []);
     assert.equal(response.recommendations[0].tags[0], "@auth");
+  });
+
+  it("parses persisted page discovery runs", () => {
+    const recommendation = {
+      acceptance: ["Assert invalid credentials show an error."],
+      impact: "High" as const,
+      reason: "Authentication failures are critical regression paths.",
+      scenario: ["Given I am on the login page", "When I submit invalid credentials", "Then I should see an error"],
+      tags: ["@auth", "@negative"],
+      title: "Invalid login is rejected",
+    };
+    const coverage = {
+      feature: "Login",
+      path: "features/login.feature",
+      scenario: "Invalid login",
+      steps: ["Given I am on the login page"],
+      tags: ["@auth"],
+    };
+    const decision = discoverCoverageDecisionSchema.parse({
+      matchedCoverage: coverage,
+      recommendation,
+      reason: "Existing coverage already checks this path.",
+      score: 0.72,
+      status: "hide",
+    });
+    const request = createDiscoverRunRequestSchema.parse({
+      hiddenDecisions: [decision],
+      notes: "Focus auth.",
+      pageUrl: "https://example.com/login",
+      provider: "AI gap analysis",
+      relatedCoverage: [coverage],
+      repositoryId: "11111111-1111-4111-8111-111111111111",
+      targetBranch: "main",
+      visibleDecisions: [
+        {
+          ...decision,
+          matchedCoverage: null,
+          reason: "Worth adding.",
+          score: 0.2,
+          status: "keep",
+        },
+      ],
+    });
+    const queued = updateDiscoverRunQueuedRequestSchema.parse({
+      queuedTitles: ["Invalid login is rejected"],
+    });
+    const response = discoverRunResponseSchema.parse({
+      ...request,
+      createdAt: new Date().toISOString(),
+      id: "run-1",
+      queuedTitles: queued.queuedTitles,
+      repository: {
+        cloneUrl: "https://github.com/rgmichaels/example.git",
+        createdAt: new Date().toISOString(),
+        defaultBranch: "main",
+        id: request.repositoryId,
+        localPath: "/tmp/example",
+        name: "example",
+        owner: "rgmichaels",
+        provider: "GITHUB",
+        trackerIntegration: null,
+        trackerIntegrationId: null,
+        updatedAt: new Date().toISOString(),
+        validationCommand: "pnpm test",
+        webUrl: "https://github.com/rgmichaels/example",
+      },
+      updatedAt: new Date().toISOString(),
+    });
+
+    assert.equal(request.provider, "AI gap analysis");
+    assert.equal(response.hiddenDecisions[0].status, "hide");
+    assert.deepEqual(response.queuedTitles, ["Invalid login is rejected"]);
   });
 
   it("parses paginated job responses", () => {

@@ -13,12 +13,15 @@ import {
   createJobRequestSchema,
   createRepositoryRequestSchema,
   createTrackerIntegrationRequestSchema,
+  createDiscoverRunRequestSchema,
   discoverTestRecommendationsRequestSchema,
   explainCucumberScenarioRequestSchema,
   jobStatusSchema,
   retryStageRequestSchema,
+  updateDiscoverRunQueuedRequestSchema,
   updateTrackerIntegrationRequestSchema,
   updateReviewJobRequestSchema,
+  type DiscoverRunResponse,
   type JobDiffResponse,
   type JobEventResponse,
   type JobResponse,
@@ -176,6 +179,36 @@ const toTrackerIntegrationResponse = (integration: {
   issueType: integration.issueType,
   createdAt: integration.createdAt.toISOString(),
   updatedAt: integration.updatedAt.toISOString(),
+});
+
+const toDiscoverRunResponse = (run: {
+  id: string;
+  repositoryId: string;
+  targetBranch: string;
+  pageUrl: string;
+  notes: string;
+  provider: string;
+  relatedCoverage: Prisma.JsonValue;
+  visibleDecisions: Prisma.JsonValue;
+  hiddenDecisions: Prisma.JsonValue;
+  queuedTitles: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  repository: Parameters<typeof toRepositoryResponse>[0];
+}): DiscoverRunResponse => ({
+  id: run.id,
+  repositoryId: run.repositoryId,
+  targetBranch: run.targetBranch,
+  pageUrl: run.pageUrl,
+  notes: run.notes,
+  provider: run.provider,
+  relatedCoverage: run.relatedCoverage as DiscoverRunResponse["relatedCoverage"],
+  visibleDecisions: run.visibleDecisions as DiscoverRunResponse["visibleDecisions"],
+  hiddenDecisions: run.hiddenDecisions as DiscoverRunResponse["hiddenDecisions"],
+  queuedTitles: run.queuedTitles,
+  createdAt: run.createdAt.toISOString(),
+  updatedAt: run.updatedAt.toISOString(),
+  repository: toRepositoryResponse(run.repository),
 });
 
 const toJobResponseWithRepository = (job: {
@@ -703,6 +736,126 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return buildDiscoverRecommendations({
       input: body,
     });
+  });
+
+  server.get("/discover/runs", async () => {
+    const runs = await prisma.discoverRun.findMany({
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 20,
+    });
+
+    return runs.map(toDiscoverRunResponse);
+  });
+
+  server.post("/discover/runs", async (request, reply) => {
+    const body = createDiscoverRunRequestSchema.parse(request.body);
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: body.repositoryId,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    const run = await prisma.discoverRun.create({
+      data: {
+        hiddenDecisions: body.hiddenDecisions,
+        notes: body.notes,
+        pageUrl: body.pageUrl,
+        provider: body.provider,
+        relatedCoverage: body.relatedCoverage,
+        repositoryId: body.repositoryId,
+        targetBranch: body.targetBranch,
+        visibleDecisions: body.visibleDecisions,
+      },
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+      },
+    });
+
+    return reply.status(201).send(toDiscoverRunResponse(run));
+  });
+
+  server.get("/discover/runs/:id", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const run = await prisma.discoverRun.findUnique({
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!run) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Discover run not found.",
+      });
+    }
+
+    return toDiscoverRunResponse(run);
+  });
+
+  server.put("/discover/runs/:id/queued", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const body = updateDiscoverRunQueuedRequestSchema.parse(request.body);
+    const existingRun = await prisma.discoverRun.findUnique({
+      select: {
+        queuedTitles: true,
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!existingRun) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Discover run not found.",
+      });
+    }
+
+    const queuedTitles = Array.from(new Set([...existingRun.queuedTitles, ...body.queuedTitles]));
+    const run = await prisma.discoverRun.update({
+      data: {
+        queuedTitles,
+      },
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    return toDiscoverRunResponse(run);
   });
 
   server.get("/readiness", async () => {
@@ -1499,9 +1652,23 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: body.payload.repositoryId,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
     const existingPayload = job.payload && typeof job.payload === "object" ? (job.payload as Record<string, unknown>) : {};
     const changedFields = [
       body.priority !== job.priority ? "priority" : null,
+      body.payload.repositoryId !== job.repositoryId ? "repository" : null,
       body.payload.acceptanceCriteria !== existingPayload.acceptanceCriteria ? "acceptanceCriteria" : null,
       body.payload.featureArea !== existingPayload.featureArea ? "featureArea" : null,
       body.payload.goal !== existingPayload.goal ? "goal" : null,
@@ -1512,6 +1679,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       acceptanceCriteria: body.payload.acceptanceCriteria,
       featureArea: body.payload.featureArea,
       goal: body.payload.goal,
+      repositoryId: body.payload.repositoryId,
       targetBranch: body.payload.targetBranch,
     };
 
@@ -1519,6 +1687,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       data: {
         payload: updatedPayload,
         priority: body.priority,
+        repositoryId: body.payload.repositoryId,
       },
       include: {
         repository: {
@@ -1548,8 +1717,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       metadata: {
         changedFields,
         newPriority: body.priority,
+        newRepositoryId: body.payload.repositoryId,
         newTargetBranch: body.payload.targetBranch,
         previousPriority: job.priority,
+        previousRepositoryId: job.repositoryId,
         previousTargetBranch:
           typeof existingPayload.targetBranch === "string" ? existingPayload.targetBranch : null,
         reviewAction: "edited",

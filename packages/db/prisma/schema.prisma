@@ -131,11 +131,32 @@ model Repository {
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   jobs                 Job[]
+  discoverRuns         DiscoverRun[]
   trackerIntegration   TrackerIntegration? @relation(fields: [trackerIntegrationId], references: [id], onDelete: SetNull)
 
   @@unique([provider, owner, name])
   @@index([trackerIntegrationId])
   @@map("repositories")
+}
+
+model DiscoverRun {
+  id               String     @id @default(uuid()) @db.Uuid
+  repositoryId     String     @map("repository_id") @db.Uuid
+  targetBranch     String     @map("target_branch")
+  pageUrl          String     @map("page_url")
+  notes            String
+  provider         String
+  relatedCoverage  Json       @map("related_coverage")
+  visibleDecisions Json       @map("visible_decisions")
+  hiddenDecisions  Json       @map("hidden_decisions")
+  queuedTitles     String[]   @default([]) @map("queued_titles")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  repository       Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, createdAt])
+  @@index([createdAt])
+  @@map("discover_runs")
 }
 
 model TrackerIntegration {
