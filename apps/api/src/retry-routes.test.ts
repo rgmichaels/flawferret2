@@ -229,6 +229,20 @@ describe("retry routes", () => {
 
     assert.equal(queuedResponse.statusCode, 200);
     assert.deepEqual(queuedResponse.json().queuedTitles, ["Invalid login is rejected"]);
+
+    const deleteResponse = await server.inject({
+      method: "DELETE",
+      url: `/discover/runs/${createdRun.id}`,
+    });
+
+    assert.equal(deleteResponse.statusCode, 204);
+
+    const missingResponse = await server.inject({
+      method: "GET",
+      url: `/discover/runs/${createdRun.id}`,
+    });
+
+    assert.equal(missingResponse.statusCode, 404);
   });
 
   it("rejects requeue requests for non-retryable statuses", async () => {

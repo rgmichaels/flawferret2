@@ -189,6 +189,28 @@ async function markDiscoverRunQueued(runId: string, queuedTitles: string[]) {
   }
 }
 
+async function deleteDiscoverRun(formData: FormData) {
+  "use server";
+
+  const discoverRunId = String(formData.get("discoverRunId") ?? "");
+
+  if (!discoverRunId) {
+    redirect("/discover");
+  }
+
+  const response = await fetch(`${apiUrl}/discover/runs/${discoverRunId}`, {
+    cache: "no-store",
+    method: "DELETE",
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error("Unable to delete discovery run.");
+  }
+
+  revalidatePath("/discover");
+  redirect("/discover?deleted=1");
+}
+
 async function queueSelectedTests(formData: FormData) {
   "use server";
 
@@ -681,11 +703,12 @@ export default async function DiscoverPage({
     queued?: string;
     repositoryId?: string;
     runId?: string;
+    deleted?: string;
     targetBranch?: string;
   }>;
 }) {
   const query = await searchParams;
-  const [{ notes = "", pageUrl = "", queued, repositoryId = "", runId = "", targetBranch = "main" }, repositories, queueControl, recentRuns, activeRun] =
+  const [{ deleted, notes = "", pageUrl = "", queued, repositoryId = "", runId = "", targetBranch = "main" }, repositories, queueControl, recentRuns, activeRun] =
     await Promise.all([
       Promise.resolve(query),
       getRepositories(),
@@ -784,6 +807,12 @@ export default async function DiscoverPage({
                       <span>
                         {repositoryLabel(run.repository)} on {run.targetBranch}
                       </span>
+                      <form action={deleteDiscoverRun} className="discover-history-delete-form">
+                        <input name="discoverRunId" type="hidden" value={run.id} />
+                        <button className="danger-button compact-button" type="submit">
+                          Delete
+                        </button>
+                      </form>
                     </div>
                     <div className="discover-history-meta">
                       <span>{run.provider}</span>
@@ -816,6 +845,8 @@ export default async function DiscoverPage({
         {queueControl.paused ? (
           <p className="queue-paused-note">Queue is paused. Selected tests can be queued now and will wait.</p>
         ) : null}
+
+        {deleted === "1" ? <p className="queue-success-note">Discovery run deleted.</p> : null}
 
         {Number.isFinite(queuedCount) ? (
           queuedCount > 0 ? (

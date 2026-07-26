@@ -858,6 +858,30 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toDiscoverRunResponse(run);
   });
 
+  server.delete("/discover/runs/:id", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const existingRun = await prisma.discoverRun.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!existingRun) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Discover run not found.",
+      });
+    }
+
+    await prisma.discoverRun.delete({
+      where: {
+        id: params.id,
+      },
+    });
+
+    return reply.status(204).send();
+  });
+
   server.get("/readiness", async () => {
     await prisma.$queryRaw`SELECT 1`;
 

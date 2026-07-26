@@ -1531,6 +1531,10 @@ td span {
   margin-top: 4px;
 }
 
+.discover-history-delete-form {
+  margin-top: 10px;
+}
+
 .discover-history-meta {
   align-items: end;
   color: #667085;
