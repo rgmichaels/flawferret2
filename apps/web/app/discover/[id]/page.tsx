@@ -52,6 +52,29 @@ const markDiscoverRunQueued = async (runId: string, queuedTitles: string[]) => {
   }
 };
 
+async function deleteDiscoverRun(formData: FormData) {
+  "use server";
+
+  const runId = String(formData.get("runId") ?? "");
+
+  if (!runId) {
+    redirect("/discover");
+  }
+
+  const response = await fetch(`${apiUrl}/discover/runs/${runId}`, {
+    cache: "no-store",
+    method: "DELETE",
+  });
+
+  if (!response.ok && response.status !== 404) {
+    throw new Error("Unable to delete discovery run.");
+  }
+
+  revalidatePath("/discover");
+  revalidatePath(`/discover/${runId}`);
+  redirect("/discover?deleted=1");
+}
+
 const repositoryLabel = (run: DiscoverRunResponse) => `${run.repository.owner}/${run.repository.name}`;
 
 const formatRunDate = (value: string) =>
@@ -235,13 +258,19 @@ export default async function DiscoverRunPage({
             <p className="eyebrow">Discovery Artifact</p>
             <h1>{run.pageUrl}</h1>
             <p>
-              Saved {formatRunDate(run.createdAt)} for {repositoryLabel(run)} on {run.targetBranch}.
+              Saved analysis for {repositoryLabel(run)} on {run.targetBranch}.
             </p>
           </div>
           <div className="topbar-actions">
             <a className="secondary-button compact-button" href={`/discover?runId=${run.id}`}>
               Open in Discover
             </a>
+            <form action={deleteDiscoverRun}>
+              <input name="runId" type="hidden" value={run.id} />
+              <button className="danger-button compact-button" type="submit">
+                Delete
+              </button>
+            </form>
             <a className="primary-link" href="/discover">
               Discover Tests
             </a>
@@ -262,6 +291,14 @@ export default async function DiscoverRunPage({
           <article className="panel discover-run-summary-card">
             <span>Provider</span>
             <strong>{run.provider}</strong>
+          </article>
+          <article className="panel discover-run-summary-card timestamp">
+            <span>Saved</span>
+            <strong>{formatRunDate(run.createdAt)}</strong>
+          </article>
+          <article className="panel discover-run-summary-card timestamp">
+            <span>Updated</span>
+            <strong>{formatRunDate(run.updatedAt)}</strong>
           </article>
           <article className="panel discover-run-summary-card">
             <span>Visible</span>

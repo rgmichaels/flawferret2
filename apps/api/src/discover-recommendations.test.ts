@@ -152,4 +152,35 @@ describe("discover recommendations", () => {
     assert.equal(response.provider, "openai");
     assert.equal(response.recommendations[0].title, "Invalid login shows an error");
   });
+
+  it("falls back locally when OpenAI recommendations time out", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+
+    const fetchImpl = async (url: string | URL | Request) => {
+      const requestUrl = String(url);
+
+      if (requestUrl === "https://example.com/login") {
+        return new Response("<html><body><h1>Login</h1></body></html>", {
+          headers: {
+            "content-type": "text/html",
+          },
+        });
+      }
+
+      throw new DOMException("The operation was aborted.", "AbortError");
+    };
+
+    const response = await buildDiscoverRecommendations({
+      fetchImpl: fetchImpl as typeof fetch,
+      input: {
+        existingCoverage: [],
+        maxRecommendations: 10,
+        notes: "",
+        pageUrl: "https://example.com/login",
+      },
+    });
+
+    assert.equal(response.provider, "local");
+    assert.match(response.message ?? "", /timed out/);
+  });
 });

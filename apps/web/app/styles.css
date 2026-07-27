@@ -52,17 +52,13 @@ textarea {
 }
 
 .brand-mark {
-  align-items: center;
-  background: #7c3aed;
-  border: 1px solid rgb(255 255 255 / 24%);
-  border-radius: 8px;
-  color: #ffffff;
-  display: inline-flex;
-  font-size: 14px;
-  font-weight: 800;
-  height: 42px;
-  justify-content: center;
-  width: 42px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 50%;
+  display: block;
+  flex: 0 0 auto;
+  height: 48px;
+  object-fit: cover;
+  width: 48px;
 }
 
 .brand strong {
@@ -284,8 +280,13 @@ button {
 
 .danger-button,
 .danger-button:hover {
+  background: #ffffff;
   border-color: #fecaca;
   color: #b91c1c;
+}
+
+.danger-button:hover {
+  background: #fff1f2;
 }
 
 .metric-grid {
@@ -1531,6 +1532,30 @@ td span {
   margin-top: 4px;
 }
 
+.discover-history-delete-form {
+  margin-top: 10px;
+}
+
+.discover-history-controls {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+}
+
+.discover-history-controls label {
+  color: #667085;
+  display: grid;
+  font-size: 11px;
+  font-weight: 900;
+  gap: 5px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.discover-history-controls select {
+  min-width: 96px;
+}
+
 .discover-history-meta {
   align-items: end;
   color: #667085;
@@ -1569,7 +1594,7 @@ td span {
 .discover-run-summary-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .discover-run-summary-card {
@@ -1592,6 +1617,15 @@ td span {
   color: #101828;
   font-size: 30px;
   line-height: 1;
+}
+
+.discover-run-summary-card.timestamp {
+  grid-column: span 2;
+}
+
+.discover-run-summary-card.timestamp strong {
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .discover-run-request-card {

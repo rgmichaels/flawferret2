@@ -8,6 +8,7 @@ import { getConfiguredModelPromptPreface } from "@flawferret2/shared";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const MAX_PAGE_CONTEXT_CHARS = 18_000;
+const OPENAI_RECOMMENDATION_TIMEOUT_MS = 12_000;
 
 type DiscoverRecommendationsInput = {
   existingCoverage: DiscoverExistingCoverage[];
@@ -229,20 +230,31 @@ export const buildDiscoverRecommendations = async ({
     fetchImpl,
     pageUrl: input.pageUrl,
   });
-  const response = await fetchImpl(OPENAI_RESPONSES_URL, {
-    body: JSON.stringify({
-      input: buildDiscoverRecommendationsPrompt({
-        ...input,
-        pageContext,
+  let response: Response;
+
+  try {
+    response = await fetchImpl(OPENAI_RESPONSES_URL, {
+      body: JSON.stringify({
+        input: buildDiscoverRecommendationsPrompt({
+          ...input,
+          pageContext,
+        }),
+        model: process.env.OPENAI_DISCOVER_TESTS_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini",
       }),
-      model: process.env.OPENAI_DISCOVER_TESTS_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || "gpt-4.1-mini",
-    }),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(OPENAI_RECOMMENDATION_TIMEOUT_MS),
+    });
+  } catch {
+    return {
+      message: "OpenAI recommendation request timed out, so local recommendations were used.",
+      provider: "local",
+      recommendations: [],
+    };
+  }
 
   if (!response.ok) {
     return {
