@@ -63,6 +63,19 @@ enum RunStatus {
   READY_FOR_CODEX
 }
 
+enum LocalTestRunStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+  CANCELED
+}
+
+enum LocalTestRunScope {
+  FEATURE
+  SCENARIO
+}
+
 enum JobEventType {
   JOB_CREATED
   JOB_APPROVED
@@ -132,11 +145,36 @@ model Repository {
   updatedAt            DateTime            @updatedAt @map("updated_at")
   jobs                 Job[]
   discoverRuns         DiscoverRun[]
+  localTestRuns        LocalTestRun[]
   trackerIntegration   TrackerIntegration? @relation(fields: [trackerIntegrationId], references: [id], onDelete: SetNull)
 
   @@unique([provider, owner, name])
   @@index([trackerIntegrationId])
   @@map("repositories")
+}
+
+model LocalTestRun {
+  id           String             @id @default(uuid()) @db.Uuid
+  repositoryId String             @map("repository_id") @db.Uuid
+  scope        LocalTestRunScope   @default(FEATURE)
+  status       LocalTestRunStatus  @default(QUEUED)
+  featurePath  String             @map("feature_path")
+  scenarioLine Int?               @map("scenario_line")
+  command      String?
+  exitCode     Int?               @map("exit_code")
+  stdoutPath   String?            @map("stdout_path")
+  stderrPath   String?            @map("stderr_path")
+  error        String?
+  workerId     String?            @map("worker_id")
+  startedAt    DateTime?          @map("started_at")
+  completedAt  DateTime?          @map("completed_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+  repository   Repository         @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([repositoryId, featurePath, createdAt])
+  @@map("local_test_runs")
 }
 
 model DiscoverRun {

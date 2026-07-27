@@ -38,6 +38,10 @@ export const runStatusSchema = z.enum([
   "READY_FOR_CODEX",
 ]);
 
+export const localTestRunStatusSchema = z.enum(["QUEUED", "RUNNING", "PASSED", "FAILED", "CANCELED"]);
+
+export const localTestRunScopeSchema = z.enum(["FEATURE", "SCENARIO"]);
+
 export const jobEventTypeSchema = z.enum([
   "JOB_CREATED",
   "JOB_APPROVED",
@@ -507,6 +511,55 @@ export const cucumberFeatureDetailResponseSchema = z.object({
   repository: repositoryResponseSchema,
 });
 
+export const createLocalTestRunRequestSchema = z.object({
+  featurePath: z.string().trim().min(1, "Feature path is required").max(500),
+  scenarioLine: z.number().int().positive().optional(),
+});
+
+export const localTestRunResponseSchema = z.object({
+  command: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  createdAt: z.string(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  error: z.string().nullable(),
+  exitCode: z.number().int().nullable(),
+  featurePath: z.string(),
+  id: z.string(),
+  repository: repositoryResponseSchema,
+  repositoryId: z.string(),
+  scenarioLine: z.number().int().positive().nullable(),
+  scope: localTestRunScopeSchema,
+  startedAt: z.string().nullable(),
+  status: localTestRunStatusSchema,
+  stderrPath: z.string().nullable(),
+  stdoutPath: z.string().nullable(),
+  updatedAt: z.string(),
+  workerId: z.string().nullable(),
+});
+
+export const localTestRunStatsResponseSchema = z.object({
+  averageDurationMs: z.number().int().nonnegative().nullable(),
+  canceledRuns: z.number().int().nonnegative(),
+  completedRuns: z.number().int().nonnegative(),
+  failedRuns: z.number().int().nonnegative(),
+  failureRate: z.number().min(0).max(1).nullable(),
+  maxDurationMs: z.number().int().nonnegative().nullable(),
+  minDurationMs: z.number().int().nonnegative().nullable(),
+  passedRuns: z.number().int().nonnegative(),
+  passRate: z.number().min(0).max(1).nullable(),
+  queuedRuns: z.number().int().nonnegative(),
+  runningRuns: z.number().int().nonnegative(),
+  totalRuns: z.number().int().nonnegative(),
+});
+
+export const localTestRunOutputResponseSchema = z.object({
+  stderr: z.string(),
+  stderrPath: z.string().nullable(),
+  stdout: z.string(),
+  stdoutPath: z.string().nullable(),
+  truncated: z.boolean(),
+});
+
 export const explainCucumberScenarioRequestSchema = z.object({
   path: z.string().trim().min(1, "Feature path is required"),
   scenarioLine: z.number().int().positive("Scenario line is required"),
@@ -524,6 +577,8 @@ export type JobPriority = z.infer<typeof prioritySchema>;
 export type RepositoryProvider = z.infer<typeof repositoryProviderSchema>;
 export type TrackerProvider = z.infer<typeof trackerProviderSchema>;
 export type RunStatus = z.infer<typeof runStatusSchema>;
+export type LocalTestRunStatus = z.infer<typeof localTestRunStatusSchema>;
+export type LocalTestRunScope = z.infer<typeof localTestRunScopeSchema>;
 export type JobEventType = z.infer<typeof jobEventTypeSchema>;
 export type CreateRepositoryRequest = z.infer<typeof createRepositoryRequestSchema>;
 export type RepositoryResponse = z.infer<typeof repositoryResponseSchema>;
@@ -556,5 +611,9 @@ export type CucumberFeatureSummary = z.infer<typeof cucumberFeatureSummarySchema
 export type CucumberAssociatedFile = z.infer<typeof cucumberAssociatedFileSchema>;
 export type CucumberFeatureCatalogResponse = z.infer<typeof cucumberFeatureCatalogResponseSchema>;
 export type CucumberFeatureDetailResponse = z.infer<typeof cucumberFeatureDetailResponseSchema>;
+export type CreateLocalTestRunRequest = z.infer<typeof createLocalTestRunRequestSchema>;
+export type LocalTestRunResponse = z.infer<typeof localTestRunResponseSchema>;
+export type LocalTestRunStatsResponse = z.infer<typeof localTestRunStatsResponseSchema>;
+export type LocalTestRunOutputResponse = z.infer<typeof localTestRunOutputResponseSchema>;
 export type ExplainCucumberScenarioRequest = z.infer<typeof explainCucumberScenarioRequestSchema>;
 export type ExplainCucumberScenarioResponse = z.infer<typeof explainCucumberScenarioResponseSchema>;

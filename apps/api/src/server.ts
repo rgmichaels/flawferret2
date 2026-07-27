@@ -11,6 +11,7 @@ import {
 } from "@flawferret2/db";
 import {
   createJobRequestSchema,
+  createLocalTestRunRequestSchema,
   createRepositoryRequestSchema,
   createTrackerIntegrationRequestSchema,
   createDiscoverRunRequestSchema,
@@ -25,6 +26,9 @@ import {
   type JobDiffResponse,
   type JobEventResponse,
   type JobResponse,
+  type LocalTestRunOutputResponse,
+  type LocalTestRunResponse,
+  type LocalTestRunStatsResponse,
   type QueueControlResponse,
   type RepositoryResponse,
   type RunResponse,
@@ -39,6 +43,7 @@ import {
 } from "@flawferret2/shared";
 import Fastify, { type FastifyInstance } from "fastify";
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { z, ZodError } from "zod";
@@ -50,6 +55,7 @@ import { buildDiscoverRecommendations } from "./discover-recommendations.js";
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
 const DIFF_PROCESS_BUFFER = 5_000_000;
+const LOCAL_TEST_OUTPUT_LIMIT = 60_000;
 
 const toJobResponse = (job: {
   id: string;
@@ -210,6 +216,113 @@ const toDiscoverRunResponse = (run: {
   updatedAt: run.updatedAt.toISOString(),
   repository: toRepositoryResponse(run.repository),
 });
+
+const getDurationMs = (startedAt: Date | null, completedAt: Date | null) =>
+  startedAt && completedAt ? Math.max(0, completedAt.getTime() - startedAt.getTime()) : null;
+
+const toLocalTestRunResponse = (run: {
+  command: string | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  error: string | null;
+  exitCode: number | null;
+  featurePath: string;
+  id: string;
+  repository: Parameters<typeof toRepositoryResponse>[0];
+  repositoryId: string;
+  scenarioLine: number | null;
+  scope: LocalTestRunResponse["scope"];
+  startedAt: Date | null;
+  status: LocalTestRunResponse["status"];
+  stderrPath: string | null;
+  stdoutPath: string | null;
+  updatedAt: Date;
+  workerId: string | null;
+}): LocalTestRunResponse => ({
+  command: run.command,
+  completedAt: run.completedAt?.toISOString() ?? null,
+  createdAt: run.createdAt.toISOString(),
+  durationMs: getDurationMs(run.startedAt, run.completedAt),
+  error: run.error,
+  exitCode: run.exitCode,
+  featurePath: run.featurePath,
+  id: run.id,
+  repository: toRepositoryResponse(run.repository),
+  repositoryId: run.repositoryId,
+  scenarioLine: run.scenarioLine,
+  scope: run.scope,
+  startedAt: run.startedAt?.toISOString() ?? null,
+  status: run.status,
+  stderrPath: run.stderrPath,
+  stdoutPath: run.stdoutPath,
+  updatedAt: run.updatedAt.toISOString(),
+  workerId: run.workerId,
+});
+
+const toLocalTestRunStatsResponse = (
+  runs: Array<{
+    completedAt: Date | null;
+    startedAt: Date | null;
+    status: LocalTestRunResponse["status"];
+  }>,
+): LocalTestRunStatsResponse => {
+  const countByStatus = (status: LocalTestRunResponse["status"]) =>
+    runs.filter((run) => run.status === status).length;
+  const passedRuns = countByStatus("PASSED");
+  const failedRuns = countByStatus("FAILED");
+  const canceledRuns = countByStatus("CANCELED");
+  const completedRuns = passedRuns + failedRuns + canceledRuns;
+  const assertedRuns = passedRuns + failedRuns;
+  const durations = runs
+    .map((run) => getDurationMs(run.startedAt, run.completedAt))
+    .filter((duration): duration is number => duration !== null);
+  const durationTotal = durations.reduce((total, duration) => total + duration, 0);
+
+  return {
+    averageDurationMs: durations.length > 0 ? Math.round(durationTotal / durations.length) : null,
+    canceledRuns,
+    completedRuns,
+    failedRuns,
+    failureRate: assertedRuns > 0 ? failedRuns / assertedRuns : null,
+    maxDurationMs: durations.length > 0 ? Math.max(...durations) : null,
+    minDurationMs: durations.length > 0 ? Math.min(...durations) : null,
+    passedRuns,
+    passRate: assertedRuns > 0 ? passedRuns / assertedRuns : null,
+    queuedRuns: countByStatus("QUEUED"),
+    runningRuns: countByStatus("RUNNING"),
+    totalRuns: runs.length,
+  };
+};
+
+const readLocalTestOutputFile = async (path: string | null) => {
+  if (!path) {
+    return {
+      content: "",
+      truncated: false,
+    };
+  }
+
+  try {
+    const content = await readFile(path, "utf8");
+
+    if (content.length <= LOCAL_TEST_OUTPUT_LIMIT) {
+      return {
+        content,
+        truncated: false,
+      };
+    }
+
+    return {
+      content: content.slice(content.length - LOCAL_TEST_OUTPUT_LIMIT),
+      truncated: true,
+    };
+  } catch (error) {
+    return {
+      content: `Unable to read local test output: ${error instanceof Error ? error.message : "Unknown error."}`,
+      truncated: false,
+    };
+  }
+};
 
 const toJobResponseWithRepository = (job: {
   id: string;
@@ -1453,6 +1566,221 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: error instanceof Error ? error.message : "Unable to explain scenario.",
       });
     }
+  });
+
+  server.get("/repositories/:id/features/local-test-runs", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+    const query = z
+      .object({
+        featurePath: z.string().trim().min(1).optional(),
+        limit: z.coerce.number().int().min(1).max(25).default(5),
+        page: z.coerce.number().int().min(1).default(1),
+      })
+      .parse(request.query);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    const where = {
+      repositoryId: params.id,
+      ...(query.featurePath ? { featurePath: query.featurePath } : {}),
+    };
+
+    const [runs, totalRuns] = await Promise.all([
+      prisma.localTestRun.findMany({
+        include: {
+          repository: {
+            include: {
+              trackerIntegration: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+        where,
+      }),
+      prisma.localTestRun.count({
+        where,
+      }),
+    ]);
+
+    return reply.header("x-total-count", totalRuns).send(runs.map(toLocalTestRunResponse));
+  });
+
+  server.get("/repositories/:id/features/local-test-runs/stats", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+    const query = z
+      .object({
+        featurePath: z.string().trim().min(1).optional(),
+        scenarioLine: z.coerce.number().int().positive().optional(),
+      })
+      .parse(request.query);
+
+    const repository = await prisma.repository.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    const runs = await prisma.localTestRun.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        completedAt: true,
+        startedAt: true,
+        status: true,
+      },
+      where: {
+        repositoryId: params.id,
+        ...(query.featurePath ? { featurePath: query.featurePath } : {}),
+        ...(query.scenarioLine ? { scenarioLine: query.scenarioLine } : {}),
+      },
+    });
+
+    return toLocalTestRunStatsResponse(runs);
+  });
+
+  server.post("/repositories/:id/features/local-test-runs", async (request, reply) => {
+    const params = repositoryParamsSchema.parse(request.params);
+    const body = createLocalTestRunRequestSchema.parse(request.body);
+
+    const repository = await prisma.repository.findUnique({
+      include: {
+        trackerIntegration: true,
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!repository) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Repository not found.",
+      });
+    }
+
+    let detail;
+
+    try {
+      detail = await buildFeatureDetail({
+        featurePath: body.featurePath,
+        repository: toRepositoryResponse(repository),
+      });
+    } catch (error) {
+      return reply.status(409).send({
+        error: "FeatureCatalogUnavailable",
+        message: error instanceof Error ? error.message : "Unable to read feature detail.",
+      });
+    }
+
+    if (!detail) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Feature file not found.",
+      });
+    }
+
+    if (body.scenarioLine && !detail.feature.scenarios.some((scenario) => scenario.line === body.scenarioLine)) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Scenario not found.",
+      });
+    }
+
+    const run = await prisma.localTestRun.create({
+      data: {
+        featurePath: body.featurePath,
+        repositoryId: params.id,
+        scenarioLine: body.scenarioLine ?? null,
+        scope: body.scenarioLine ? "SCENARIO" : "FEATURE",
+      },
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+      },
+    });
+
+    return reply.status(201).send(toLocalTestRunResponse(run));
+  });
+
+  server.get("/local-test-runs/:id", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const run = await prisma.localTestRun.findUnique({
+      include: {
+        repository: {
+          include: {
+            trackerIntegration: true,
+          },
+        },
+      },
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!run) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Local test run not found.",
+      });
+    }
+
+    return toLocalTestRunResponse(run);
+  });
+
+  server.get("/local-test-runs/:id/output", async (request, reply) => {
+    const params = jobParamsSchema.parse(request.params);
+    const run = await prisma.localTestRun.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!run) {
+      return reply.status(404).send({
+        error: "NotFound",
+        message: "Local test run not found.",
+      });
+    }
+
+    const [stdout, stderr] = await Promise.all([
+      readLocalTestOutputFile(run.stdoutPath),
+      readLocalTestOutputFile(run.stderrPath),
+    ]);
+    const output: LocalTestRunOutputResponse = {
+      stderr: stderr.content,
+      stderrPath: run.stderrPath,
+      stdout: stdout.content,
+      stdoutPath: run.stdoutPath,
+      truncated: stdout.truncated || stderr.truncated,
+    };
+
+    return output;
   });
 
   server.post("/dev/sample-review-job", async (_request, reply) => {

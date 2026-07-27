@@ -10,7 +10,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
-export type { Job, Prisma, Repository, Run, Worker } from "@prisma/client";
+export type { Job, LocalTestRun, Prisma, Repository, Run, Worker } from "@prisma/client";
 
 export type ClaimNextQueuedJobResult = Awaited<ReturnType<typeof claimNextQueuedJob>>;
 export type ClaimedJob = NonNullable<ClaimNextQueuedJobResult["job"]>;
@@ -22,6 +22,8 @@ export type ClaimNextReviewJobResult = Awaited<ReturnType<typeof claimNextReview
 export type ClaimedReviewJob = NonNullable<ClaimNextReviewJobResult["job"]>;
 export type ClaimNextPrCreatedJobResult = Awaited<ReturnType<typeof claimNextPrCreatedJob>>;
 export type ClaimedPrCreatedJob = NonNullable<ClaimNextPrCreatedJobResult["job"]>;
+export type ClaimNextLocalTestRunResult = Awaited<ReturnType<typeof claimNextLocalTestRun>>;
+export type ClaimedLocalTestRun = NonNullable<ClaimNextLocalTestRunResult["run"]>;
 
 export const DEFAULT_QUEUE_CONTROL_ID = "default";
 
@@ -488,6 +490,107 @@ export const claimNextPrCreatedJob = async (workerId: string) =>
       job,
       queuePaused: false,
     };
+  });
+
+export const claimNextLocalTestRun = async (workerId: string) =>
+  prisma.$transaction(async (tx) => {
+    const candidates = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id
+      FROM local_test_runs
+      WHERE status = 'QUEUED'
+      ORDER BY created_at ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+
+    const candidate = candidates[0];
+
+    if (!candidate) {
+      return {
+        run: null,
+      };
+    }
+
+    const run = await tx.localTestRun.update({
+      where: {
+        id: candidate.id,
+      },
+      data: {
+        startedAt: new Date(),
+        status: "RUNNING",
+        workerId,
+      },
+      include: {
+        repository: true,
+      },
+    });
+
+    return {
+      run,
+    };
+  });
+
+export const markLocalTestRunPassed = async ({
+  command,
+  exitCode,
+  runId,
+  stderrPath,
+  stdoutPath,
+}: {
+  command: string;
+  exitCode: number | null;
+  runId: string;
+  stderrPath: string;
+  stdoutPath: string;
+}) =>
+  prisma.localTestRun.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      command,
+      completedAt: new Date(),
+      exitCode,
+      stderrPath,
+      stdoutPath,
+      status: "PASSED",
+    },
+    include: {
+      repository: true,
+    },
+  });
+
+export const markLocalTestRunFailed = async ({
+  command,
+  error,
+  exitCode,
+  runId,
+  stderrPath,
+  stdoutPath,
+}: {
+  command: string;
+  error?: string | null;
+  exitCode: number | null;
+  runId: string;
+  stderrPath: string;
+  stdoutPath: string;
+}) =>
+  prisma.localTestRun.update({
+    where: {
+      id: runId,
+    },
+    data: {
+      command,
+      completedAt: new Date(),
+      error,
+      exitCode,
+      stderrPath,
+      stdoutPath,
+      status: "FAILED",
+    },
+    include: {
+      repository: true,
+    },
   });
 
 export const markJobRunning = async ({

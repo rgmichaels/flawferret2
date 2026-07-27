@@ -1,8 +1,13 @@
 import type {
   CucumberFeatureCatalogResponse,
   CucumberFeatureSummary,
+  LocalTestRunResponse,
+  LocalTestRunStatsResponse,
+  ReadinessResponse,
   RepositoryResponse,
 } from "@flawferret2/job-schemas";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { AppShell } from "../app-shell";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -39,6 +44,100 @@ async function getFeatureCatalog(repositoryId: string): Promise<CucumberFeatureC
   }
 }
 
+async function getReadiness(): Promise<ReadinessResponse | null> {
+  try {
+    const response = await fetch(`${apiUrl}/readiness`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<ReadinessResponse>;
+  } catch {
+    return null;
+  }
+}
+
+type LocalTestRunList = {
+  runs: LocalTestRunResponse[];
+  totalRuns: number;
+};
+
+async function getLocalTestRuns(repositoryId: string, featurePath: string): Promise<LocalTestRunList> {
+  try {
+    const params = new URLSearchParams({
+      featurePath,
+      limit: "3",
+    });
+    const response = await fetch(`${apiUrl}/repositories/${repositoryId}/features/local-test-runs?${params}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return { runs: [], totalRuns: 0 };
+    }
+
+    const runs = (await response.json()) as LocalTestRunResponse[];
+
+    return {
+      runs,
+      totalRuns: Number(response.headers.get("x-total-count") ?? runs.length),
+    };
+  } catch {
+    return { runs: [], totalRuns: 0 };
+  }
+}
+
+async function getLocalTestRunStats(
+  repositoryId: string,
+  featurePath: string,
+): Promise<LocalTestRunStatsResponse | null> {
+  try {
+    const params = new URLSearchParams({
+      featurePath,
+    });
+    const response = await fetch(`${apiUrl}/repositories/${repositoryId}/features/local-test-runs/stats?${params}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<LocalTestRunStatsResponse>;
+  } catch {
+    return null;
+  }
+}
+
+async function createLocalTestRun(formData: FormData) {
+  "use server";
+
+  const repositoryId = String(formData.get("repositoryId") ?? "");
+  const featurePath = String(formData.get("featurePath") ?? "");
+  const returnTo = String(formData.get("returnTo") ?? "/features");
+
+  if (!repositoryId || !featurePath) {
+    redirect(returnTo);
+  }
+
+  const response = await fetch(`${apiUrl}/repositories/${repositoryId}/features/local-test-runs`, {
+    body: JSON.stringify({
+      featurePath,
+    }),
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  revalidatePath("/features");
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}${response.ok ? "localRunQueued=1" : "localRunError=1"}`);
+}
+
 async function getFeatureHasUnmatchedSteps(repositoryId: string, featurePath: string) {
   try {
     const response = await fetch(
@@ -70,6 +169,39 @@ const formatDate = (value: string) =>
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+
+const formatLocalRunStatus = (status: LocalTestRunResponse["status"]) =>
+  status.charAt(0) + status.slice(1).toLowerCase();
+
+const localRunLabel = (run: LocalTestRunResponse, scenarios: CucumberFeatureSummary["scenarios"]) => {
+  if (run.scope !== "SCENARIO" || !run.scenarioLine) {
+    return {
+      meta: "All scenarios",
+      title: "Feature",
+    };
+  }
+
+  const scenario = scenarios.find((candidate) => candidate.line === run.scenarioLine);
+
+  return {
+    meta: `Line ${run.scenarioLine}`,
+    title: scenario?.name ?? `Scenario on line ${run.scenarioLine}`,
+  };
+};
+
+const formatDuration = (durationMs: number | null) => {
+  if (durationMs === null) {
+    return "No timing yet";
+  }
+
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+
+  return `${(durationMs / 1000).toFixed(1)}s`;
+};
+
+const formatRate = (rate: number | null) => (rate === null ? "No data" : `${Math.round(rate * 100)}%`);
 
 const normalizeSearch = (value: string | undefined) => value?.trim().toLowerCase() ?? "";
 
@@ -332,12 +464,20 @@ const renderFeatureTree = ({
 export default async function FeaturesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ feature?: string; repositoryId?: string; q?: string; tag?: string; unmatched?: string }>;
+  searchParams: Promise<{
+    feature?: string;
+    localRunError?: string;
+    localRunQueued?: string;
+    repositoryId?: string;
+    q?: string;
+    tag?: string;
+    unmatched?: string;
+  }>;
 }) {
-  const [{ feature: selectedFeaturePathParam, q, repositoryId, tag, unmatched }, repositories] = await Promise.all([
-    searchParams,
-    getRepositories(),
-  ]);
+  const [
+    { feature: selectedFeaturePathParam, localRunError, localRunQueued, q, repositoryId, tag, unmatched },
+    [repositories, readiness],
+  ] = await Promise.all([searchParams, Promise.all([getRepositories(), getReadiness()])]);
   const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0] ?? null;
   const catalog = selectedRepository ? await getFeatureCatalog(selectedRepository.id) : null;
   const search = normalizeSearch(q);
@@ -363,6 +503,29 @@ export default async function FeaturesPage({
       })
     : null;
   const selectedFeatureUnmatchedStepCount = selectedFeature ? getFeatureUnmatchedStepCount(selectedFeature) : 0;
+  const selectedFeatureLocalTestRunList =
+    selectedFeature && catalog
+      ? await getLocalTestRuns(catalog.repository.id, selectedFeature.path)
+      : { runs: [], totalRuns: 0 };
+  const selectedFeatureLocalTestRuns = selectedFeatureLocalTestRunList.runs;
+  const selectedFeatureLocalTestStats =
+    selectedFeature && catalog ? await getLocalTestRunStats(catalog.repository.id, selectedFeature.path) : null;
+  const selectedFeatureHref =
+    selectedFeature && catalog
+      ? buildFeaturesHref({
+          featurePath: selectedFeature.path,
+          repositoryId: catalog.repository.id,
+          search,
+          tag: selectedTag,
+          unmatchedOnly,
+        })
+      : "/features";
+  const selectedFeatureLocalTestRunsHref =
+    selectedFeature && catalog
+      ? `/local-test-runs?repositoryId=${encodeURIComponent(catalog.repository.id)}&featurePath=${encodeURIComponent(
+          selectedFeature.path,
+        )}`
+      : "/local-test-runs";
 
   return (
     <AppShell active="features">
@@ -534,7 +697,7 @@ export default async function FeaturesPage({
                   </div>
                   <div>
                     <dt>Runs</dt>
-                    <dd>No data</dd>
+                    <dd>{selectedFeatureLocalTestStats?.totalRuns ?? 0}</dd>
                   </div>
                 </dl>
 
@@ -578,10 +741,74 @@ export default async function FeaturesPage({
                     <h3>Run Readiness</h3>
                     <span>Feature-level actions</span>
                   </div>
-                  <p>No feature run history has been recorded yet.</p>
-                  <a className="secondary-button" href="/jobs/new">
-                    Create Run Job
-                  </a>
+                  {localRunQueued === "1" ? (
+                    <p className="local-test-run-confirmation">Local test run queued.</p>
+                  ) : null}
+                  {localRunError === "1" ? (
+                    <p className="local-test-run-error">Unable to queue local test run.</p>
+                  ) : null}
+                  <div className="local-test-run-runner-hint">
+                    <strong>Runner</strong>
+                    <span>{readiness?.runner.healthText ?? "Runner status unavailable."}</span>
+                  </div>
+                  <dl className="local-test-run-stats">
+                    <div>
+                      <dt>Total Runs</dt>
+                      <dd>{selectedFeatureLocalTestStats?.totalRuns ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Failed</dt>
+                      <dd>{selectedFeatureLocalTestStats?.failedRuns ?? 0}</dd>
+                    </div>
+                    <div>
+                      <dt>Pass Rate</dt>
+                      <dd>{formatRate(selectedFeatureLocalTestStats?.passRate ?? null)}</dd>
+                    </div>
+                    <div>
+                      <dt>Avg Time</dt>
+                      <dd>{formatDuration(selectedFeatureLocalTestStats?.averageDurationMs ?? null)}</dd>
+                    </div>
+                  </dl>
+                  {selectedFeatureLocalTestRuns.length > 0 ? (
+                    <>
+                      <ol className="local-test-run-list">
+                        {selectedFeatureLocalTestRuns.map((run) => {
+                          const label = localRunLabel(run, selectedFeature.scenarios);
+
+                          return (
+                            <li key={run.id}>
+                              <div>
+                                <span className={`local-test-run-status ${run.status.toLowerCase()}`}>
+                                  {formatLocalRunStatus(run.status)}
+                                </span>
+                                <span className="local-test-run-name">
+                                  <strong>{label.title}</strong>
+                                  <small>{label.meta}</small>
+                                </span>
+                              </div>
+                              <span>
+                                {formatDuration(run.durationMs)} / {formatDate(run.updatedAt)}
+                              </span>
+                              <a className="compact-output-link" href={`/local-test-runs/${run.id}/output`}>
+                                View Output
+                              </a>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                      <a className="local-test-run-history-link" href={selectedFeatureLocalTestRunsHref}>
+                        View all {selectedFeatureLocalTestRunList.totalRuns} runs
+                      </a>
+                    </>
+                  ) : (
+                    <p>No feature run history has been recorded yet.</p>
+                  )}
+                  <form action={createLocalTestRun} className="local-test-run-form">
+                    <input name="repositoryId" type="hidden" value={catalog.repository.id} />
+                    <input name="featurePath" type="hidden" value={selectedFeature.path} />
+                    <input name="returnTo" type="hidden" value={selectedFeatureHref} />
+                    <button type="submit">Test Local</button>
+                  </form>
                 </section>
               </article>
             ) : null}
