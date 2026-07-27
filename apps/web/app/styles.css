@@ -268,9 +268,18 @@ button {
 }
 
 .secondary-button {
+  align-items: center;
   background: #ffffff;
   border: 1px solid #cbd5e1;
+  border-radius: 8px;
   color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  justify-self: start;
+  padding: 11px 16px;
+  text-decoration: none;
 }
 
 .secondary-button:hover {
@@ -1020,6 +1029,276 @@ td span {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.feature-explorer {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(320px, 460px) minmax(0, 1fr);
+}
+
+.feature-tree-panel,
+.feature-preview-panel {
+  overflow: hidden;
+}
+
+.feature-tree-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.feature-tree-list {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
+.feature-tree-list .feature-tree-list {
+  border-left: 1px solid #e1e7f0;
+  margin: 6px 0 4px 12px;
+  padding: 0 0 0 12px;
+}
+
+.feature-tree-node details {
+  display: grid;
+  gap: 4px;
+}
+
+.feature-tree-node summary,
+.feature-tree-node a {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #172033;
+  display: grid;
+  gap: 4px 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.feature-tree-node summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.feature-tree-node summary::-webkit-details-marker {
+  display: none;
+}
+
+.feature-tree-node a:hover,
+.feature-tree-node summary:hover {
+  background: #f8fafc;
+  border-color: #dce3ee;
+}
+
+.feature-tree-node.active > a {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.feature-tree-node span:nth-child(2) {
+  font-size: 13px;
+  font-weight: 900;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feature-tree-node small {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 750;
+  grid-column: 2 / 3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feature-tree-node em {
+  background: #fee2e2;
+  border-radius: 999px;
+  color: #b91c1c;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.feature-tree-icon {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  color: #3730a3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 6px;
+}
+
+.feature-tree-node.folder > details > summary .feature-tree-icon {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+  color: #0e7490;
+}
+
+.feature-preview-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.feature-preview-panel .panel-header {
+  align-items: start;
+}
+
+.feature-preview-kicker {
+  color: #2563eb;
+  display: block;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.feature-preview-panel h2 {
+  color: #172033;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.feature-preview-panel .panel-header p {
+  color: #667085;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.feature-preview-description {
+  color: #475467;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.45;
+  margin: 0;
+  padding: 0 20px;
+}
+
+.feature-preview-stats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0 20px;
+}
+
+.feature-preview-stats div {
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.feature-preview-stats dt {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.feature-preview-stats dd {
+  color: #172033;
+  font-size: 18px;
+  font-weight: 900;
+  margin: 5px 0 0;
+}
+
+.feature-preview-panel > .tag-row {
+  padding: 0 20px;
+}
+
+.feature-preview-section {
+  border-top: 1px solid #edf1f6;
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.feature-preview-section > div:first-child {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feature-preview-section h3 {
+  color: #172033;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.feature-preview-section > div:first-child span,
+.feature-preview-section p {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.feature-preview-scenario-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feature-preview-scenario-list li {
+  align-items: center;
+  border-top: 1px solid #edf1f6;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.feature-preview-scenario-list li:first-child {
+  border-top: 0;
+}
+
+.feature-preview-scenario-list strong {
+  color: #172033;
+  display: block;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.feature-preview-scenario-list span {
+  color: #667085;
+  display: block;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.feature-preview-scenario-list em {
+  background: #fee2e2;
+  border-radius: 999px;
+  color: #b91c1c;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  padding: 5px 8px;
+}
+
+.feature-run-placeholder .secondary-button {
+  justify-self: start;
 }
 
 .feature-card {
@@ -3590,6 +3869,14 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .feature-explorer {
+    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  }
+
+  .feature-preview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .repository-edit-form {
     grid-template-columns: 1fr;
   }
@@ -3712,8 +3999,14 @@ textarea {
   .discover-history-list > li,
   .discover-run-request-list > div,
   .discover-run-summary-grid,
+  .feature-explorer,
+  .feature-preview-stats,
   .recommendation-list > li {
     grid-template-columns: 1fr;
+  }
+
+  .feature-tree-panel {
+    position: static;
   }
 
   .discover-history-meta {
