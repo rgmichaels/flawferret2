@@ -6,6 +6,7 @@ import type {
   RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -180,7 +181,15 @@ export async function AppShell({ active, children }: AppShellProps) {
     <main className="app-shell">
       <aside className="sidebar" aria-label="FlawFerret2 navigation">
         <div className="brand">
-          <div className="brand-mark">F2</div>
+          <Image
+            alt=""
+            aria-hidden="true"
+            className="brand-mark"
+            height={48}
+            priority
+            src="/flawferret2-brand-mark.png"
+            width={48}
+          />
           <div>
             <strong>FlawFerret 2</strong>
             <span>QA orchestration</span>

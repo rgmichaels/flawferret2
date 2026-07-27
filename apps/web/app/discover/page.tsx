@@ -5,13 +5,13 @@ import type {
   DiscoverRunResponse,
   DiscoverTestRecommendation,
   DiscoverTestRecommendationsResponse,
-  QueueControlResponse,
   RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { AppShell } from "../app-shell";
-import { classifyRecommendationsByCoverage, summarizeRelatedCoverage, type CoverageDecision } from "./coverage-matching";
+import { AnalyzeSubmitButton } from "./analyze-submit-button";
+import { classifyRecommendationsByCoverage, summarizeRelatedCoverage } from "./coverage-matching";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -30,32 +30,6 @@ async function getRepositories(): Promise<RepositoryResponse[]> {
     return response.json() as Promise<RepositoryResponse[]>;
   } catch {
     return [];
-  }
-}
-
-async function getQueueControl(): Promise<QueueControlResponse> {
-  try {
-    const response = await fetch(`${apiUrl}/queue`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return {
-        paused: false,
-        pausedAt: null,
-        resumedAt: null,
-        updatedAt: new Date().toISOString(),
-      };
-    }
-
-    return response.json() as Promise<QueueControlResponse>;
-  } catch {
-    return {
-      paused: false,
-      pausedAt: null,
-      resumedAt: null,
-      updatedAt: new Date().toISOString(),
-    };
   }
 }
 
@@ -133,26 +107,6 @@ async function getDiscoverRuns(): Promise<DiscoverRunResponse[]> {
   }
 }
 
-async function getDiscoverRun(runId: string): Promise<DiscoverRunResponse | null> {
-  if (!runId) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${apiUrl}/discover/runs/${runId}`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return response.json() as Promise<DiscoverRunResponse>;
-  } catch {
-    return null;
-  }
-}
-
 async function createDiscoverRun(input: CreateDiscoverRunRequest): Promise<DiscoverRunResponse> {
   const response = await fetch(`${apiUrl}/discover/runs`, {
     body: JSON.stringify(input),
@@ -168,25 +122,6 @@ async function createDiscoverRun(input: CreateDiscoverRunRequest): Promise<Disco
   }
 
   return response.json() as Promise<DiscoverRunResponse>;
-}
-
-async function markDiscoverRunQueued(runId: string, queuedTitles: string[]) {
-  if (!runId || queuedTitles.length === 0) {
-    return;
-  }
-
-  const response = await fetch(`${apiUrl}/discover/runs/${runId}/queued`, {
-    body: JSON.stringify({ queuedTitles }),
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    method: "PUT",
-  });
-
-  if (!response.ok) {
-    throw new Error("Unable to mark discovery recommendations as queued.");
-  }
 }
 
 async function deleteDiscoverRun(formData: FormData) {
@@ -209,93 +144,6 @@ async function deleteDiscoverRun(formData: FormData) {
 
   revalidatePath("/discover");
   redirect("/discover?deleted=1");
-}
-
-async function queueSelectedTests(formData: FormData) {
-  "use server";
-
-  const discoverRunId = String(formData.get("discoverRunId") ?? "");
-  const repositoryId = String(formData.get("repositoryId") ?? "");
-  const targetBranch = String(formData.get("targetBranch") ?? "main");
-  const pageUrl = String(formData.get("pageUrl") ?? "");
-  const notes = String(formData.get("notes") ?? "");
-  const selectedRecommendations = formData.getAll("recommendation").map((value) => String(value));
-  const queuedCount = selectedRecommendations.length;
-
-  if (queuedCount === 0) {
-    const params = new URLSearchParams({
-      queued: "0",
-    });
-
-    if (discoverRunId) {
-      params.set("runId", discoverRunId);
-    } else {
-      params.set("notes", notes);
-      params.set("pageUrl", pageUrl);
-      params.set("repositoryId", repositoryId);
-      params.set("targetBranch", targetBranch);
-    }
-
-    redirect(`/discover?${params.toString()}`);
-  }
-
-  const recommendations = selectedRecommendations.map(
-    (serializedRecommendation) => JSON.parse(serializedRecommendation) as TestRecommendation,
-  );
-
-  await Promise.all(
-    recommendations.map(async (recommendation) => {
-      const response = await fetch(`${apiUrl}/jobs`, {
-        body: JSON.stringify({
-          jobType: "ADD_PLAYWRIGHT_TEST",
-          priority: recommendation.impact === "High" ? "HIGH" : "NORMAL",
-          payload: {
-            acceptanceCriteria: buildAcceptanceCriteria({
-              notes,
-              pageUrl,
-              recommendation,
-            }),
-            createDraftPr: true,
-            featureArea: recommendation.title,
-            goal: `Implement page-discovery test coverage: ${recommendation.title}.`,
-            repositoryId,
-            runAffectedTests: true,
-            targetBranch,
-          },
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to queue one or more selected tests.");
-      }
-    }),
-  );
-
-  await markDiscoverRunQueued(
-    discoverRunId,
-    recommendations.map((recommendation) => recommendation.title),
-  );
-
-  revalidatePath("/");
-  revalidatePath("/discover");
-  const params = new URLSearchParams({
-    queued: String(queuedCount),
-  });
-
-  if (discoverRunId) {
-    params.set("runId", discoverRunId);
-  } else {
-    params.set("notes", notes);
-    params.set("pageUrl", pageUrl);
-    params.set("repositoryId", repositoryId);
-    params.set("targetBranch", targetBranch);
-  }
-
-  redirect(`/discover?${params.toString()}`);
 }
 
 const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
@@ -574,50 +422,49 @@ const buildRecommendations = ({ notes, pageUrl }: { notes: string; pageUrl: stri
   return recommendations.slice(0, 20);
 };
 
-const buildAcceptanceCriteria = ({
-  notes,
-  pageUrl,
-  recommendation,
-}: {
-  notes: string;
-  pageUrl: string;
-  recommendation: TestRecommendation;
-}) =>
-  [
-    "Source: Page discovery recommendation",
-    `Page URL: ${pageUrl}`,
-    `Impact: ${recommendation.impact}`,
-    `Tags: ${recommendation.tags.join(" ")}`,
-    notes.trim() ? `Discovery notes: ${notes.trim()}` : null,
-    "",
-    "Suggested scenario:",
-    ...recommendation.scenario,
-    "",
-    "Why this matters:",
-    recommendation.reason,
-    "",
-    "Implementation guidance:",
-    ...recommendation.acceptance.map((item) => `- ${item}`),
-    "- Add or update Cucumber feature coverage.",
-    "- Reuse existing page objects and step definitions where sensible.",
-    "- Keep the scenario focused on one behavior.",
-    "- Run affected tests.",
-  ]
-    .filter((line): line is string => line !== null)
-    .join("\n");
-
-const formatCoveragePercent = (score: number) => `${Math.round(score * 100)}%`;
-
 const formatRunDate = (value: string) =>
   new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 
-const coverageDecisionText = (decision: CoverageDecision) =>
-  decision.matchedCoverage
-    ? `${decision.reason} Match: ${decision.matchedCoverage.feature} > ${decision.matchedCoverage.scenario}.`
-    : decision.reason;
+const getSelectedPage = (value: string | undefined) => {
+  const page = Number(value);
+
+  return Number.isInteger(page) && page > 0 ? page : 1;
+};
+
+const getSelectedPageSize = (value: string | undefined) => {
+  const pageSize = Number(value);
+
+  return [5, 10, 25].includes(pageSize) ? pageSize : 5;
+};
+
+const buildDiscoverHref = ({
+  deleted,
+  page,
+  pageSize,
+}: {
+  deleted?: string;
+  page: number;
+  pageSize: number;
+}) => {
+  const params = new URLSearchParams();
+
+  if (deleted === "1") {
+    params.set("deleted", "1");
+  }
+  if (page !== 1) {
+    params.set("page", String(page));
+  }
+  if (pageSize !== 5) {
+    params.set("pageSize", String(pageSize));
+  }
+
+  const query = params.toString();
+
+  return query ? `/discover?${query}` : "/discover";
+};
 
 const buildDiscoverAnalysis = async ({
   notes,
@@ -691,7 +538,7 @@ async function analyzePage(formData: FormData) {
   });
 
   revalidatePath("/discover");
-  redirect(`/discover?runId=${run.id}`);
+  redirect(`/discover/${run.id}`);
 }
 
 export default async function DiscoverPage({
@@ -699,39 +546,38 @@ export default async function DiscoverPage({
 }: {
   searchParams: Promise<{
     notes?: string;
+    page?: string;
+    pageSize?: string;
     pageUrl?: string;
-    queued?: string;
     repositoryId?: string;
-    runId?: string;
     deleted?: string;
     targetBranch?: string;
   }>;
 }) {
   const query = await searchParams;
-  const [{ deleted, notes = "", pageUrl = "", queued, repositoryId = "", runId = "", targetBranch = "main" }, repositories, queueControl, recentRuns, activeRun] =
-    await Promise.all([
-      Promise.resolve(query),
-      getRepositories(),
-      getQueueControl(),
-      getDiscoverRuns(),
-      getDiscoverRun(query.runId ?? ""),
-    ]);
-  const activeRepositoryId = activeRun?.repositoryId ?? repositoryId;
-  const selectedRepository =
-    repositories.find((repository) => repository.id === activeRepositoryId) ?? activeRun?.repository ?? repositories[0];
+  const { deleted, notes = "", page: pageParam, pageSize: pageSizeParam, pageUrl = "", repositoryId = "", targetBranch = "main" } = query;
+  const selectedPage = getSelectedPage(pageParam);
+  const selectedPageSize = getSelectedPageSize(pageSizeParam);
+  const [repositories, recentRuns] = await Promise.all([getRepositories(), getDiscoverRuns()]);
+  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
   const selectedRepositoryId = repositoryId || selectedRepository?.id || "";
-  const selectedBranch = activeRun?.targetBranch ?? (targetBranch || selectedRepository?.defaultBranch || "main");
-  const activePageUrl = activeRun?.pageUrl ?? pageUrl;
-  const activeNotes = activeRun?.notes ?? notes;
-  const existingCoverage = activeRun?.relatedCoverage ?? [];
-  const visibleCoverageDecisions = activeRun?.visibleDecisions ?? [];
-  const hiddenCoverageDecisions = activeRun?.hiddenDecisions ?? [];
-  const coverageDecisions = [...visibleCoverageDecisions, ...hiddenCoverageDecisions];
-  const recommendations = visibleCoverageDecisions.map((decision) => decision.recommendation);
-  const suppressedDuplicateCount = hiddenCoverageDecisions.length;
-  const recommendationProvider = activeRun?.provider ?? "";
-  const queuedTitleSet = new Set(activeRun?.queuedTitles ?? []);
-  const queuedCount = Number.parseInt(queued ?? "", 10);
+  const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
+  const totalRuns = recentRuns.length;
+  const totalPages = Math.max(1, Math.ceil(totalRuns / selectedPageSize));
+  const page = Math.min(selectedPage, totalPages);
+  const firstShown = totalRuns === 0 ? 0 : (page - 1) * selectedPageSize + 1;
+  const lastShown = Math.min(totalRuns, page * selectedPageSize);
+  const paginatedRuns = recentRuns.slice((page - 1) * selectedPageSize, page * selectedPageSize);
+  const previousHref = buildDiscoverHref({
+    deleted,
+    page: Math.max(1, page - 1),
+    pageSize: selectedPageSize,
+  });
+  const nextHref = buildDiscoverHref({
+    deleted,
+    page: Math.min(totalPages, page + 1),
+    pageSize: selectedPageSize,
+  });
 
   return (
     <AppShell active="discover">
@@ -750,7 +596,7 @@ export default async function DiscoverPage({
           <div className="panel-header">
             <div>
               <h2>Analyze Page</h2>
-              <p>Generate high-impact test ideas, select the valuable ones, and queue them for implementation.</p>
+              <p>Create a saved analysis artifact, then review and queue recommended tests from its detail page.</p>
             </div>
           </div>
           <form action={analyzePage} className="job-form discover-form">
@@ -771,32 +617,49 @@ export default async function DiscoverPage({
             </label>
             <label className="wide-field">
               Page URL
-              <input name="pageUrl" defaultValue={activePageUrl} placeholder="https://example.com/login" required type="url" />
+              <input name="pageUrl" defaultValue={pageUrl} placeholder="https://example.com/login" required type="url" />
             </label>
             <label className="wide-field">
               Notes
               <textarea
                 name="notes"
-                defaultValue={activeNotes}
+                defaultValue={notes}
                 placeholder="Focus on authentication, validation, empty states, or the riskiest user flows."
               />
             </label>
-            <button type="submit" disabled={repositories.length === 0}>
-              Analyze Page
-            </button>
+            <AnalyzeSubmitButton disabled={repositories.length === 0} />
           </form>
         </section>
+
+        {deleted === "1" ? <p className="queue-success-note">Discovery run deleted.</p> : null}
 
         {recentRuns.length > 0 ? (
           <section className="panel discover-history-panel">
             <div className="panel-header">
               <div>
-                <h2>Recent Discoveries</h2>
-                <p>Reopen saved page analyses without regenerating recommendations.</p>
+                <h2>Saved Analyses</h2>
+                <p>
+                  Reopen saved page analyses without regenerating recommendations. Showing {firstShown}-{lastShown} of{" "}
+                  {totalRuns}.
+                </p>
               </div>
+              <form className="discover-history-controls" action="/discover">
+                {deleted === "1" ? <input name="deleted" type="hidden" value="1" /> : null}
+                <label>
+                  Page Size
+                  <select defaultValue={selectedPageSize} name="pageSize">
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                  </select>
+                </label>
+                <button className="secondary-button" type="submit">
+                  Apply
+                </button>
+              </form>
             </div>
             <ol className="discover-history-list">
-              {recentRuns.map((run) => {
+              {paginatedRuns.map((run) => {
                 const candidateCount = run.visibleDecisions.length;
                 const hiddenCount = run.hiddenDecisions.length;
 
@@ -826,8 +689,34 @@ export default async function DiscoverPage({
                 );
               })}
             </ol>
+            <nav className="pagination-bar" aria-label="Saved analyses pagination">
+              <span>
+                Page {page} of {totalPages}
+              </span>
+              <div>
+                {page > 1 ? (
+                  <a className="secondary-button" href={previousHref}>
+                    Previous
+                  </a>
+                ) : (
+                  <span className="pagination-disabled">Previous</span>
+                )}
+                {page < totalPages ? (
+                  <a className="secondary-button" href={nextHref}>
+                    Next
+                  </a>
+                ) : (
+                  <span className="pagination-disabled">Next</span>
+                )}
+              </div>
+            </nav>
           </section>
-        ) : null}
+        ) : (
+          <section className="panel detail-empty">
+            <h2>No saved analyses yet</h2>
+            <p>Analyze a page to create the first saved recommendation artifact.</p>
+          </section>
+        )}
 
         {selectedRepository ? (
           selectedRepository.trackerIntegration ? (
@@ -841,163 +730,6 @@ export default async function DiscoverPage({
             </p>
           )
         ) : null}
-
-        {queueControl.paused ? (
-          <p className="queue-paused-note">Queue is paused. Selected tests can be queued now and will wait.</p>
-        ) : null}
-
-        {deleted === "1" ? <p className="queue-success-note">Discovery run deleted.</p> : null}
-
-        {Number.isFinite(queuedCount) ? (
-          queuedCount > 0 ? (
-            <p className="queue-success-note">
-              {queuedCount} {queuedCount === 1 ? "test was" : "tests were"} added to the queue.
-            </p>
-          ) : (
-            <p className="queue-paused-note">Select at least one recommended test before queueing.</p>
-          )
-        ) : null}
-
-        {activePageUrl && existingCoverage.length > 0 ? (
-          <section className="panel existing-coverage-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Related Existing Tests</h2>
-                <p>
-                  {existingCoverage.length} nearby Cucumber {existingCoverage.length === 1 ? "scenario was" : "scenarios were"} used
-                  to avoid duplicate recommendations.
-                </p>
-              </div>
-            </div>
-            <ol className="existing-coverage-list">
-              {existingCoverage.slice(0, 8).map((coverage) => (
-                <li key={`${coverage.path}:${coverage.scenario}`}>
-                  <div>
-                    <strong>{coverage.scenario}</strong>
-                    <span>{coverage.feature}</span>
-                  </div>
-                  <code>{coverage.path}</code>
-                  {coverage.tags.length > 0 ? (
-                    <div className="tag-row compact">
-                      {coverage.tags.map((tag) => (
-                        <span key={tag}>{tag}</span>
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          </section>
-        ) : null}
-
-        {coverageDecisions.length > 0 ? (
-          <form action={queueSelectedTests} className="panel recommendation-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Recommended Tests</h2>
-                <p>
-                  {recommendations.length} behavior-focused {recommendations.length === 1 ? "candidate" : "candidates"} for this
-                  page. Generated by {recommendationProvider}.
-                </p>
-              </div>
-              <button type="submit">Queue Selected</button>
-            </div>
-            {suppressedDuplicateCount > 0 ? (
-              <p className="queue-success-note recommendation-source-note">
-                {suppressedDuplicateCount} duplicate-looking{" "}
-                {suppressedDuplicateCount === 1 ? "recommendation was" : "recommendations were"} hidden because related tests
-                already exist.
-              </p>
-            ) : null}
-            <input name="repositoryId" type="hidden" value={selectedRepositoryId} />
-            <input name="targetBranch" type="hidden" value={selectedBranch} />
-            <input name="pageUrl" type="hidden" value={activePageUrl} />
-            <input name="notes" type="hidden" value={activeNotes} />
-            {activeRun ? <input name="discoverRunId" type="hidden" value={activeRun.id} /> : null}
-            {visibleCoverageDecisions.length > 0 ? (
-              <ol className="recommendation-list">
-                {visibleCoverageDecisions.map((decision) => (
-                  <li key={decision.recommendation.title}>
-                    <label className="recommendation-check">
-                      <input name="recommendation" type="checkbox" value={JSON.stringify(decision.recommendation)} />
-                      <span>Implement Test</span>
-                    </label>
-                    <div className="recommendation-copy">
-                      <div>
-                        <h3>{decision.recommendation.title}</h3>
-                        <span className={`impact-pill ${decision.recommendation.impact.toLowerCase()}`}>
-                          {decision.recommendation.impact} impact
-                        </span>
-                        {queuedTitleSet.has(decision.recommendation.title) ? (
-                          <span className="queued-pill">Queued</span>
-                        ) : null}
-                      </div>
-                      <p>{decision.recommendation.reason}</p>
-                      <p className="coverage-decision-note">{coverageDecisionText(decision)}</p>
-                      <pre>{decision.recommendation.scenario.join("\n")}</pre>
-                      <div className="tag-row compact">
-                        {decision.recommendation.tags.map((tag) => (
-                          <span key={tag}>{tag}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="queue-paused-note recommendation-source-note">
-                Every generated recommendation looked similar to existing Cucumber coverage.
-              </p>
-            )}
-            {hiddenCoverageDecisions.length > 0 ? (
-              <details className="hidden-recommendations">
-                <summary>
-                  Show {hiddenCoverageDecisions.length} hidden duplicate-looking{" "}
-                  {hiddenCoverageDecisions.length === 1 ? "suggestion" : "suggestions"}
-                </summary>
-                <ol className="recommendation-list hidden">
-                  {hiddenCoverageDecisions.map((decision) => (
-                    <li key={decision.recommendation.title}>
-                      <label className="recommendation-check">
-                        <input name="recommendation" type="checkbox" value={JSON.stringify(decision.recommendation)} />
-                        <span>Implement Anyway</span>
-                      </label>
-                      <div className="recommendation-copy">
-                        <div>
-                          <h3>{decision.recommendation.title}</h3>
-                          <span className={`impact-pill ${decision.recommendation.impact.toLowerCase()}`}>
-                            {decision.recommendation.impact} impact
-                          </span>
-                          {queuedTitleSet.has(decision.recommendation.title) ? (
-                            <span className="queued-pill">Queued</span>
-                          ) : null}
-                        </div>
-                        <p>{decision.recommendation.reason}</p>
-                        <p className="coverage-decision-note duplicate">
-                          Hidden because {coverageDecisionText(decision)} Similarity: {formatCoveragePercent(decision.score)}.
-                        </p>
-                        {decision.matchedCoverage ? (
-                          <code className="coverage-match-path">{decision.matchedCoverage.path}</code>
-                        ) : null}
-                        <pre>{decision.recommendation.scenario.join("\n")}</pre>
-                        <div className="tag-row compact">
-                          {decision.recommendation.tags.map((tag) => (
-                            <span key={tag}>{tag}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </details>
-            ) : null}
-          </form>
-        ) : (
-          <section className="panel detail-empty">
-            <h2>No page analyzed yet</h2>
-            <p>Enter a page URL to generate candidate tests.</p>
-          </section>
-        )}
       </section>
     </AppShell>
   );

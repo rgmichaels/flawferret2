@@ -258,7 +258,7 @@ export default async function DiscoverRunPage({
             <p className="eyebrow">Discovery Artifact</p>
             <h1>{run.pageUrl}</h1>
             <p>
-              Saved {formatRunDate(run.createdAt)} for {repositoryLabel(run)} on {run.targetBranch}.
+              Saved analysis for {repositoryLabel(run)} on {run.targetBranch}.
             </p>
           </div>
           <div className="topbar-actions">
@@ -291,6 +291,14 @@ export default async function DiscoverRunPage({
           <article className="panel discover-run-summary-card">
             <span>Provider</span>
             <strong>{run.provider}</strong>
+          </article>
+          <article className="panel discover-run-summary-card timestamp">
+            <span>Saved</span>
+            <strong>{formatRunDate(run.createdAt)}</strong>
+          </article>
+          <article className="panel discover-run-summary-card timestamp">
+            <span>Updated</span>
+            <strong>{formatRunDate(run.updatedAt)}</strong>
           </article>
           <article className="panel discover-run-summary-card">
             <span>Visible</span>
