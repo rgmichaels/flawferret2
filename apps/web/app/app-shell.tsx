@@ -7,7 +7,7 @@ import type {
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import Image from "next/image";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { RepositoryScopeSelector } from "./repository-scope-selector";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -197,7 +197,16 @@ export async function AppShell({ active, children }: AppShellProps) {
           </div>
         </div>
 
-        <RepositoryScopeSelector repositories={repositories} />
+        <Suspense
+          fallback={
+            <section className="scope-card" aria-label="Repository scope">
+              <span>Scope</span>
+              <small>Loading repositories...</small>
+            </section>
+          }
+        >
+          <RepositoryScopeSelector repositories={repositories} />
+        </Suspense>
 
         <nav className="nav-section" aria-label="Main">
           <span>Main</span>

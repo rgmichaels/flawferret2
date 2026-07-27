@@ -29,26 +29,57 @@ export function RepositoryScopeSelector({ repositories }: RepositoryScopeSelecto
   );
 
   useEffect(() => {
-    if (repositoryIdFromUrl) {
-      localStorage.setItem(storageKey, repositoryIdFromUrl);
-      setSelectedRepositoryId(repositoryIdFromUrl);
-      return;
-    }
-
     const savedRepositoryId = localStorage.getItem(storageKey) ?? "";
     const savedRepositoryExists = repositories.some((repository) => repository.id === savedRepositoryId);
 
-    if (!savedRepositoryExists) {
+    if (repositoryIdFromUrl) {
+      const urlRepositoryExists = repositories.some((repository) => repository.id === repositoryIdFromUrl);
+
+      if (savedRepositoryExists && savedRepositoryId !== repositoryIdFromUrl && shouldScopePath(pathname)) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("repositoryId", savedRepositoryId);
+        setSelectedRepositoryId(savedRepositoryId);
+        router.replace(`${pathname}?${params.toString()}`, {
+          scroll: false,
+        });
+        return;
+      }
+
+      if (urlRepositoryExists) {
+        localStorage.setItem(storageKey, repositoryIdFromUrl);
+        setSelectedRepositoryId(repositoryIdFromUrl);
+        return;
+      }
+
+      localStorage.removeItem(storageKey);
+      setSelectedRepositoryId("");
+
+      if (shouldScopePath(pathname)) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("repositoryId");
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname, {
+          scroll: false,
+        });
+      }
+
+      return;
+    }
+
+    const nextRepositoryId = savedRepositoryExists ? savedRepositoryId : repositories[0]?.id ?? "";
+
+    if (!nextRepositoryId) {
       localStorage.removeItem(storageKey);
       setSelectedRepositoryId("");
       return;
     }
 
-    setSelectedRepositoryId(savedRepositoryId);
+    localStorage.setItem(storageKey, nextRepositoryId);
+    setSelectedRepositoryId(nextRepositoryId);
 
-    if (savedRepositoryId && shouldScopePath(pathname)) {
+    if (shouldScopePath(pathname)) {
       const params = new URLSearchParams(searchParams.toString());
-      params.set("repositoryId", savedRepositoryId);
+      params.set("repositoryId", nextRepositoryId);
       router.replace(`${pathname}?${params.toString()}`, {
         scroll: false,
       });

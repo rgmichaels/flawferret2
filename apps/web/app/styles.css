@@ -95,6 +95,7 @@ textarea {
   gap: 6px;
 }
 
+.scope-card > span,
 .scope-card label > span {
   color: #8ea0b8;
   font-size: 12px;
@@ -995,6 +996,10 @@ td span {
 
 .feature-toolbar label:first-child,
 .feature-toolbar label:nth-child(2) {
+  min-width: 280px;
+}
+
+.feature-toolbar .scoped-repository-field {
   min-width: 280px;
 }
 
@@ -2516,6 +2521,49 @@ label {
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
+}
+
+.scoped-repository-field {
+  color: #39455f;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.scoped-repository-field > span:first-child {
+  font-weight: 800;
+}
+
+.locked-scope-value {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  min-height: 48px;
+  padding: 10px 12px;
+}
+
+.locked-scope-value strong {
+  color: #172033;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.locked-scope-value small {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.locked-scope-value.missing {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.locked-scope-value.missing strong {
+  color: #9a3412;
 }
 
 .queue-paused-note {

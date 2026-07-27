@@ -542,17 +542,24 @@ export default async function FeaturesPage({
 
         <section className="panel feature-toolbar">
           <form>
-            <label>
-              Repository
-              <select name="repositoryId" defaultValue={selectedRepository?.id ?? ""}>
-                {repositories.length === 0 ? <option value="">No repositories registered</option> : null}
-                {repositories.map((repository) => (
-                  <option key={repository.id} value={repository.id}>
-                    {repositoryLabel(repository)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="scoped-repository-field">
+              <span>Repository</span>
+              {selectedRepository ? (
+                <>
+                  <input name="repositoryId" type="hidden" value={selectedRepository.id} />
+                  <div className="locked-scope-value">
+                    <strong>{repositoryLabel(selectedRepository)}</strong>
+                    <small>{selectedRepository.defaultBranch}</small>
+                  </div>
+                  <span className="field-hint">Locked to the sidebar scope.</span>
+                </>
+              ) : (
+                <div className="locked-scope-value missing">
+                  <strong>No repository scope selected</strong>
+                  <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope in the sidebar"}</small>
+                </div>
+              )}
+            </div>
             <label>
               Search
               <input
@@ -582,7 +589,7 @@ export default async function FeaturesPage({
               />
               Unmatched only
             </label>
-            <button type="submit" disabled={repositories.length === 0}>
+            <button type="submit" disabled={!selectedRepository}>
               Apply
             </button>
             {(q || selectedTag || unmatchedOnly) && selectedRepository ? (

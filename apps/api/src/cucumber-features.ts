@@ -222,11 +222,31 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 const cucumberExpressionToRegex = (expression: string) => {
   const source = expression
     .split(/({[^}]+})/)
-    .map((part) => (part.startsWith("{") && part.endsWith("}") ? ".+" : escapeRegExp(part)))
+    .map((part) =>
+      part.startsWith("{") && part.endsWith("}") ? ".+" : escapeRegExp(part.replace(/\\([^\w\s])/g, "$1")),
+    )
     .join("");
 
   return new RegExp(`^${source}$`);
 };
+
+const decodeStepStringExpression = (expression: string) =>
+  expression.replace(/\\([\\/"'`bfnrt])/g, (_match, escaped: string) => {
+    switch (escaped) {
+      case "b":
+        return "\b";
+      case "f":
+        return "\f";
+      case "n":
+        return "\n";
+      case "r":
+        return "\r";
+      case "t":
+        return "\t";
+      default:
+        return escaped;
+    }
+  });
 
 const parseStepDefinitions = ({
   content,
@@ -236,19 +256,13 @@ const parseStepDefinitions = ({
   path: string;
 }): StepDefinition[] => {
   const definitions: StepDefinition[] = [];
-  const lines = content.split(/\r?\n/);
   const pattern =
-    /\b(?:Given|When|Then|And|But)\s*\(\s*(\/(?:\\.|[^/])+\/[gimsuy]*|["'`]([^"'`]+)["'`])/;
+    /\b(?:Given|When|Then|And|But)\s*\(\s*(\/(?:\\.|[^/])+\/[gimsuy]*|["'`]([^"'`]+)["'`])/g;
 
-  lines.forEach((line, index) => {
-    const match = line.match(pattern);
-
-    if (!match) {
-      return;
-    }
-
+  for (const match of content.matchAll(pattern)) {
     const rawExpression = match[1];
     const stringExpression = match[2];
+    const line = content.slice(0, match.index).split(/\r?\n/).length;
 
     try {
       if (rawExpression.startsWith("/")) {
@@ -257,23 +271,25 @@ const parseStepDefinitions = ({
         const flags = rawExpression.slice(lastSlashIndex + 1).replace(/[gy]/g, "");
         definitions.push({
           expression: rawExpression,
-          line: index + 1,
+          line,
           path,
           regex: new RegExp(patternSource, flags),
         });
-        return;
+        continue;
       }
 
+      const decodedExpression = decodeStepStringExpression(stringExpression);
+
       definitions.push({
-        expression: stringExpression,
-        line: index + 1,
+        expression: decodedExpression,
+        line,
         path,
-        regex: cucumberExpressionToRegex(stringExpression),
+        regex: cucumberExpressionToRegex(decodedExpression),
       });
     } catch {
       // Skip invalid expressions; the catalog should stay browsable.
     }
-  });
+  }
 
   return definitions;
 };
