@@ -166,7 +166,7 @@ export default async function NewJobPage({
     getRepositories(),
     getQueueControl(),
   ]);
-  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
+  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? null;
   const selectedRepositoryId = selectedRepository?.id || "";
 
   return (
@@ -196,20 +196,31 @@ export default async function NewJobPage({
               </div>
             ) : null}
             <input name="captureContext" type="hidden" value={serializedCaptureContext} />
-            <label>
-              Test Suite Repository
-              <select name="repositoryId" defaultValue={selectedRepositoryId} required disabled={repositories.length === 0}>
-                <option value="">Select repository</option>
-                {repositories.map((repository) => (
-                  <option key={repository.id} value={repository.id}>
-                    {repositoryLabel(repository)}
-                  </option>
-                ))}
-              </select>
-              <span className="field-hint">
-                Register a repository before queueing work for ferret-runner.
-              </span>
-            </label>
+            <div className="scoped-repository-field">
+              <span>Test Suite Repository</span>
+              {selectedRepository ? (
+                <>
+                  <input name="repositoryId" type="hidden" value={selectedRepositoryId} />
+                  <div className="locked-scope-value">
+                    <strong>{repositoryLabel(selectedRepository)}</strong>
+                    <small>{selectedRepository.defaultBranch}</small>
+                  </div>
+                  <span className="field-hint">
+                    Locked to the sidebar scope. Change the Scope selector to use a different repository.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="locked-scope-value missing">
+                    <strong>No repository scope selected</strong>
+                    <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope in the sidebar"}</small>
+                  </div>
+                  <span className="field-hint">
+                    New jobs need a scoped repository before they can be queued.
+                  </span>
+                </>
+              )}
+            </div>
             {queueControl.paused ? (
               <p className="queue-paused-note">
                 Queue is paused. New jobs will wait until you resume it.
@@ -265,7 +276,7 @@ export default async function NewJobPage({
                 Create draft PR
               </label>
             </div>
-            <button type="submit" disabled={repositories.length === 0}>
+            <button type="submit" disabled={!selectedRepositoryId}>
               Queue Job
             </button>
           </form>
