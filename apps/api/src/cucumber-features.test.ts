@@ -97,6 +97,8 @@ describe("cucumber feature catalog", () => {
         "",
         "  Scenario: Pay by card",
         "    Given I have 2 items",
+        "    And the \"Checkout\" example initially returns a transient server error",
+        "    Then the Add/Remove Elements page should load",
         "    When I pay by card",
         "    Then the order should be confirmed",
       ].join("\n"),
@@ -107,6 +109,11 @@ describe("cucumber feature catalog", () => {
         "import { Given, When } from '@cucumber/cucumber';",
         "",
         "Given('I have {int} items', async () => {});",
+        "Given(",
+        "  'the {string} example initially returns a transient server error',",
+        "  async () => {}",
+        ");",
+        "Then('the Add\\\\/Remove Elements page should load', async () => {});",
         "When(/I pay by card/, async () => {});",
       ].join("\n"),
     );
@@ -118,7 +125,9 @@ describe("cucumber feature catalog", () => {
     assert.equal(catalog.features[0].scenarios[0].unmatchedStepCount, 1);
     assert.equal(catalog.features[0].scenarios[0].steps[0].matchedDefinition?.path, "features/step_definitions/checkout.steps.ts");
     assert.equal(catalog.features[0].scenarios[0].steps[1].matchedDefinition?.path, "features/step_definitions/checkout.steps.ts");
-    assert.equal(catalog.features[0].scenarios[0].steps[2].matchedDefinition, null);
+    assert.equal(catalog.features[0].scenarios[0].steps[2].matchedDefinition?.path, "features/step_definitions/checkout.steps.ts");
+    assert.equal(catalog.features[0].scenarios[0].steps[3].matchedDefinition?.path, "features/step_definitions/checkout.steps.ts");
+    assert.equal(catalog.features[0].scenarios[0].steps[4].matchedDefinition, null);
   });
 
   it("builds feature detail with associated support files", async () => {
