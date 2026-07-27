@@ -1,6 +1,7 @@
 "use client";
 
 import type { ExplainCucumberScenarioResponse, JobResponse } from "@flawferret2/job-schemas";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -18,6 +19,7 @@ export function ScenarioExplainer({
   scenarioName: string;
   scenarioLine: number;
 }) {
+  const router = useRouter();
   const [explanation, setExplanation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,6 +28,9 @@ export function ScenarioExplainer({
   const [selectedQaNote, setSelectedQaNote] = useState<string | null>(null);
   const [createdJobHref, setCreatedJobHref] = useState<string | null>(null);
   const [lastAnalyzedAt, setLastAnalyzedAt] = useState<string | null>(null);
+  const [localRunMessage, setLocalRunMessage] = useState<string | null>(null);
+  const [localRunError, setLocalRunError] = useState<string | null>(null);
+  const [isSubmittingLocalRun, setIsSubmittingLocalRun] = useState(false);
   const [provider, setProvider] = useState<ExplainCucumberScenarioResponse["provider"] | null>(null);
   const qaNotes = getQaNotes(explanation);
   const repairDraft = buildRepairDraft({
@@ -68,13 +73,48 @@ export function ScenarioExplainer({
     }
   };
 
+  const createLocalRun = async () => {
+    setLocalRunError(null);
+    setLocalRunMessage(null);
+    setIsSubmittingLocalRun(true);
+
+    try {
+      const response = await fetch(`${apiUrl}/repositories/${repositoryId}/features/local-test-runs`, {
+        body: JSON.stringify({
+          featurePath,
+          scenarioLine,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to queue local test run.");
+      }
+
+      setLocalRunMessage("Local scenario test queued. Run history updated above.");
+      router.refresh();
+    } catch (caught) {
+      setLocalRunError(caught instanceof Error ? caught.message : "Unable to queue local test run.");
+    } finally {
+      setIsSubmittingLocalRun(false);
+    }
+  };
+
   return (
     <div className="scenario-explainer">
       <button disabled={isLoading} onClick={explain} type="button">
         {isLoading ? "Analyzing..." : explanation ? "Analyze Again" : "What Does This Do?"}
       </button>
+      <button className="scenario-test-local-button" disabled={isSubmittingLocalRun} onClick={createLocalRun} type="button">
+        {isSubmittingLocalRun ? "Queueing..." : "Test Local"}
+      </button>
       {provider === "local" && explanation ? <span>Source summary</span> : null}
       {lastAnalyzedAt ? <span>Updated {lastAnalyzedAt}</span> : null}
+      {localRunMessage ? <span>{localRunMessage}</span> : null}
+      {localRunError ? <p role="alert">{localRunError}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
       {explanation ? <div className="scenario-explanation">{explanation}</div> : null}
       {qaNotes.length > 0 ? (

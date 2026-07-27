@@ -154,9 +154,9 @@ export const getDefaultAcceptanceCriteria = (captureContext: CaptureContext | nu
 export default async function NewJobPage({
   searchParams,
 }: {
-  searchParams: Promise<{ captureContext?: string }>;
+  searchParams: Promise<{ captureContext?: string; repositoryId?: string }>;
 }) {
-  const { captureContext: captureContextParam } = await searchParams;
+  const { captureContext: captureContextParam, repositoryId = "" } = await searchParams;
   const captureContext = parseCaptureContextValue(captureContextParam);
   const serializedCaptureContext = captureContext ? JSON.stringify(captureContext) : "";
   const defaultFeatureArea = getDefaultFeatureArea(captureContext);
@@ -166,6 +166,8 @@ export default async function NewJobPage({
     getRepositories(),
     getQueueControl(),
   ]);
+  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
+  const selectedRepositoryId = selectedRepository?.id || "";
 
   return (
     <AppShell active="new-job">
@@ -196,7 +198,7 @@ export default async function NewJobPage({
             <input name="captureContext" type="hidden" value={serializedCaptureContext} />
             <label>
               Test Suite Repository
-              <select name="repositoryId" required disabled={repositories.length === 0}>
+              <select name="repositoryId" defaultValue={selectedRepositoryId} required disabled={repositories.length === 0}>
                 <option value="">Select repository</option>
                 {repositories.map((repository) => (
                   <option key={repository.id} value={repository.id}>

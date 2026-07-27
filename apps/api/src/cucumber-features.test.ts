@@ -88,6 +88,39 @@ describe("cucumber feature catalog", () => {
     assert.equal(catalog.totalScenarios, 1);
   });
 
+  it("uses step definitions when computing catalog unmatched counts", async () => {
+    const { repository, root } = await createTempRepository();
+    await writeFile(
+      join(root, "features", "checkout.feature"),
+      [
+        "Feature: Checkout",
+        "",
+        "  Scenario: Pay by card",
+        "    Given I have 2 items",
+        "    When I pay by card",
+        "    Then the order should be confirmed",
+      ].join("\n"),
+    );
+    await writeFile(
+      join(root, "features", "step_definitions", "checkout.steps.ts"),
+      [
+        "import { Given, When } from '@cucumber/cucumber';",
+        "",
+        "Given('I have {int} items', async () => {});",
+        "When(/I pay by card/, async () => {});",
+      ].join("\n"),
+    );
+
+    const catalog = await buildFeatureCatalog({
+      repository,
+    });
+
+    assert.equal(catalog.features[0].scenarios[0].unmatchedStepCount, 1);
+    assert.equal(catalog.features[0].scenarios[0].steps[0].matchedDefinition?.path, "features/step_definitions/checkout.steps.ts");
+    assert.equal(catalog.features[0].scenarios[0].steps[1].matchedDefinition?.path, "features/step_definitions/checkout.steps.ts");
+    assert.equal(catalog.features[0].scenarios[0].steps[2].matchedDefinition, null);
+  });
+
   it("builds feature detail with associated support files", async () => {
     const { repository, root } = await createTempRepository();
     await writeFile(

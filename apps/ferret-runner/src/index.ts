@@ -1,6 +1,7 @@
 import {
   appendJobEvent,
   claimNextApprovedCodexJob,
+  claimNextLocalTestRun,
   claimNextPrCreatedJob,
   claimNextQueuedJob,
   claimNextReviewJob,
@@ -14,6 +15,8 @@ import {
   markJobReview,
   markJobRunning,
   markJobValidating,
+  markLocalTestRunFailed,
+  markLocalTestRunPassed,
   markRunCodexRunning,
   markRunFailed,
   markRunPrCreated,
@@ -45,6 +48,7 @@ import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
 import { validateGeneratedWork } from "./validation.js";
 import { prepareWorkBranch } from "./work-branch.js";
+import { buildLocalTestCommand, prepareLocalTestCommand, runLocalTest } from "./local-test-run.js";
 
 const workerId = config.WORKER_ID ?? randomUUID();
 const workerHostname = hostname();
@@ -297,6 +301,94 @@ while (!shouldStop) {
   await setWorkerState({
     status: "IDLE",
   });
+
+  const localTestRunClaim = await claimNextLocalTestRun(workerId);
+
+  if (localTestRunClaim.run) {
+    const localTestRun = localTestRunClaim.run;
+    const localPath = localTestRun.repository.localPath;
+    let command = buildLocalTestCommand(localTestRun);
+
+    await setWorkerState({
+      currentJob: localTestRun.id,
+      status: "BUSY",
+    });
+
+    if (!localPath) {
+      await markLocalTestRunFailed({
+        command,
+        error: "Repository has no local checkout path configured.",
+        exitCode: null,
+        runId: localTestRun.id,
+        stderrPath: "",
+        stdoutPath: "",
+      });
+
+      log("Local test run failed before execution", {
+        error: "Repository has no local checkout path configured.",
+        localTestRunId: localTestRun.id,
+        repositoryId: localTestRun.repositoryId,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    command = await prepareLocalTestCommand({
+      localPath,
+      logDir: config.FERRET_RUNNER_LOG_DIR,
+      run: localTestRun,
+    });
+
+    log("Starting local test run", {
+      command,
+      featurePath: localTestRun.featurePath,
+      localPath,
+      localTestRunId: localTestRun.id,
+      repositoryId: localTestRun.repositoryId,
+    });
+
+    const result = await runLocalTest({
+      command,
+      localPath,
+      logDir: config.FERRET_RUNNER_LOG_DIR,
+      runId: localTestRun.id,
+      timeoutMs: config.FERRET_RUNNER_LOCAL_TEST_TIMEOUT_MS,
+    });
+
+    if (result.ok) {
+      await markLocalTestRunPassed({
+        command,
+        exitCode: result.exitCode,
+        runId: localTestRun.id,
+        stderrPath: result.stderrPath,
+        stdoutPath: result.stdoutPath,
+      });
+    } else {
+      await markLocalTestRunFailed({
+        command,
+        error: result.error,
+        exitCode: result.exitCode,
+        runId: localTestRun.id,
+        stderrPath: result.stderrPath,
+        stdoutPath: result.stdoutPath,
+      });
+    }
+
+    log("Local test run completed", {
+      exitCode: result.exitCode,
+      localTestRunId: localTestRun.id,
+      ok: result.ok,
+      timedOut: result.timedOut,
+    });
+
+    await setWorkerState({
+      status: "IDLE",
+    });
+    continue;
+  }
 
   const codexClaimResult = await claimNextApprovedCodexJob(workerId);
 

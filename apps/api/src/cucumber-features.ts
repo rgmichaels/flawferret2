@@ -177,7 +177,7 @@ const findFeatureRoot = async (localPath: string) => {
   return localPath;
 };
 
-const listFeatureSummaries = async (localPath: string) => {
+const listFeatureSummaries = async (localPath: string, stepDefinitions: StepDefinition[] = []) => {
   const root = await findFeatureRoot(localPath);
   const files = (await walkFiles(root))
     .filter((file) => file.endsWith(".feature"))
@@ -190,6 +190,7 @@ const listFeatureSummaries = async (localPath: string) => {
         content,
         modifiedAt: fileStat.mtime,
         relativePath: normalizeRelativePath(relative(localPath, file)),
+        stepDefinitions,
       });
     }),
   );
@@ -306,8 +307,7 @@ const readStepDefinitions = async (
   return parsed.flat();
 };
 
-const listAssociatedFiles = async (localPath: string, featurePath: string): Promise<CucumberAssociatedFile[]> => {
-  const candidates = [featurePath];
+const listAssociatedSupportFiles = async (localPath: string): Promise<string[]> => {
   const discovered = await Promise.all(
     ASSOCIATED_FILE_DIRS.map(async (directory) => {
       const fullDirectory = resolve(localPath, directory);
@@ -326,8 +326,14 @@ const listAssociatedFiles = async (localPath: string, featurePath: string): Prom
         .map((file) => normalizeRelativePath(relative(localPath, file)));
     }),
   );
-  const uniquePaths = [...new Set([...candidates, ...discovered.flat()])].sort((left, right) =>
-    left.localeCompare(right),
+
+  return [...new Set(discovered.flat())].sort((left, right) => left.localeCompare(right));
+};
+
+const listAssociatedFiles = async (localPath: string, featurePath: string): Promise<CucumberAssociatedFile[]> => {
+  const candidates = [featurePath];
+  const uniquePaths = [...new Set([...candidates, ...(await listAssociatedSupportFiles(localPath))])].sort(
+    (left, right) => left.localeCompare(right),
   );
 
   return uniquePaths.map((path) => ({
@@ -352,7 +358,12 @@ export const buildFeatureCatalog = async ({
   }
 
   const localPath = resolve(repository.localPath);
-  const { features, root } = await listFeatureSummaries(localPath);
+  const associatedFiles = (await listAssociatedSupportFiles(localPath)).map((path) => ({
+    kind: toAssociatedKind(path),
+    path,
+  }));
+  const stepDefinitions = await readStepDefinitions(localPath, associatedFiles);
+  const { features, root } = await listFeatureSummaries(localPath, stepDefinitions);
 
   return {
     features,

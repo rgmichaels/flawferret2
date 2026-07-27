@@ -14,6 +14,9 @@ import {
   explainCucumberScenarioRequestSchema,
   explainCucumberScenarioResponseSchema,
   jobEventTypeSchema,
+  localTestRunOutputResponseSchema,
+  localTestRunResponseSchema,
+  localTestRunStatsResponseSchema,
   paginatedJobsResponseSchema,
   readinessResponseSchema,
   retryStageRequestSchema,
@@ -220,6 +223,82 @@ describe("job schemas", () => {
 
     assert.equal(catalog.features[0].feature, "Login");
     assert.equal(detail.associatedFiles[0].kind, "feature");
+  });
+
+  it("parses local test run responses", () => {
+    const now = new Date().toISOString();
+    const repository = {
+      cloneUrl: "https://github.com/rgmichaels/example.git",
+      createdAt: now,
+      defaultBranch: "main",
+      id: "repo-1",
+      localPath: "/tmp/example",
+      name: "example",
+      owner: "rgmichaels",
+      provider: "GITHUB" as const,
+      trackerIntegration: null,
+      trackerIntegrationId: null,
+      updatedAt: now,
+      validationCommand: "pnpm test",
+      webUrl: "https://github.com/rgmichaels/example",
+    };
+
+    const run = localTestRunResponseSchema.parse({
+      command: "npx cucumber-js 'features/login.feature:5'",
+      completedAt: null,
+      createdAt: now,
+      durationMs: null,
+      error: null,
+      exitCode: null,
+      featurePath: "features/login.feature",
+      id: "run-1",
+      repository,
+      repositoryId: "repo-1",
+      scenarioLine: 5,
+      scope: "SCENARIO",
+      startedAt: null,
+      status: "QUEUED",
+      stderrPath: null,
+      stdoutPath: null,
+      updatedAt: now,
+      workerId: null,
+    });
+
+    assert.equal(run.scope, "SCENARIO");
+    assert.equal(run.status, "QUEUED");
+  });
+
+  it("parses local test run stats responses", () => {
+    const stats = localTestRunStatsResponseSchema.parse({
+      averageDurationMs: 1200,
+      canceledRuns: 1,
+      completedRuns: 4,
+      failedRuns: 1,
+      failureRate: 0.25,
+      maxDurationMs: 1500,
+      minDurationMs: 900,
+      passedRuns: 3,
+      passRate: 0.75,
+      queuedRuns: 2,
+      runningRuns: 1,
+      totalRuns: 7,
+    });
+
+    assert.equal(stats.passRate, 0.75);
+    assert.equal(stats.averageDurationMs, 1200);
+  });
+
+  it("parses local test run output responses", () => {
+    const output = localTestRunOutputResponseSchema.parse({
+      stderr: "",
+      stderrPath: ".flawferret-runs/local-test-runs/run-1/stderr.log",
+      stdout: "1 scenario passed",
+      stdoutPath: ".flawferret-runs/local-test-runs/run-1/stdout.log",
+      truncated: false,
+    });
+
+    assert.equal(output.stdout, "1 scenario passed");
+    assert.equal(output.truncated, false);
   });
 
   it("parses cucumber scenario explanation requests and responses", () => {

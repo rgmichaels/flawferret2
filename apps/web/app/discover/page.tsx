@@ -560,7 +560,7 @@ export default async function DiscoverPage({
   const selectedPageSize = getSelectedPageSize(pageSizeParam);
   const [repositories, recentRuns] = await Promise.all([getRepositories(), getDiscoverRuns()]);
   const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
-  const selectedRepositoryId = repositoryId || selectedRepository?.id || "";
+  const selectedRepositoryId = selectedRepository?.id || "";
   const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
   const totalRuns = recentRuns.length;
   const totalPages = Math.max(1, Math.ceil(totalRuns / selectedPageSize));
