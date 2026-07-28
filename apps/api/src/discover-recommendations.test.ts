@@ -79,6 +79,20 @@ describe("discover recommendations", () => {
     assert.match(prompt, /features\/login\.feature/);
   });
 
+  it("treats tester notes as priority prompt instructions", () => {
+    const prompt = buildDiscoverRecommendationsPrompt({
+      existingCoverage: [],
+      maxRecommendations: 10,
+      notes: "Focus on the search bar.",
+      pageContext: "Yahoo Search Search the web input button",
+      pageUrl: "https://www.yahoo.com/",
+    });
+
+    assert.match(prompt, /Tester notes are priority instructions/);
+    assert.match(prompt, /At least half of the recommendations should directly address the tester notes/);
+    assert.match(prompt, /Tester notes \(priority\): Focus on the search bar\./);
+  });
+
   it("returns local fallback when OpenAI is not configured", async () => {
     delete process.env.OPENAI_API_KEY;
 
