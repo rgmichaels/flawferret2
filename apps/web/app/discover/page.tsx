@@ -444,13 +444,18 @@ const buildDiscoverHref = ({
   deleted,
   page,
   pageSize,
+  repositoryId,
 }: {
   deleted?: string;
   page: number;
   pageSize: number;
+  repositoryId: string;
 }) => {
   const params = new URLSearchParams();
 
+  if (repositoryId) {
+    params.set("repositoryId", repositoryId);
+  }
   if (deleted === "1") {
     params.set("deleted", "1");
   }
@@ -558,10 +563,13 @@ export default async function DiscoverPage({
   const { deleted, notes = "", page: pageParam, pageSize: pageSizeParam, pageUrl = "", repositoryId = "", targetBranch = "main" } = query;
   const selectedPage = getSelectedPage(pageParam);
   const selectedPageSize = getSelectedPageSize(pageSizeParam);
-  const [repositories, recentRuns] = await Promise.all([getRepositories(), getDiscoverRuns()]);
-  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? repositories[0];
+  const [repositories, allRecentRuns] = await Promise.all([getRepositories(), getDiscoverRuns()]);
+  const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? null;
   const selectedRepositoryId = selectedRepository?.id || "";
   const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
+  const recentRuns = selectedRepositoryId
+    ? allRecentRuns.filter((run) => run.repository.id === selectedRepositoryId)
+    : [];
   const totalRuns = recentRuns.length;
   const totalPages = Math.max(1, Math.ceil(totalRuns / selectedPageSize));
   const page = Math.min(selectedPage, totalPages);
@@ -572,11 +580,13 @@ export default async function DiscoverPage({
     deleted,
     page: Math.max(1, page - 1),
     pageSize: selectedPageSize,
+    repositoryId: selectedRepositoryId,
   });
   const nextHref = buildDiscoverHref({
     deleted,
     page: Math.min(totalPages, page + 1),
     pageSize: selectedPageSize,
+    repositoryId: selectedRepositoryId,
   });
 
   return (
@@ -587,7 +597,7 @@ export default async function DiscoverPage({
             <p className="eyebrow">Page Discovery</p>
             <h1>Discover Tests</h1>
           </div>
-          <a className="primary-link" href="/features">
+          <a className="primary-link" href={selectedRepositoryId ? `/features?repositoryId=${selectedRepositoryId}` : "/features"}>
             Feature Catalog
           </a>
         </header>
@@ -600,17 +610,31 @@ export default async function DiscoverPage({
             </div>
           </div>
           <form action={analyzePage} className="job-form discover-form">
-            <label>
-              Test Suite Repository
-              <select name="repositoryId" defaultValue={selectedRepositoryId} required disabled={repositories.length === 0}>
-                <option value="">Select repository</option>
-                {repositories.map((repository) => (
-                  <option key={repository.id} value={repository.id}>
-                    {repositoryLabel(repository)} - {repositoryTrackerLabel(repository)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="scoped-repository-field">
+              <span>Test Suite Repository</span>
+              {selectedRepository ? (
+                <>
+                  <input name="repositoryId" type="hidden" value={selectedRepositoryId} />
+                  <div className="locked-scope-value">
+                    <strong>{repositoryLabel(selectedRepository)}</strong>
+                    <small>
+                      {selectedRepository.defaultBranch} - {repositoryTrackerLabel(selectedRepository)}
+                    </small>
+                  </div>
+                  <span className="field-hint">
+                    Locked to the sidebar scope. Change the Scope selector to use a different repository.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="locked-scope-value missing">
+                    <strong>No repository scope selected</strong>
+                    <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope in the sidebar"}</small>
+                  </div>
+                  <span className="field-hint">Discover analysis needs a scoped repository before it can run.</span>
+                </>
+              )}
+            </div>
             <label>
               Target Branch
               <input name="targetBranch" defaultValue={selectedBranch} required />
@@ -627,7 +651,7 @@ export default async function DiscoverPage({
                 placeholder="Focus on authentication, validation, empty states, or the riskiest user flows."
               />
             </label>
-            <AnalyzeSubmitButton disabled={repositories.length === 0} />
+            <AnalyzeSubmitButton disabled={!selectedRepositoryId} />
           </form>
         </section>
 
@@ -644,6 +668,7 @@ export default async function DiscoverPage({
                 </p>
               </div>
               <form className="discover-history-controls" action="/discover">
+                {selectedRepositoryId ? <input name="repositoryId" type="hidden" value={selectedRepositoryId} /> : null}
                 {deleted === "1" ? <input name="deleted" type="hidden" value="1" /> : null}
                 <label>
                   Page Size

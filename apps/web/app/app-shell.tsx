@@ -213,9 +213,6 @@ export async function AppShell({ active, children }: AppShellProps) {
           <a className={navClassName(active, "dashboard")} href="/">
             Dashboard
           </a>
-          <a className={navClassName(active, "jobs")} href="/#jobs">
-            Jobs
-          </a>
           <a className={navClassName(active, "repositories")} href="/repositories">
             Repositories
           </a>
