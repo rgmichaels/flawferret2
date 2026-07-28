@@ -2,6 +2,7 @@ import type {
   DiscoverCoverageDecision,
   DiscoverRunResponse,
   DiscoverTestRecommendation,
+  JobResponse,
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
@@ -14,6 +15,7 @@ type DiscoverRunPageParams = Promise<{
 }>;
 
 type DiscoverRunPageSearchParams = Promise<{
+  reviewJobId?: string | string[];
   queued?: string;
 }>;
 
@@ -138,7 +140,7 @@ async function queueSelectedTests(formData: FormData) {
     redirect(`/discover/${runId}?queued=0`);
   }
 
-  await Promise.all(
+  const createdJobs = await Promise.all(
     recommendations.map(async (recommendation) => {
       const response = await fetch(`${apiUrl}/jobs`, {
         body: JSON.stringify({
@@ -167,6 +169,8 @@ async function queueSelectedTests(formData: FormData) {
       if (!response.ok) {
         throw new Error("Unable to queue one or more selected tests.");
       }
+
+      return response.json() as Promise<JobResponse>;
     }),
   );
 
@@ -178,7 +182,15 @@ async function queueSelectedTests(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/discover");
   revalidatePath(`/discover/${runId}`);
-  redirect(`/discover/${runId}?queued=${recommendations.length}`);
+  const params = new URLSearchParams({
+    queued: String(recommendations.length),
+  });
+
+  createdJobs.forEach((job) => {
+    params.append("reviewJobId", job.id);
+  });
+
+  redirect(`/discover/${runId}?${params.toString()}`);
 }
 
 const RecommendationList = ({
@@ -240,7 +252,7 @@ export default async function DiscoverRunPage({
   params: DiscoverRunPageParams;
   searchParams: DiscoverRunPageSearchParams;
 }) {
-  const [{ id }, { queued }] = await Promise.all([params, searchParams]);
+  const [{ id }, { queued, reviewJobId }] = await Promise.all([params, searchParams]);
   const run = await getDiscoverRun(id);
 
   if (!run) {
@@ -248,6 +260,7 @@ export default async function DiscoverRunPage({
   }
 
   const queuedCount = Number.parseInt(queued ?? "", 10);
+  const reviewJobIds = Array.isArray(reviewJobId) ? reviewJobId : reviewJobId ? [reviewJobId] : [];
   const queuedTitleSet = new Set(run.queuedTitles);
 
   return (
@@ -279,9 +292,23 @@ export default async function DiscoverRunPage({
 
         {Number.isFinite(queuedCount) ? (
           queuedCount > 0 ? (
-            <p className="queue-success-note">
-              {queuedCount} {queuedCount === 1 ? "test was" : "tests were"} added to the queue.
-            </p>
+            <div className="queue-success-note discover-queue-success">
+              <p>
+                {queuedCount} {queuedCount === 1 ? "test was" : "tests were"} added to the queue.
+              </p>
+              {reviewJobIds.length === 1 ? (
+                <a href={`/jobs/${reviewJobIds[0]}/review`}>Review it here...</a>
+              ) : reviewJobIds.length > 1 ? (
+                <div className="discover-review-links" aria-label="Queued job review links">
+                  <span>Review them here:</span>
+                  {reviewJobIds.map((jobId, index) => (
+                    <a key={jobId} href={`/jobs/${jobId}/review`}>
+                      Test {index + 1}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : (
             <p className="queue-paused-note">Select at least one recommended test before queueing.</p>
           )

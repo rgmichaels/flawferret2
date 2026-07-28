@@ -2588,6 +2588,32 @@ label {
   padding: 10px 12px;
 }
 
+.discover-queue-success {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.discover-queue-success p {
+  margin: 0;
+}
+
+.discover-queue-success a,
+.discover-review-links a {
+  color: #166534;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.discover-review-links {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .readiness-hero {
   align-items: center;
   display: flex;
