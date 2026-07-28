@@ -8,7 +8,7 @@ import { getConfiguredModelPromptPreface } from "@flawferret2/shared";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const MAX_PAGE_CONTEXT_CHARS = 18_000;
-const OPENAI_RECOMMENDATION_TIMEOUT_MS = 12_000;
+const OPENAI_RECOMMENDATION_TIMEOUT_MS = 20_000;
 
 type DiscoverRecommendationsInput = {
   existingCoverage: DiscoverExistingCoverage[];
@@ -160,6 +160,9 @@ export const buildDiscoverRecommendationsPrompt = ({
     "Each recommendation must be small enough to become one Cucumber scenario/job.",
     "Do not recommend tests that are already covered by the existing Cucumber scenarios listed below.",
     "If similar coverage exists, recommend a meaningfully different gap or edge case.",
+    notes
+      ? "Tester notes are priority instructions. Bias the recommendations toward the behavior, element, or risk called out in the notes before adding broader generic coverage."
+      : "No tester notes were supplied, so infer priority from the page context and URL.",
     "",
     "Return JSON only with this shape:",
     JSON.stringify(
@@ -186,9 +189,10 @@ export const buildDiscoverRecommendationsPrompt = ({
     "- Do not invent credentials, private data, or internal endpoints.",
     "- Keep each title unique.",
     "- Include 1-5 tags per recommendation.",
+    notes ? "- At least half of the recommendations should directly address the tester notes when feasible." : null,
     "",
     `Page URL: ${pageUrl}`,
-    notes ? `Tester notes: ${notes}` : "Tester notes: none",
+    notes ? `Tester notes (priority): ${notes}` : "Tester notes: none",
     "",
     "Related existing Cucumber coverage:",
     existingCoverage.length > 0
@@ -207,7 +211,9 @@ export const buildDiscoverRecommendationsPrompt = ({
     "",
     "Visible page/context text:",
     pageContext || "No page text was available. Infer from the URL and tester notes.",
-  ].join("\n");
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
 
 export const buildDiscoverRecommendations = async ({
   fetchImpl = fetch,
