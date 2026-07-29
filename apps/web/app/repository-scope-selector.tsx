@@ -118,8 +118,22 @@ export function RepositoryScopeSelector({ repositories }: RepositoryScopeSelecto
 
   return (
     <section className="scope-card" aria-label="Repository scope">
-      <label>
+      <div className="scope-card-copy">
         <span>Scope</span>
+        {selectedRepository ? (
+          <>
+            <strong>{repositoryLabel(selectedRepository)}</strong>
+            <small>Branch: {selectedRepository.defaultBranch}</small>
+          </>
+        ) : (
+          <>
+            <strong>No repository selected</strong>
+            <small>Choose a repository to scope repo-aware pages.</small>
+          </>
+        )}
+      </div>
+      <label className="scope-card-select">
+        <span>Change repository</span>
         <select
           aria-label="Repository scope"
           value={selectedRepositoryId}
@@ -134,7 +148,6 @@ export function RepositoryScopeSelector({ repositories }: RepositoryScopeSelecto
           <option value="__new__">New repository...</option>
         </select>
       </label>
-      {selectedRepository ? <small>{selectedRepository.defaultBranch}</small> : <small>No repository selected</small>}
     </section>
   );
 }

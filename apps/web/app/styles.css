@@ -82,33 +82,52 @@ textarea {
 }
 
 .scope-card {
-  background: #0e2036;
-  border: 1px solid rgb(255 255 255 / 8%);
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #dce3ee;
   border-radius: 8px;
-  display: grid;
-  gap: 8px;
-  padding: 12px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 14px 18px;
 }
 
-.scope-card label {
+.scope-card-copy {
   display: grid;
-  gap: 6px;
+  gap: 3px;
+  min-width: 0;
 }
 
 .scope-card > span,
-.scope-card label > span {
-  color: #8ea0b8;
+.scope-card-copy > span,
+.scope-card-select > span {
+  color: #667085;
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
+.scope-card strong {
+  color: #172033;
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.scope-card-select {
+  display: grid;
+  flex: 0 0 min(360px, 42%);
+  gap: 6px;
+  min-width: 240px;
+}
+
 .scope-card select {
   appearance: none;
-  background: #071426;
-  border: 1px solid rgb(255 255 255 / 14%);
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  color: #ffffff;
+  color: #172033;
   font-size: 13px;
   font-weight: 800;
   min-width: 0;
@@ -117,12 +136,9 @@ textarea {
 }
 
 .scope-card small {
-  color: #8ea0b8;
+  color: #667085;
   font-size: 12px;
   font-weight: 800;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .nav-item {
@@ -143,7 +159,7 @@ textarea {
   background: #0e2036;
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 8px;
-  margin-top: auto;
+  margin-top: 10px;
   padding: 16px;
 }
 
@@ -249,6 +265,13 @@ textarea {
 .workspace {
   display: grid;
   gap: 20px;
+  padding: 0;
+}
+
+.app-content {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
   padding: 28px;
 }
 
@@ -4389,8 +4412,23 @@ textarea {
     gap: 18px;
   }
 
-  .workspace {
+  .app-content {
     padding: 16px;
+  }
+
+  .workspace {
+    padding: 0;
+  }
+
+  .scope-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scope-card-select {
+    flex-basis: auto;
+    min-width: 0;
+    width: 100%;
   }
 
   .topbar,
