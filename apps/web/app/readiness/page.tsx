@@ -76,7 +76,7 @@ export default async function ReadinessPage() {
 
   if (!readiness) {
     return (
-      <AppShell active="readiness">
+      <AppShell active="settings">
         <section className="workspace">
           <header className="topbar">
             <div>
@@ -105,7 +105,7 @@ export default async function ReadinessPage() {
     (readiness.runner.codexEnabled || readiness.runner.prCreationEnabled);
 
   return (
-    <AppShell active="readiness">
+    <AppShell active="settings">
       <section className="workspace">
         <header className="topbar">
           <div>
