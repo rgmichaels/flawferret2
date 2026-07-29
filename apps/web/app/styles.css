@@ -423,6 +423,77 @@ button {
   border-top: 3px solid #94a3b8;
 }
 
+.settings-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-card {
+  background: #ffffff;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  padding: 20px;
+  text-decoration: none;
+}
+
+.settings-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 10px 24px rgb(37 99 235 / 10%);
+}
+
+.settings-card span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.settings-card strong {
+  color: #111827;
+  font-size: 34px;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.settings-card p {
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.settings-summary dl {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.settings-summary div {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.settings-summary dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.settings-summary dd {
+  color: #111827;
+  font-size: 24px;
+  font-weight: 900;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .content-grid {
   align-items: start;
   display: grid;
@@ -4454,6 +4525,11 @@ textarea {
   }
 
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-grid,
+  .settings-summary dl {
     grid-template-columns: 1fr;
   }
 

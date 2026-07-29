@@ -206,14 +206,14 @@ export default async function NewJobPage({
                     <small>{selectedRepository.defaultBranch}</small>
                   </div>
                   <span className="field-hint">
-                    Locked to the sidebar scope. Change the Scope selector to use a different repository.
+                    Locked to the current scope. Change the Scope selector above to use a different repository.
                   </span>
                 </>
               ) : (
                 <>
                   <div className="locked-scope-value missing">
                     <strong>No repository scope selected</strong>
-                    <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope in the sidebar"}</small>
+                    <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope above"}</small>
                   </div>
                   <span className="field-hint">
                     New jobs need a scoped repository before they can be queued.

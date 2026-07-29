@@ -551,12 +551,12 @@ export default async function FeaturesPage({
                     <strong>{repositoryLabel(selectedRepository)}</strong>
                     <small>{selectedRepository.defaultBranch}</small>
                   </div>
-                  <span className="field-hint">Locked to the sidebar scope.</span>
+                  <span className="field-hint">Locked to the current scope.</span>
                 </>
               ) : (
                 <div className="locked-scope-value missing">
                   <strong>No repository scope selected</strong>
-                  <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope in the sidebar"}</small>
+                  <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope above"}</small>
                 </div>
               )}
             </div>

@@ -202,7 +202,7 @@ export default async function IntegrationsPage({
   ]);
 
   return (
-    <AppShell active="integrations">
+    <AppShell active="settings">
       <section className="workspace">
         <header className="topbar">
           <div>

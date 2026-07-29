@@ -150,7 +150,7 @@ export default async function RepositoriesPage() {
   ]);
 
   return (
-    <AppShell active="repositories">
+    <AppShell active="settings">
       <section className="workspace">
         <header className="topbar">
           <div>

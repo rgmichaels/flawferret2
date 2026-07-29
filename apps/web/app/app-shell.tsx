@@ -143,11 +143,9 @@ type AppShellProps = {
     | "dashboard"
     | "discover"
     | "features"
-    | "integrations"
     | "jobs"
-    | "readiness"
-    | "repositories"
-    | "new-job";
+    | "new-job"
+    | "settings";
   children: ReactNode;
 };
 
@@ -202,17 +200,11 @@ export async function AppShell({ active, children }: AppShellProps) {
           <a className={navClassName(active, "dashboard")} href="/">
             Dashboard
           </a>
-          <a className={navClassName(active, "repositories")} href="/repositories">
-            Repositories
-          </a>
-          <a className={navClassName(active, "integrations")} href="/integrations">
-            Integrations
-          </a>
           <a className={navClassName(active, "features")} href="/features">
             Features
           </a>
-          <a className={navClassName(active, "readiness")} href="/readiness">
-            Readiness
+          <a className={navClassName(active, "settings")} href="/settings">
+            Settings
           </a>
         </nav>
 
