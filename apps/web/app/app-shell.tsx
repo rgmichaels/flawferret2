@@ -197,17 +197,6 @@ export async function AppShell({ active, children }: AppShellProps) {
           </div>
         </div>
 
-        <Suspense
-          fallback={
-            <section className="scope-card" aria-label="Repository scope">
-              <span>Scope</span>
-              <small>Loading repositories...</small>
-            </section>
-          }
-        >
-          <RepositoryScopeSelector repositories={repositories} />
-        </Suspense>
-
         <nav className="nav-section" aria-label="Main">
           <span>Main</span>
           <a className={navClassName(active, "dashboard")} href="/">
@@ -289,7 +278,19 @@ export async function AppShell({ active, children }: AppShellProps) {
         </div>
       </aside>
 
-      {children}
+      <section className="app-content">
+        <Suspense
+          fallback={
+            <section className="scope-card" aria-label="Repository scope">
+              <span>Scope</span>
+              <small>Loading repositories...</small>
+            </section>
+          }
+        >
+          <RepositoryScopeSelector repositories={repositories} />
+        </Suspense>
+        {children}
+      </section>
     </main>
   );
 }
