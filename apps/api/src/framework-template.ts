@@ -388,44 +388,52 @@ export abstract class BasePage {
   },
   {
     category: "page-object",
-    description: "Example page object demonstrating semantic locators and focused assertions.",
-    path: "src/pages/HomePage.ts",
+    description: "Sample application page object that verifies the configured base URL responds and renders.",
+    path: "src/pages/ApplicationPage.ts",
     content: `import { expect, type Page } from "@playwright/test";
 import { BasePage } from "./BasePage.js";
 
-export class HomePage extends BasePage {
+export class ApplicationPage extends BasePage {
   constructor(page: Page) {
     super(page);
   }
 
-  async open() {
-    await this.goto("/");
+  async openConfiguredBaseUrl() {
+    const response = await this.page.goto("/", {
+      waitUntil: "domcontentloaded"
+    });
+
+    if (!response) {
+      throw new Error("Expected the configured base URL to return a navigation response.");
+    }
+
+    expect(response.status(), "Configured base URL should return a successful document response").toBeLessThan(400);
   }
 
   async expectLoaded() {
-    await expect(this.page.getByRole("main").or(this.page.locator("body"))).toBeVisible();
-    await expect(this.page).toHaveTitle(/.+/);
+    await expect(this.page.locator("body"), "The configured base URL should render a page body").toBeVisible();
+    await expect(this.page, "The configured base URL should expose a populated page title").toHaveTitle(/\\S+/);
   }
 }
 `,
   },
   {
     category: "step-definition",
-    description: "Reusable navigation and page-load steps that delegate behavior to page objects.",
+    description: "Reusable base URL smoke steps that delegate behavior to page objects.",
     path: "src/steps/navigation.steps.ts",
     content: `import { Given, Then } from "@cucumber/cucumber";
 import { expect } from "@playwright/test";
-import { HomePage } from "../pages/HomePage.js";
+import { ApplicationPage } from "../pages/ApplicationPage.js";
 import { env } from "../support/env.js";
 import { getPage } from "../support/world-guards.js";
 import type { TestWorld } from "../support/world.js";
 
-Given("I am on the home page", async function (this: TestWorld) {
-  await new HomePage(getPage(this)).open();
+Given("I open the configured base URL", async function (this: TestWorld) {
+  await new ApplicationPage(getPage(this)).openConfiguredBaseUrl();
 });
 
-Then("the home page should load", async function (this: TestWorld) {
-  await new HomePage(getPage(this)).expectLoaded();
+Then("the configured page should load successfully", async function (this: TestWorld) {
+  await new ApplicationPage(getPage(this)).expectLoaded();
 });
 
 Then("the page should be served from the configured base URL", async function (this: TestWorld) {
@@ -441,14 +449,14 @@ Then("the page should be served from the configured base URL", async function (t
 const sampleFeatureFiles = (): TemplateFileInput[] => [
   {
     category: "feature",
-    description: "Focused smoke feature demonstrating a concise load assertion scenario.",
-    path: "features/smoke/home.feature",
-    content: `@smoke @home
-Feature: Home page
+    description: "Focused smoke feature that opens the configured base URL and verifies it loads.",
+    path: "features/smoke/configured-base-url.feature",
+    content: `@smoke @base-url
+Feature: Configured application availability
 
-  Scenario: Home page loads with stable content
-    Given I am on the home page
-    Then the home page should load
+  Scenario: Configured base URL loads successfully
+    Given I open the configured base URL
+    Then the configured page should load successfully
     And the page should be served from the configured base URL
 `,
   },
@@ -552,7 +560,7 @@ const selectedFiles = (values: FrameworkTemplateRequest) => {
   const enabled = new Set(values.features);
   const files = [...coreFiles(values)];
 
-  if (enabled.has("pageObjects")) {
+  if (enabled.has("pageObjects") || enabled.has("sampleFeature")) {
     files.push(...pageObjectFiles());
   }
 

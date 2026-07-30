@@ -54,6 +54,7 @@ type FrameworkNewSearchParams = {
   baseUrl?: string;
   createError?: string;
   created?: string;
+  destinationType?: string;
   features?: string | string[];
   overwritten?: string;
   packageName?: string;
@@ -72,6 +73,7 @@ const getFeatureValues = (value: string | string[] | undefined): FrameworkTempla
 
 const buildPreviewRequest = (params: FrameworkNewSearchParams): FrameworkTemplateRequest => ({
   baseUrl: params.baseUrl?.trim() || "https://example.com",
+  destinationType: "local",
   features: getFeatureValues(params.features),
   packageName: params.packageName?.trim() || "playwright-cucumber-tests",
   projectName: params.projectName?.trim() || "Playwright Cucumber Tests",
@@ -114,6 +116,7 @@ const getFrameworkPreview = async (
 
 const toCreateRequest = (formData: FormData): FrameworkTemplateRequest & { overwriteExisting: boolean } => ({
   baseUrl: String(formData.get("baseUrl") ?? "").trim() || "https://example.com",
+  destinationType: "local",
   features: getFeatureValues(formData.getAll("features").map(String)),
   overwriteExisting: formData.get("overwriteExisting") === "on",
   packageName: String(formData.get("packageName") ?? "").trim() || "playwright-cucumber-tests",
@@ -127,6 +130,7 @@ async function createFramework(formData: FormData) {
   const request = toCreateRequest(formData);
   const params = new URLSearchParams({
     baseUrl: request.baseUrl,
+    destinationType: request.destinationType,
     packageName: request.packageName,
     preview: "true",
     projectName: request.projectName,
@@ -210,11 +214,7 @@ export default async function NewFrameworkPage({
                 Package Name
                 <input name="packageName" defaultValue={request.packageName} required />
               </label>
-              <FrameworkFolderPicker
-                defaultValue={request.targetDirectory}
-                request={request}
-                showCreateControls={Boolean(preview)}
-              />
+              <FrameworkFolderPicker defaultValue={request.targetDirectory} />
               <label>
                 Base URL
                 <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
@@ -298,6 +298,7 @@ export default async function NewFrameworkPage({
 
             <form action={createFramework} className="framework-create-form">
               <input name="baseUrl" type="hidden" value={request.baseUrl} />
+              <input name="destinationType" type="hidden" value={request.destinationType} />
               <input name="packageName" type="hidden" value={request.packageName} />
               <input name="projectName" type="hidden" value={request.projectName} />
               <input name="targetDirectory" type="hidden" value={request.targetDirectory} />

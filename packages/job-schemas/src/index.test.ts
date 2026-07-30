@@ -505,6 +505,7 @@ describe("job schemas", () => {
     });
 
     assert.equal(request.baseUrl, "https://example.test/app");
+    assert.equal(request.destinationType, "local");
     assert.equal(request.projectName, "Example QA Framework");
     assert.deepEqual(request.features, [
       "pageObjects",
@@ -541,6 +542,7 @@ describe("job schemas", () => {
   it("parses create framework requests and responses", () => {
     const request = createFrameworkRequestSchema.parse({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: ["sampleFeature"],
       overwriteExisting: true,
       packageName: "qa-framework",
@@ -549,6 +551,7 @@ describe("job schemas", () => {
     });
 
     assert.equal(request.overwriteExisting, true);
+    assert.equal(request.destinationType, "local");
 
     const response = createFrameworkResponseSchema.parse({
       createdFiles: [
