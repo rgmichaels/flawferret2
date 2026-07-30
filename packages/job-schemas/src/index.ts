@@ -424,8 +424,11 @@ export const frameworkTemplateFeatureSchema = z.enum([
   "sampleFeature",
 ]);
 
+export const frameworkTemplateDestinationTypeSchema = z.enum(["local"]).default("local");
+
 export const frameworkTemplateRequestSchema = z.object({
   baseUrl: z.string().trim().url("Base URL must be a valid URL").default("https://example.com"),
+  destinationType: frameworkTemplateDestinationTypeSchema,
   features: z.array(frameworkTemplateFeatureSchema).default([
     "pageObjects",
     "apiTesting",
@@ -665,6 +668,7 @@ export type CreateDiscoverRunRequest = z.infer<typeof createDiscoverRunRequestSc
 export type UpdateDiscoverRunQueuedRequest = z.infer<typeof updateDiscoverRunQueuedRequestSchema>;
 export type DiscoverRunResponse = z.infer<typeof discoverRunResponseSchema>;
 export type FrameworkTemplateFeature = z.infer<typeof frameworkTemplateFeatureSchema>;
+export type FrameworkTemplateDestinationType = z.infer<typeof frameworkTemplateDestinationTypeSchema>;
 export type FrameworkTemplateRequest = z.infer<typeof frameworkTemplateRequestSchema>;
 export type CreateFrameworkRequest = z.infer<typeof createFrameworkRequestSchema>;
 export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;

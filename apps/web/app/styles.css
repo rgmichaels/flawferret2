@@ -515,6 +515,69 @@ button {
   text-transform: uppercase;
 }
 
+.framework-destination {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+}
+
+.framework-destination legend {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.framework-destination-option {
+  align-items: start;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.framework-destination-option.selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.framework-destination-option.disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.framework-destination-option input {
+  height: 16px;
+  margin-top: 3px;
+  width: 16px;
+}
+
+.framework-destination-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.framework-destination-option strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-destination-option.disabled strong {
+  color: #64748b;
+}
+
+.framework-destination-option small {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .framework-folder-picker {
   display: grid;
   gap: 10px;
@@ -527,8 +590,7 @@ button {
   margin-top: 6px;
 }
 
-.framework-folder-input-row button,
-.framework-folder-create-actions button {
+.framework-folder-input-row button {
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
@@ -538,26 +600,9 @@ button {
   padding: 10px 14px;
 }
 
-.framework-folder-input-row button:hover,
-.framework-folder-create-actions button:hover {
+.framework-folder-input-row button:hover {
   border-color: #2563eb;
   color: #2563eb;
-}
-
-.framework-folder-create-actions {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid #dce3ee;
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 14px;
-}
-
-.framework-folder-create-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
 }
 
 .framework-folder-error,
@@ -685,14 +730,6 @@ button {
   font-size: 12px;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-}
-
-.framework-folder-success {
-  color: #15803d;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.35;
-  margin: 0;
 }
 
 .framework-overwrite-option {

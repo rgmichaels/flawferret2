@@ -14,6 +14,7 @@ describe("framework template preview", () => {
   it("builds a best-practices Playwright Cucumber TypeScript framework preview", () => {
     const preview = buildFrameworkTemplatePreview({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: ["pageObjects", "apiTesting", "accessibility", "githubActions", "sampleFeature"],
       packageName: "@example/qa-framework",
       projectName: "Example QA Framework",
@@ -27,7 +28,7 @@ describe("framework template preview", () => {
     assert.ok(preview.directories.includes("qa/e2e/src/pages"));
     assert.ok(preview.directories.includes("qa/e2e/features/smoke"));
     assert.ok(preview.files.some((file) => file.path === "qa/e2e/src/support/hooks.ts"));
-    assert.ok(preview.files.some((file) => file.path === "qa/e2e/src/pages/HomePage.ts"));
+    assert.ok(preview.files.some((file) => file.path === "qa/e2e/src/pages/ApplicationPage.ts"));
     assert.ok(preview.files.some((file) => file.path === "qa/e2e/src/api/ApiClient.ts"));
     assert.ok(preview.files.some((file) => file.path === "qa/e2e/src/accessibility/scan.ts"));
     assert.ok(preview.files.some((file) => file.path === "qa/e2e/.github/workflows/playwright-cucumber.yml"));
@@ -40,6 +41,7 @@ describe("framework template preview", () => {
   it("omits optional framework areas when they are not selected", () => {
     const preview = buildFrameworkTemplatePreview({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: [],
       packageName: "minimal-framework",
       projectName: "Minimal Framework",
@@ -56,6 +58,7 @@ describe("framework template preview", () => {
   it("builds browser-writable framework files without target-directory prefixes", () => {
     const template = buildFrameworkBrowserTemplate({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: ["sampleFeature"],
       packageName: "browser-framework",
       projectName: "Browser Framework",
@@ -63,14 +66,17 @@ describe("framework template preview", () => {
     });
 
     assert.ok(template.files.some((file) => file.path === "package.json"));
-    assert.ok(template.files.some((file) => file.path === "features/smoke/home.feature"));
+    assert.ok(template.files.some((file) => file.path === "features/smoke/configured-base-url.feature"));
     assert.match(template.files.find((file) => file.path === "package.json")?.content ?? "", /browser-framework/);
+    assert.ok(template.files.some((file) => file.path === "src/pages/ApplicationPage.ts"));
+    assert.ok(template.files.some((file) => file.path === "src/steps/navigation.steps.ts"));
     assert.ok(!template.files.some((file) => file.path.startsWith("qa/e2e/")));
   });
 
   it("makes the base URL first-class in generated framework files", () => {
     const template = buildFrameworkBrowserTemplate({
       baseUrl: "https://app.example.test",
+      destinationType: "local",
       features: ["pageObjects", "sampleFeature"],
       packageName: "base-url-framework",
       projectName: "Base URL Framework",
@@ -78,12 +84,16 @@ describe("framework template preview", () => {
     });
     const envExample = template.files.find((file) => file.path === ".env.example")?.content ?? "";
     const readme = template.files.find((file) => file.path === "README.md")?.content ?? "";
-    const feature = template.files.find((file) => file.path === "features/smoke/home.feature")?.content ?? "";
+    const feature = template.files.find((file) => file.path === "features/smoke/configured-base-url.feature")?.content ?? "";
+    const applicationPage = template.files.find((file) => file.path === "src/pages/ApplicationPage.ts")?.content ?? "";
     const steps = template.files.find((file) => file.path === "src/steps/navigation.steps.ts")?.content ?? "";
 
     assert.match(envExample, /BASE_URL=https:\/\/app\.example\.test/);
     assert.match(readme, /The framework targets `https:\/\/app\.example\.test` by default/);
+    assert.match(feature, /Given I open the configured base URL/);
+    assert.match(feature, /Then the configured page should load successfully/);
     assert.match(feature, /And the page should be served from the configured base URL/);
+    assert.match(applicationPage, /Configured base URL should return a successful document response/);
     assert.match(steps, /new URL\(env\.BASE_URL\)\.origin/);
   });
 
@@ -93,6 +103,7 @@ describe("framework template preview", () => {
 
     const preview = await buildFrameworkTemplatePreviewWithFileStatus({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: [],
       packageName: "minimal-framework",
       projectName: "Minimal Framework",
@@ -109,6 +120,7 @@ describe("framework template preview", () => {
 
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: ["sampleFeature"],
       overwriteExisting: false,
       packageName: "created-framework",
@@ -119,7 +131,10 @@ describe("framework template preview", () => {
     assert.ok(result.createdFiles.some((file) => file.path.endsWith("/cucumber.js")));
     assert.ok(result.skippedFiles.some((file) => file.path.endsWith("/package.json")));
     assert.equal(await readFile(join(targetDirectory, "package.json"), "utf8"), "existing package");
-    assert.match(await readFile(join(targetDirectory, "features/smoke/home.feature"), "utf8"), /Feature: Home page/);
+    assert.match(
+      await readFile(join(targetDirectory, "features/smoke/configured-base-url.feature"), "utf8"),
+      /Feature: Configured application availability/,
+    );
   });
 
   it("overwrites existing files only when requested", async () => {
@@ -128,6 +143,7 @@ describe("framework template preview", () => {
 
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
+      destinationType: "local",
       features: [],
       overwriteExisting: true,
       packageName: "overwritten-framework",
