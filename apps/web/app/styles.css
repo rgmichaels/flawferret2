@@ -494,6 +494,143 @@ button {
   overflow-wrap: anywhere;
 }
 
+.framework-builder-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+}
+
+.framework-options {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+}
+
+.framework-options legend {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.framework-option {
+  align-items: start;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.framework-option input {
+  height: 16px;
+  margin-top: 3px;
+  width: 16px;
+}
+
+.framework-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.framework-option strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-option small,
+.framework-principles li {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.framework-principles ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.framework-preview {
+  display: grid;
+  gap: 18px;
+}
+
+.framework-command-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.framework-command-grid div {
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.framework-command-grid span,
+.framework-file-card span {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.framework-command-grid code,
+.framework-file-card code {
+  color: #334155;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.framework-file-list {
+  display: grid;
+  gap: 12px;
+}
+
+.framework-file-card {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  padding: 14px;
+}
+
+.framework-file-card strong {
+  color: #172033;
+  display: block;
+  font-size: 14px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.framework-file-card p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 6px 0 0;
+}
+
+.framework-file-card code {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: block;
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px;
+}
+
 .content-grid {
   align-items: start;
   display: grid;
@@ -4529,7 +4666,10 @@ textarea {
   }
 
   .settings-grid,
-  .settings-summary dl {
+  .settings-summary dl,
+  .framework-builder-grid,
+  .framework-command-grid,
+  .framework-file-card {
     grid-template-columns: 1fr;
   }
 

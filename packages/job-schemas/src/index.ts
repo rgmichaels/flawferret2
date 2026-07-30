@@ -416,6 +416,53 @@ export const discoverRunResponseSchema = z.object({
   visibleDecisions: z.array(discoverCoverageDecisionSchema),
 });
 
+export const frameworkTemplateFeatureSchema = z.enum([
+  "pageObjects",
+  "apiTesting",
+  "accessibility",
+  "githubActions",
+  "sampleFeature",
+]);
+
+export const frameworkTemplateRequestSchema = z.object({
+  baseUrl: z.string().trim().url("Base URL must be a valid URL").default("https://example.com"),
+  features: z.array(frameworkTemplateFeatureSchema).default([
+    "pageObjects",
+    "apiTesting",
+    "accessibility",
+    "githubActions",
+    "sampleFeature",
+  ]),
+  packageName: z
+    .string()
+    .trim()
+    .min(1, "Package name is required")
+    .max(80, "Package name is too long")
+    .regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/, "Use a valid npm package name")
+    .default("playwright-cucumber-tests"),
+  projectName: z.string().trim().min(1, "Project name is required").max(80).default("Playwright Cucumber Tests"),
+  targetDirectory: z.string().trim().min(1, "Target directory is required").max(500).default("."),
+});
+
+export const frameworkTemplateFileSchema = z.object({
+  category: z.enum(["config", "feature", "page-object", "step-definition", "support", "utility", "ci", "docs"]),
+  contentPreview: z.string(),
+  description: z.string(),
+  path: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+});
+
+export const frameworkTemplatePreviewResponseSchema = z.object({
+  directories: z.array(z.string()),
+  files: z.array(frameworkTemplateFileSchema),
+  installCommand: z.string(),
+  packageName: z.string(),
+  projectName: z.string(),
+  runCommand: z.string(),
+  targetDirectory: z.string(),
+  totalFiles: z.number().int().nonnegative(),
+});
+
 export const jobResponseSchema = z.object({
   id: z.string(),
   jobType: jobTypeSchema,
@@ -601,6 +648,10 @@ export type DiscoverTestRecommendationsResponse = z.infer<typeof discoverTestRec
 export type CreateDiscoverRunRequest = z.infer<typeof createDiscoverRunRequestSchema>;
 export type UpdateDiscoverRunQueuedRequest = z.infer<typeof updateDiscoverRunQueuedRequestSchema>;
 export type DiscoverRunResponse = z.infer<typeof discoverRunResponseSchema>;
+export type FrameworkTemplateFeature = z.infer<typeof frameworkTemplateFeatureSchema>;
+export type FrameworkTemplateRequest = z.infer<typeof frameworkTemplateRequestSchema>;
+export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;
+export type FrameworkTemplatePreviewResponse = z.infer<typeof frameworkTemplatePreviewResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;

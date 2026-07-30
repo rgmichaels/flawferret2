@@ -143,6 +143,7 @@ type AppShellProps = {
     | "dashboard"
     | "discover"
     | "features"
+    | "framework"
     | "jobs"
     | "new-job"
     | "settings";
@@ -212,6 +213,9 @@ export async function AppShell({ active, children }: AppShellProps) {
           <span>Create</span>
           <a className={navClassName(active, "discover")} href="/discover">
             Discover Tests
+          </a>
+          <a className={navClassName(active, "framework")} href="/framework/new">
+            Create Framework
           </a>
           <a className={navClassName(active, "new-job")} href="/jobs/new">
             New Job

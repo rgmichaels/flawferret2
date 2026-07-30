@@ -13,6 +13,8 @@ import {
   discoverTestRecommendationsResponseSchema,
   explainCucumberScenarioRequestSchema,
   explainCucumberScenarioResponseSchema,
+  frameworkTemplatePreviewResponseSchema,
+  frameworkTemplateRequestSchema,
   jobEventTypeSchema,
   localTestRunOutputResponseSchema,
   localTestRunResponseSchema,
@@ -489,5 +491,47 @@ describe("job schemas", () => {
     });
 
     assert.equal("apiToken" in response, false);
+  });
+
+  it("parses framework template preview requests and responses", () => {
+    const request = frameworkTemplateRequestSchema.parse({
+      baseUrl: " https://example.test/app ",
+      features: ["pageObjects", "apiTesting", "accessibility", "githubActions", "sampleFeature"],
+      packageName: "@example/qa-framework",
+      projectName: " Example QA Framework ",
+      targetDirectory: " qa/e2e ",
+    });
+
+    assert.equal(request.baseUrl, "https://example.test/app");
+    assert.equal(request.projectName, "Example QA Framework");
+    assert.deepEqual(request.features, [
+      "pageObjects",
+      "apiTesting",
+      "accessibility",
+      "githubActions",
+      "sampleFeature",
+    ]);
+
+    const response = frameworkTemplatePreviewResponseSchema.parse({
+      directories: ["qa/e2e/src"],
+      files: [
+        {
+          category: "config",
+          contentPreview: "{",
+          description: "Package manifest",
+          path: "qa/e2e/package.json",
+          sizeBytes: 10,
+        },
+      ],
+      installCommand: "pnpm install",
+      packageName: request.packageName,
+      projectName: request.projectName,
+      runCommand: "pnpm test",
+      targetDirectory: request.targetDirectory,
+      totalFiles: 1,
+    });
+
+    assert.equal(response.files[0].path, "qa/e2e/package.json");
+    assert.equal(response.totalFiles, 1);
   });
 });

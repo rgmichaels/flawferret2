@@ -17,6 +17,7 @@ import {
   createDiscoverRunRequestSchema,
   discoverTestRecommendationsRequestSchema,
   explainCucumberScenarioRequestSchema,
+  frameworkTemplateRequestSchema,
   jobStatusSchema,
   retryStageRequestSchema,
   updateDiscoverRunQueuedRequestSchema,
@@ -51,6 +52,7 @@ import { config } from "./config.js";
 import { explainCucumberScenario } from "./cucumber-explanations.js";
 import { buildFeatureCatalog, buildFeatureDetail } from "./cucumber-features.js";
 import { buildDiscoverRecommendations } from "./discover-recommendations.js";
+import { buildFrameworkTemplatePreview } from "./framework-template.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -849,6 +851,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return buildDiscoverRecommendations({
       input: body,
     });
+  });
+
+  server.post("/frameworks/preview", async (request) => {
+    const body = frameworkTemplateRequestSchema.parse(request.body);
+
+    return buildFrameworkTemplatePreview(body);
   });
 
   server.get("/discover/runs", async () => {
