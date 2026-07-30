@@ -314,7 +314,36 @@ export default async function NewFrameworkPage({
               <button type="submit">Create from Target Directory</button>
             </form>
 
+            <section className="framework-next-steps">
+              <div>
+                <h3>Next Steps</h3>
+                <p>Run these from the generated framework folder after files are created.</p>
+              </div>
+              <ol>
+                <li>
+                  <span>Open folder</span>
+                  <code>cd {preview.targetDirectory}</code>
+                </li>
+                <li>
+                  <span>Install dependencies</span>
+                  <code>pnpm install</code>
+                </li>
+                <li>
+                  <span>Create local env</span>
+                  <code>cp .env.example .env</code>
+                </li>
+                <li>
+                  <span>Run smoke test</span>
+                  <code>pnpm test:smoke</code>
+                </li>
+              </ol>
+            </section>
+
             <div className="framework-command-grid">
+              <div>
+                <span>Base URL</span>
+                <code>{request.baseUrl}</code>
+              </div>
               <div>
                 <span>Install</span>
                 <code>{preview.installCommand}</code>

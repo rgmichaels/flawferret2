@@ -876,6 +876,24 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return buildFrameworkBrowserTemplate(body);
   });
 
+  server.get("/frameworks/pick-folder", async (_request, reply) => {
+    try {
+      const { stdout } = await execFileAsync("osascript", [
+        "-e",
+        'POSIX path of (choose folder with prompt "Choose where FlawFerret should create the framework")',
+      ]);
+
+      return {
+        path: stdout.trim().replace(/\/$/, ""),
+      };
+    } catch {
+      return reply.status(400).send({
+        error: "FolderPickerCanceled",
+        message: "No folder was selected.",
+      });
+    }
+  });
+
   server.get("/discover/runs", async () => {
     const runs = await prisma.discoverRun.findMany({
       include: {

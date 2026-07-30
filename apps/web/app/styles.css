@@ -544,21 +544,15 @@ button {
   color: #2563eb;
 }
 
-.framework-folder-create-row {
+.framework-folder-create-actions {
+  align-items: center;
   background: #f8fafc;
   border: 1px solid #dce3ee;
   border-radius: 8px;
   display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-  padding: 14px;
-}
-
-.framework-folder-create-actions {
-  align-items: center;
-  display: grid;
   gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px;
 }
 
 .framework-folder-create-actions button:disabled {
@@ -638,6 +632,61 @@ button {
   padding: 14px;
 }
 
+.framework-next-steps {
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.framework-next-steps h3 {
+  color: #172033;
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.framework-next-steps p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.framework-next-steps ol {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.framework-next-steps li {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.framework-next-steps span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.framework-next-steps code {
+  color: #172033;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .framework-folder-success {
   color: #15803d;
   font-size: 13px;
@@ -678,7 +727,7 @@ button {
 .framework-command-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .framework-command-grid div {
@@ -4812,6 +4861,7 @@ textarea {
   .settings-summary dl,
   .framework-builder-grid,
   .framework-command-grid,
+  .framework-next-steps ol,
   .framework-file-card {
     grid-template-columns: 1fr;
   }
