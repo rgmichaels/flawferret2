@@ -1,8 +1,13 @@
 import type {
+  CreateFrameworkFileResult,
+  CreateFrameworkRequest,
+  CreateFrameworkResponse,
   FrameworkTemplateFile,
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
 } from "@flawferret2/job-schemas";
+import { access, mkdir, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 type TemplateFileInput = Omit<FrameworkTemplateFile, "contentPreview" | "path" | "sizeBytes"> & {
   content: string;
@@ -17,6 +22,46 @@ const normalizeTargetDirectory = (value: string) => {
 
 const joinTargetPath = (targetDirectory: string, path: string) =>
   targetDirectory === "." ? path : `${targetDirectory}/${path}`;
+
+const resolveTargetRoot = (targetDirectory: string) =>
+  isAbsolute(targetDirectory) ? resolve(targetDirectory) : resolve(process.cwd(), targetDirectory);
+
+const assertPathInsideRoot = (root: string, path: string) => {
+  const resolvedPath = resolve(path);
+  const relativePath = relative(root, resolvedPath);
+
+  if (relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath))) {
+    return resolvedPath;
+  }
+
+  throw new Error(`Unsafe framework path resolved outside the target directory: ${path}`);
+};
+
+const resolveFrameworkFilePath = (root: string, targetDirectory: string, path: string) =>
+  assertPathInsideRoot(root, resolveTargetRoot(joinTargetPath(targetDirectory, path)));
+
+const fileExists = async (path: string) => {
+  try {
+    await access(path);
+
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export type FrameworkBrowserTemplateResponse = {
+  files: Array<{
+    category: string;
+    content: string;
+    description: string;
+    path: string;
+    sizeBytes: number;
+  }>;
+  packageName: string;
+  projectName: string;
+  totalFiles: number;
+};
 
 const previewContent = (content: string) => {
   const normalized = content.trimStart();
@@ -513,6 +558,15 @@ const selectedFiles = (values: FrameworkTemplateRequest) => {
   return files;
 };
 
+const getTemplateFiles = (request: FrameworkTemplateRequest) => {
+  const targetDirectory = normalizeTargetDirectory(request.targetDirectory);
+
+  return {
+    targetDirectory,
+    files: selectedFiles(request),
+  };
+};
+
 const directoryNames = (files: FrameworkTemplateFile[]) =>
   Array.from(
     new Set(
@@ -532,8 +586,8 @@ const directoryNames = (files: FrameworkTemplateFile[]) =>
 export const buildFrameworkTemplatePreview = (
   request: FrameworkTemplateRequest,
 ): FrameworkTemplatePreviewResponse => {
-  const targetDirectory = normalizeTargetDirectory(request.targetDirectory);
-  const files = selectedFiles(request).map((file): FrameworkTemplateFile => ({
+  const { files: templateFiles, targetDirectory } = getTemplateFiles(request);
+  const files = templateFiles.map((file): FrameworkTemplateFile => ({
     category: file.category,
     contentPreview: previewContent(file.content),
     description: file.description,
@@ -550,5 +604,103 @@ export const buildFrameworkTemplatePreview = (
     runCommand: "pnpm test",
     targetDirectory,
     totalFiles: files.length,
+  };
+};
+
+export const buildFrameworkBrowserTemplate = (
+  request: FrameworkTemplateRequest,
+): FrameworkBrowserTemplateResponse => {
+  const files = selectedFiles(request).map((file) => ({
+    category: file.category,
+    content: file.content,
+    description: file.description,
+    path: file.path,
+    sizeBytes: Buffer.byteLength(file.content, "utf8"),
+  }));
+
+  return {
+    files,
+    packageName: request.packageName,
+    projectName: request.projectName,
+    totalFiles: files.length,
+  };
+};
+
+export const buildFrameworkTemplatePreviewWithFileStatus = async (
+  request: FrameworkTemplateRequest,
+  { overwriteExisting = false }: { overwriteExisting?: boolean } = {},
+): Promise<FrameworkTemplatePreviewResponse> => {
+  const preview = buildFrameworkTemplatePreview(request);
+  const targetRoot = resolveTargetRoot(preview.targetDirectory);
+  const { files: templateFiles, targetDirectory } = getTemplateFiles(request);
+  const files = await Promise.all(
+    templateFiles.map(async (file): Promise<FrameworkTemplateFile> => {
+      const absolutePath = resolveFrameworkFilePath(targetRoot, targetDirectory, file.path);
+      const exists = await fileExists(absolutePath);
+
+      return {
+        category: file.category,
+        contentPreview: previewContent(file.content),
+        description: file.description,
+        path: joinTargetPath(targetDirectory, file.path),
+        sizeBytes: Buffer.byteLength(file.content, "utf8"),
+        status: exists ? (overwriteExisting ? "overwrite" : "exists") : "create",
+      };
+    }),
+  );
+
+  return {
+    ...preview,
+    directories: directoryNames(files),
+    files,
+  };
+};
+
+export const createFrameworkFiles = async (request: CreateFrameworkRequest): Promise<CreateFrameworkResponse> => {
+  const preview = await buildFrameworkTemplatePreviewWithFileStatus(request, {
+    overwriteExisting: request.overwriteExisting,
+  });
+  const targetRoot = resolveTargetRoot(preview.targetDirectory);
+  const { files: templateFiles, targetDirectory } = getTemplateFiles(request);
+  const createdFiles: CreateFrameworkFileResult[] = [];
+  const skippedFiles: CreateFrameworkFileResult[] = [];
+  const overwrittenFiles: CreateFrameworkFileResult[] = [];
+
+  for (const file of templateFiles) {
+    const path = joinTargetPath(targetDirectory, file.path);
+    const absolutePath = resolveFrameworkFilePath(targetRoot, targetDirectory, file.path);
+    const exists = await fileExists(absolutePath);
+
+    if (exists && !request.overwriteExisting) {
+      skippedFiles.push({
+        path,
+        status: "skipped",
+      });
+      continue;
+    }
+
+    await mkdir(dirname(absolutePath), {
+      recursive: true,
+    });
+    await writeFile(absolutePath, file.content, "utf8");
+
+    if (exists) {
+      overwrittenFiles.push({
+        path,
+        status: "overwritten",
+      });
+    } else {
+      createdFiles.push({
+        path,
+        status: "created",
+      });
+    }
+  }
+
+  return {
+    ...preview,
+    createdFiles,
+    skippedFiles,
+    overwrittenFiles,
   };
 };

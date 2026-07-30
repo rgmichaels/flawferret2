@@ -515,6 +515,72 @@ button {
   text-transform: uppercase;
 }
 
+.framework-folder-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.framework-folder-input-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 6px;
+}
+
+.framework-folder-input-row button,
+.framework-folder-create-actions button {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 10px 14px;
+}
+
+.framework-folder-input-row button:hover,
+.framework-folder-create-actions button:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.framework-folder-create-row {
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  padding: 14px;
+}
+
+.framework-folder-create-actions {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.framework-folder-create-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.framework-folder-error,
+.framework-folder-muted {
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.framework-folder-error {
+  color: #b91c1c;
+}
+
+.framework-folder-muted {
+  color: #667085;
+}
+
 .framework-option {
   align-items: start;
   background: #f8fafc;
@@ -561,6 +627,54 @@ button {
   gap: 18px;
 }
 
+.framework-create-form {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.framework-folder-success {
+  color: #15803d;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.framework-overwrite-option {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0;
+}
+
+.framework-overwrite-option input {
+  height: 16px;
+  margin-top: 3px;
+  width: 16px;
+}
+
+.framework-overwrite-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.framework-overwrite-option strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-overwrite-option small {
+  color: #667085;
+  font-size: 13px;
+}
+
 .framework-command-grid {
   display: grid;
   gap: 12px;
@@ -602,7 +716,7 @@ button {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 360px) auto minmax(0, 1fr);
   padding: 14px;
 }
 
@@ -629,6 +743,30 @@ button {
   max-height: 180px;
   overflow: auto;
   padding: 12px;
+}
+
+.framework-file-status {
+  align-self: start;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.framework-file-status.create {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.framework-file-status.exists {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.framework-file-status.overwrite {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .content-grid {
@@ -4637,6 +4775,11 @@ textarea {
     flex-basis: auto;
     min-width: 0;
     width: 100%;
+  }
+
+  .framework-create-form {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .topbar,

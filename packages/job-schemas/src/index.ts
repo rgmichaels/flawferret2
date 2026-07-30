@@ -441,7 +441,11 @@ export const frameworkTemplateRequestSchema = z.object({
     .regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/, "Use a valid npm package name")
     .default("playwright-cucumber-tests"),
   projectName: z.string().trim().min(1, "Project name is required").max(80).default("Playwright Cucumber Tests"),
-  targetDirectory: z.string().trim().min(1, "Target directory is required").max(500).default("."),
+  targetDirectory: z.string().trim().min(1, "Target directory is required").max(500).default("qa/e2e"),
+});
+
+export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
+  overwriteExisting: z.boolean().default(false),
 });
 
 export const frameworkTemplateFileSchema = z.object({
@@ -450,6 +454,7 @@ export const frameworkTemplateFileSchema = z.object({
   description: z.string(),
   path: z.string(),
   sizeBytes: z.number().int().nonnegative(),
+  status: z.enum(["create", "exists", "overwrite"]).optional(),
 });
 
 export const frameworkTemplatePreviewResponseSchema = z.object({
@@ -461,6 +466,17 @@ export const frameworkTemplatePreviewResponseSchema = z.object({
   runCommand: z.string(),
   targetDirectory: z.string(),
   totalFiles: z.number().int().nonnegative(),
+});
+
+export const createFrameworkFileResultSchema = z.object({
+  path: z.string(),
+  status: z.enum(["created", "skipped", "overwritten"]),
+});
+
+export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSchema.extend({
+  createdFiles: z.array(createFrameworkFileResultSchema),
+  skippedFiles: z.array(createFrameworkFileResultSchema),
+  overwrittenFiles: z.array(createFrameworkFileResultSchema),
 });
 
 export const jobResponseSchema = z.object({
@@ -650,8 +666,11 @@ export type UpdateDiscoverRunQueuedRequest = z.infer<typeof updateDiscoverRunQue
 export type DiscoverRunResponse = z.infer<typeof discoverRunResponseSchema>;
 export type FrameworkTemplateFeature = z.infer<typeof frameworkTemplateFeatureSchema>;
 export type FrameworkTemplateRequest = z.infer<typeof frameworkTemplateRequestSchema>;
+export type CreateFrameworkRequest = z.infer<typeof createFrameworkRequestSchema>;
 export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;
 export type FrameworkTemplatePreviewResponse = z.infer<typeof frameworkTemplatePreviewResponseSchema>;
+export type CreateFrameworkFileResult = z.infer<typeof createFrameworkFileResultSchema>;
+export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
