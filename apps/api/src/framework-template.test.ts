@@ -68,6 +68,25 @@ describe("framework template preview", () => {
     assert.ok(!template.files.some((file) => file.path.startsWith("qa/e2e/")));
   });
 
+  it("makes the base URL first-class in generated framework files", () => {
+    const template = buildFrameworkBrowserTemplate({
+      baseUrl: "https://app.example.test",
+      features: ["pageObjects", "sampleFeature"],
+      packageName: "base-url-framework",
+      projectName: "Base URL Framework",
+      targetDirectory: "qa/e2e",
+    });
+    const envExample = template.files.find((file) => file.path === ".env.example")?.content ?? "";
+    const readme = template.files.find((file) => file.path === "README.md")?.content ?? "";
+    const feature = template.files.find((file) => file.path === "features/smoke/home.feature")?.content ?? "";
+    const steps = template.files.find((file) => file.path === "src/steps/navigation.steps.ts")?.content ?? "";
+
+    assert.match(envExample, /BASE_URL=https:\/\/app\.example\.test/);
+    assert.match(readme, /The framework targets `https:\/\/app\.example\.test` by default/);
+    assert.match(feature, /And the page should be served from the configured base URL/);
+    assert.match(steps, /new URL\(env\.BASE_URL\)\.origin/);
+  });
+
   it("marks existing files in preview before writing", async () => {
     const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-preview-"));
     await writeFile(join(targetDirectory, "package.json"), "existing package", "utf8");

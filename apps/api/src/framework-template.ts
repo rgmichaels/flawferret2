@@ -186,7 +186,10 @@ export default defineConfig({
     description: "Documented environment variables for base URL, browser behavior, and diagnostics.",
     path: ".env.example",
     content: template(
-      `BASE_URL={{baseUrl}}
+      `# Application root used by page objects, API clients, and smoke tests.
+BASE_URL={{baseUrl}}
+
+# Browser runtime controls for local debugging and CI.
 PW_HEADLESS=true
 PW_SLOW_MO=0
 TRACE_ON_FAILURE=true
@@ -337,6 +340,10 @@ cp .env.example .env
 pnpm test
 \`\`\`
 
+## Base URL
+
+The framework targets \`{{baseUrl}}\` by default. Update \`BASE_URL\` in \`.env\` when you need to point the same tests at another environment.
+
 ## Common Commands
 
 - \`pnpm test\` runs all Cucumber scenarios.
@@ -407,7 +414,9 @@ export class HomePage extends BasePage {
     description: "Reusable navigation and page-load steps that delegate behavior to page objects.",
     path: "src/steps/navigation.steps.ts",
     content: `import { Given, Then } from "@cucumber/cucumber";
+import { expect } from "@playwright/test";
 import { HomePage } from "../pages/HomePage.js";
+import { env } from "../support/env.js";
 import { getPage } from "../support/world-guards.js";
 import type { TestWorld } from "../support/world.js";
 
@@ -417,6 +426,13 @@ Given("I am on the home page", async function (this: TestWorld) {
 
 Then("the home page should load", async function (this: TestWorld) {
   await new HomePage(getPage(this)).expectLoaded();
+});
+
+Then("the page should be served from the configured base URL", async function (this: TestWorld) {
+  const configuredOrigin = new URL(env.BASE_URL).origin;
+  const currentOrigin = new URL(getPage(this).url()).origin;
+
+  expect(currentOrigin).toBe(configuredOrigin);
 });
 `,
   },
@@ -433,6 +449,7 @@ Feature: Home page
   Scenario: Home page loads with stable content
     Given I am on the home page
     Then the home page should load
+    And the page should be served from the configured base URL
 `,
   },
 ];
