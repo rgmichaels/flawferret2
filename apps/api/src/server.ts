@@ -15,6 +15,7 @@ import {
   createRepositoryRequestSchema,
   createTrackerIntegrationRequestSchema,
   createDiscoverRunRequestSchema,
+  createFrameworkRequestSchema,
   discoverTestRecommendationsRequestSchema,
   explainCucumberScenarioRequestSchema,
   frameworkTemplateRequestSchema,
@@ -52,7 +53,11 @@ import { config } from "./config.js";
 import { explainCucumberScenario } from "./cucumber-explanations.js";
 import { buildFeatureCatalog, buildFeatureDetail } from "./cucumber-features.js";
 import { buildDiscoverRecommendations } from "./discover-recommendations.js";
-import { buildFrameworkTemplatePreview } from "./framework-template.js";
+import {
+  buildFrameworkBrowserTemplate,
+  buildFrameworkTemplatePreviewWithFileStatus,
+  createFrameworkFiles,
+} from "./framework-template.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -856,7 +861,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
   server.post("/frameworks/preview", async (request) => {
     const body = frameworkTemplateRequestSchema.parse(request.body);
 
-    return buildFrameworkTemplatePreview(body);
+    return buildFrameworkTemplatePreviewWithFileStatus(body);
+  });
+
+  server.post("/frameworks/create", async (request, reply) => {
+    const body = createFrameworkRequestSchema.parse(request.body);
+
+    return reply.status(201).send(await createFrameworkFiles(body));
+  });
+
+  server.post("/frameworks/browser-template", async (request) => {
+    const body = frameworkTemplateRequestSchema.parse(request.body);
+
+    return buildFrameworkBrowserTemplate(body);
   });
 
   server.get("/discover/runs", async () => {

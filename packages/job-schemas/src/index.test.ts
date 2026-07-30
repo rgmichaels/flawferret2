@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   captureContextSchema,
+  createFrameworkRequestSchema,
   createDiscoverRunRequestSchema,
+  createFrameworkResponseSchema,
   cucumberFeatureCatalogResponseSchema,
   cucumberFeatureDetailResponseSchema,
   createJobRequestSchema,
@@ -521,6 +523,7 @@ describe("job schemas", () => {
           description: "Package manifest",
           path: "qa/e2e/package.json",
           sizeBytes: 10,
+          status: "create",
         },
       ],
       installCommand: "pnpm install",
@@ -533,5 +536,48 @@ describe("job schemas", () => {
 
     assert.equal(response.files[0].path, "qa/e2e/package.json");
     assert.equal(response.totalFiles, 1);
+  });
+
+  it("parses create framework requests and responses", () => {
+    const request = createFrameworkRequestSchema.parse({
+      baseUrl: "https://example.test",
+      features: ["sampleFeature"],
+      overwriteExisting: true,
+      packageName: "qa-framework",
+      projectName: "QA Framework",
+      targetDirectory: "/tmp/qa-framework",
+    });
+
+    assert.equal(request.overwriteExisting, true);
+
+    const response = createFrameworkResponseSchema.parse({
+      createdFiles: [
+        {
+          path: "/tmp/qa-framework/cucumber.js",
+          status: "created",
+        },
+      ],
+      directories: ["/tmp/qa-framework"],
+      files: [
+        {
+          category: "config",
+          contentPreview: "export default {}",
+          description: "Cucumber config",
+          path: "/tmp/qa-framework/cucumber.js",
+          sizeBytes: 17,
+          status: "create",
+        },
+      ],
+      installCommand: "pnpm install",
+      overwrittenFiles: [],
+      packageName: request.packageName,
+      projectName: request.projectName,
+      runCommand: "pnpm test",
+      skippedFiles: [],
+      targetDirectory: request.targetDirectory,
+      totalFiles: 1,
+    });
+
+    assert.equal(response.createdFiles[0].status, "created");
   });
 });

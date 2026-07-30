@@ -1,9 +1,12 @@
 import type {
+  CreateFrameworkResponse,
   FrameworkTemplateFeature,
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
 } from "@flawferret2/job-schemas";
+import { redirect } from "next/navigation";
 import { AppShell } from "../../app-shell";
+import { FrameworkFolderPicker } from "./framework-folder-picker";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -49,10 +52,14 @@ const featureOptions: Array<{
 
 type FrameworkNewSearchParams = {
   baseUrl?: string;
+  createError?: string;
+  created?: string;
   features?: string | string[];
+  overwritten?: string;
   packageName?: string;
   preview?: string;
   projectName?: string;
+  skipped?: string;
   targetDirectory?: string;
 };
 
@@ -68,7 +75,7 @@ const buildPreviewRequest = (params: FrameworkNewSearchParams): FrameworkTemplat
   features: getFeatureValues(params.features),
   packageName: params.packageName?.trim() || "playwright-cucumber-tests",
   projectName: params.projectName?.trim() || "Playwright Cucumber Tests",
-  targetDirectory: params.targetDirectory?.trim() || ".",
+  targetDirectory: params.targetDirectory?.trim() || "qa/e2e",
 });
 
 const getFrameworkPreview = async (
@@ -105,6 +112,56 @@ const getFrameworkPreview = async (
   }
 };
 
+const toCreateRequest = (formData: FormData): FrameworkTemplateRequest & { overwriteExisting: boolean } => ({
+  baseUrl: String(formData.get("baseUrl") ?? "").trim() || "https://example.com",
+  features: getFeatureValues(formData.getAll("features").map(String)),
+  overwriteExisting: formData.get("overwriteExisting") === "on",
+  packageName: String(formData.get("packageName") ?? "").trim() || "playwright-cucumber-tests",
+  projectName: String(formData.get("projectName") ?? "").trim() || "Playwright Cucumber Tests",
+  targetDirectory: String(formData.get("targetDirectory") ?? "").trim() || "qa/e2e",
+});
+
+async function createFramework(formData: FormData) {
+  "use server";
+
+  const request = toCreateRequest(formData);
+  const params = new URLSearchParams({
+    baseUrl: request.baseUrl,
+    packageName: request.packageName,
+    preview: "true",
+    projectName: request.projectName,
+    targetDirectory: request.targetDirectory,
+  });
+
+  for (const feature of request.features) {
+    params.append("features", feature);
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/create`, {
+      body: JSON.stringify(request),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error((await response.text()) || "Unable to create framework files.");
+    }
+
+    const result = (await response.json()) as CreateFrameworkResponse;
+    params.set("created", String(result.createdFiles.length));
+    params.set("skipped", String(result.skippedFiles.length));
+    params.set("overwritten", String(result.overwrittenFiles.length));
+  } catch (error) {
+    params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
+  }
+
+  redirect(`/framework/new?${params.toString()}`);
+}
+
 export default async function NewFrameworkPage({
   searchParams,
 }: {
@@ -117,6 +174,12 @@ export default async function NewFrameworkPage({
   const { error, preview } = shouldPreview
     ? await getFrameworkPreview(request)
     : { error: null, preview: null };
+  const createdCount = Number(params.created ?? 0);
+  const skippedCount = Number(params.skipped ?? 0);
+  const overwrittenCount = Number(params.overwritten ?? 0);
+  const hasCreateResult = createdCount > 0 || skippedCount > 0 || overwrittenCount > 0;
+  const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
+  const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
 
   return (
     <AppShell active="framework">
@@ -147,10 +210,11 @@ export default async function NewFrameworkPage({
                 Package Name
                 <input name="packageName" defaultValue={request.packageName} required />
               </label>
-              <label>
-                Target Directory
-                <input name="targetDirectory" defaultValue={request.targetDirectory} required />
-              </label>
+              <FrameworkFolderPicker
+                defaultValue={request.targetDirectory}
+                request={request}
+                showCreateControls={Boolean(preview)}
+              />
               <label>
                 Base URL
                 <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
@@ -203,18 +267,52 @@ export default async function NewFrameworkPage({
           </div>
         ) : null}
 
+        {params.createError ? (
+          <div className="notice error">
+            <strong>Create failed</strong>
+            <span>{params.createError}</span>
+          </div>
+        ) : null}
+
+        {hasCreateResult ? (
+          <div className="notice success">
+            <strong>Framework files created</strong>
+            <span>
+              {createdCount} created, {overwrittenCount} overwritten, {skippedCount} skipped.
+            </span>
+          </div>
+        ) : null}
+
         {preview ? (
           <section className="panel framework-preview">
             <div className="panel-header">
               <div>
                 <h2>Preview</h2>
                 <p>
-                  {preview.totalFiles} files under <code>{preview.targetDirectory}</code>. This slice only previews the
-                  framework; it does not write files yet.
+                  {preview.totalFiles} files under <code>{preview.targetDirectory}</code>. {createCount} will be created
+                  and {existingCount} already exist.
                 </p>
               </div>
               <span>{preview.packageName}</span>
             </div>
+
+            <form action={createFramework} className="framework-create-form">
+              <input name="baseUrl" type="hidden" value={request.baseUrl} />
+              <input name="packageName" type="hidden" value={request.packageName} />
+              <input name="projectName" type="hidden" value={request.projectName} />
+              <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
+              {request.features.map((feature) => (
+                <input key={feature} name="features" type="hidden" value={feature} />
+              ))}
+              <label className="framework-overwrite-option">
+                <input name="overwriteExisting" type="checkbox" />
+                <span>
+                  <strong>Overwrite existing files</strong>
+                  <small>Server-path fallback only. Leave unchecked to create missing files and skip conflicts.</small>
+                </span>
+              </label>
+              <button type="submit">Create from Target Directory</button>
+            </form>
 
             <div className="framework-command-grid">
               <div>
@@ -235,6 +333,7 @@ export default async function NewFrameworkPage({
                     <strong>{file.path}</strong>
                     <p>{file.description}</p>
                   </div>
+                  {file.status ? <mark className={`framework-file-status ${file.status}`}>{file.status}</mark> : null}
                   <code>{file.contentPreview}</code>
                 </article>
               ))}

@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
-import { buildFrameworkTemplatePreview } from "./framework-template.js";
+import {
+  buildFrameworkBrowserTemplate,
+  buildFrameworkTemplatePreview,
+  buildFrameworkTemplatePreviewWithFileStatus,
+  createFrameworkFiles,
+} from "./framework-template.js";
 
 describe("framework template preview", () => {
   it("builds a best-practices Playwright Cucumber TypeScript framework preview", () => {
@@ -44,4 +52,72 @@ describe("framework template preview", () => {
     assert.ok(!preview.files.some((file) => file.path.startsWith("features/")));
     assert.ok(!preview.files.some((file) => file.path.startsWith(".github/")));
   });
+
+  it("builds browser-writable framework files without target-directory prefixes", () => {
+    const template = buildFrameworkBrowserTemplate({
+      baseUrl: "https://example.test",
+      features: ["sampleFeature"],
+      packageName: "browser-framework",
+      projectName: "Browser Framework",
+      targetDirectory: "qa/e2e",
+    });
+
+    assert.ok(template.files.some((file) => file.path === "package.json"));
+    assert.ok(template.files.some((file) => file.path === "features/smoke/home.feature"));
+    assert.match(template.files.find((file) => file.path === "package.json")?.content ?? "", /browser-framework/);
+    assert.ok(!template.files.some((file) => file.path.startsWith("qa/e2e/")));
+  });
+
+  it("marks existing files in preview before writing", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-preview-"));
+    await writeFile(join(targetDirectory, "package.json"), "existing package", "utf8");
+
+    const preview = await buildFrameworkTemplatePreviewWithFileStatus({
+      baseUrl: "https://example.test",
+      features: [],
+      packageName: "minimal-framework",
+      projectName: "Minimal Framework",
+      targetDirectory,
+    });
+
+    assert.equal(preview.files.find((file) => file.path.endsWith("/package.json"))?.status, "exists");
+    assert.equal(preview.files.find((file) => file.path.endsWith("/cucumber.js"))?.status, "create");
+  });
+
+  it("creates files and skips existing files by default", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-create-"));
+    await writeFile(join(targetDirectory, "package.json"), "existing package", "utf8");
+
+    const result = await createFrameworkFiles({
+      baseUrl: "https://example.test",
+      features: ["sampleFeature"],
+      overwriteExisting: false,
+      packageName: "created-framework",
+      projectName: "Created Framework",
+      targetDirectory,
+    });
+
+    assert.ok(result.createdFiles.some((file) => file.path.endsWith("/cucumber.js")));
+    assert.ok(result.skippedFiles.some((file) => file.path.endsWith("/package.json")));
+    assert.equal(await readFile(join(targetDirectory, "package.json"), "utf8"), "existing package");
+    assert.match(await readFile(join(targetDirectory, "features/smoke/home.feature"), "utf8"), /Feature: Home page/);
+  });
+
+  it("overwrites existing files only when requested", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-overwrite-"));
+    await writeFile(join(targetDirectory, "package.json"), "existing package", "utf8");
+
+    const result = await createFrameworkFiles({
+      baseUrl: "https://example.test",
+      features: [],
+      overwriteExisting: true,
+      packageName: "overwritten-framework",
+      projectName: "Overwritten Framework",
+      targetDirectory,
+    });
+
+    assert.ok(result.overwrittenFiles.some((file) => file.path.endsWith("/package.json")));
+    assert.match(await readFile(join(targetDirectory, "package.json"), "utf8"), /"name": "overwritten-framework"/);
+  });
+
 });
