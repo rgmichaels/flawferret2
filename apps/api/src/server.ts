@@ -867,6 +867,10 @@ export const buildServer = async (): Promise<FastifyInstance> => {
   server.post("/frameworks/create", async (request, reply) => {
     const body = createFrameworkRequestSchema.parse(request.body);
 
+    if (body.destinationType === "github") {
+      return reply.status(501).send("GitHub framework creation is not implemented yet. Preview the destination for now.");
+    }
+
     return reply.status(201).send(await createFrameworkFiles(body));
   });
 

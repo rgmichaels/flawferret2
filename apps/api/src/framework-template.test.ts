@@ -10,11 +10,19 @@ import {
   createFrameworkFiles,
 } from "./framework-template.js";
 
+const localDestination = {
+  destinationType: "local" as const,
+  githubBranch: "main",
+  githubOwner: "",
+  githubRepositoryId: "",
+  githubRepository: "",
+};
+
 describe("framework template preview", () => {
   it("builds a best-practices Playwright Cucumber TypeScript framework preview", () => {
     const preview = buildFrameworkTemplatePreview({
       baseUrl: "https://example.test",
-      destinationType: "local",
+      ...localDestination,
       features: ["pageObjects", "apiTesting", "accessibility", "githubActions", "sampleFeature"],
       packageName: "@example/qa-framework",
       projectName: "Example QA Framework",
@@ -41,7 +49,7 @@ describe("framework template preview", () => {
   it("omits optional framework areas when they are not selected", () => {
     const preview = buildFrameworkTemplatePreview({
       baseUrl: "https://example.test",
-      destinationType: "local",
+      ...localDestination,
       features: [],
       packageName: "minimal-framework",
       projectName: "Minimal Framework",
@@ -58,7 +66,7 @@ describe("framework template preview", () => {
   it("builds browser-writable framework files without target-directory prefixes", () => {
     const template = buildFrameworkBrowserTemplate({
       baseUrl: "https://example.test",
-      destinationType: "local",
+      ...localDestination,
       features: ["sampleFeature"],
       packageName: "browser-framework",
       projectName: "Browser Framework",
@@ -76,7 +84,7 @@ describe("framework template preview", () => {
   it("makes the base URL first-class in generated framework files", () => {
     const template = buildFrameworkBrowserTemplate({
       baseUrl: "https://app.example.test",
-      destinationType: "local",
+      ...localDestination,
       features: ["pageObjects", "sampleFeature"],
       packageName: "base-url-framework",
       projectName: "Base URL Framework",
@@ -103,7 +111,7 @@ describe("framework template preview", () => {
 
     const preview = await buildFrameworkTemplatePreviewWithFileStatus({
       baseUrl: "https://example.test",
-      destinationType: "local",
+      ...localDestination,
       features: [],
       packageName: "minimal-framework",
       projectName: "Minimal Framework",
@@ -114,13 +122,32 @@ describe("framework template preview", () => {
     assert.equal(preview.files.find((file) => file.path.endsWith("/cucumber.js"))?.status, "create");
   });
 
+  it("previews GitHub destinations without checking local file status", async () => {
+    const preview = await buildFrameworkTemplatePreviewWithFileStatus({
+      baseUrl: "https://example.test",
+      destinationType: "github",
+      features: ["sampleFeature"],
+      githubBranch: "feature/framework",
+      githubOwner: "rgmichaels",
+      githubRepositoryId: "repo-1",
+      githubRepository: "qa-framework",
+      packageName: "github-framework",
+      projectName: "GitHub Framework",
+      targetDirectory: ".",
+    });
+
+    assert.equal(preview.targetDirectory, ".");
+    assert.ok(preview.files.some((file) => file.path === "package.json"));
+    assert.equal(preview.files.find((file) => file.path === "package.json")?.status, "create");
+  });
+
   it("creates files and skips existing files by default", async () => {
     const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-create-"));
     await writeFile(join(targetDirectory, "package.json"), "existing package", "utf8");
 
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
-      destinationType: "local",
+      ...localDestination,
       features: ["sampleFeature"],
       overwriteExisting: false,
       packageName: "created-framework",
@@ -143,7 +170,7 @@ describe("framework template preview", () => {
 
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
-      destinationType: "local",
+      ...localDestination,
       features: [],
       overwriteExisting: true,
       packageName: "overwritten-framework",

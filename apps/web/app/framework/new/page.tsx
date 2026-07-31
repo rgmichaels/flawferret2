@@ -1,8 +1,10 @@
 import type {
   CreateFrameworkResponse,
+  FrameworkTemplateDestinationType,
   FrameworkTemplateFeature,
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
+  RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { redirect } from "next/navigation";
 import { AppShell } from "../../app-shell";
@@ -56,6 +58,10 @@ type FrameworkNewSearchParams = {
   created?: string;
   destinationType?: string;
   features?: string | string[];
+  githubBranch?: string;
+  githubOwner?: string;
+  githubRepositoryId?: string;
+  githubRepository?: string;
   overwritten?: string;
   packageName?: string;
   preview?: string;
@@ -71,13 +77,36 @@ const getFeatureValues = (value: string | string[] | undefined): FrameworkTempla
   return values.filter((feature): feature is FrameworkTemplateFeature => allowed.has(feature as FrameworkTemplateFeature));
 };
 
+const getDestinationType = (value: string | undefined): FrameworkTemplateDestinationType =>
+  value === "github" ? "github" : "local";
+
+async function getRepositories(): Promise<RepositoryResponse[]> {
+  try {
+    const response = await fetch(`${apiUrl}/repositories`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<RepositoryResponse[]>;
+  } catch {
+    return [];
+  }
+}
+
 const buildPreviewRequest = (params: FrameworkNewSearchParams): FrameworkTemplateRequest => ({
   baseUrl: params.baseUrl?.trim() || "https://example.com",
-  destinationType: "local",
+  destinationType: getDestinationType(params.destinationType),
   features: getFeatureValues(params.features),
+  githubBranch: params.githubBranch?.trim() || "main",
+  githubOwner: params.githubOwner?.trim() || "",
+  githubRepositoryId: params.githubRepositoryId?.trim() || "",
+  githubRepository: params.githubRepository?.trim() || "",
   packageName: params.packageName?.trim() || "playwright-cucumber-tests",
   projectName: params.projectName?.trim() || "Playwright Cucumber Tests",
-  targetDirectory: params.targetDirectory?.trim() || "qa/e2e",
+  targetDirectory: params.targetDirectory?.trim() || (params.destinationType === "github" ? "." : "qa/e2e"),
 });
 
 const getFrameworkPreview = async (
@@ -116,8 +145,12 @@ const getFrameworkPreview = async (
 
 const toCreateRequest = (formData: FormData): FrameworkTemplateRequest & { overwriteExisting: boolean } => ({
   baseUrl: String(formData.get("baseUrl") ?? "").trim() || "https://example.com",
-  destinationType: "local",
+  destinationType: getDestinationType(String(formData.get("destinationType") ?? "")),
   features: getFeatureValues(formData.getAll("features").map(String)),
+  githubBranch: String(formData.get("githubBranch") ?? "").trim() || "main",
+  githubOwner: String(formData.get("githubOwner") ?? "").trim(),
+  githubRepositoryId: String(formData.get("githubRepositoryId") ?? "").trim(),
+  githubRepository: String(formData.get("githubRepository") ?? "").trim(),
   overwriteExisting: formData.get("overwriteExisting") === "on",
   packageName: String(formData.get("packageName") ?? "").trim() || "playwright-cucumber-tests",
   projectName: String(formData.get("projectName") ?? "").trim() || "Playwright Cucumber Tests",
@@ -131,6 +164,10 @@ async function createFramework(formData: FormData) {
   const params = new URLSearchParams({
     baseUrl: request.baseUrl,
     destinationType: request.destinationType,
+    githubBranch: request.githubBranch,
+    githubOwner: request.githubOwner,
+    githubRepositoryId: request.githubRepositoryId,
+    githubRepository: request.githubRepository,
     packageName: request.packageName,
     preview: "true",
     projectName: request.projectName,
@@ -175,9 +212,12 @@ export default async function NewFrameworkPage({
   const request = buildPreviewRequest(params);
   const selectedFeatures = new Set(request.features);
   const shouldPreview = params.preview === "true";
-  const { error, preview } = shouldPreview
-    ? await getFrameworkPreview(request)
-    : { error: null, preview: null };
+  const [{ error, preview }, repositories] = await Promise.all([
+    shouldPreview
+      ? getFrameworkPreview(request)
+      : Promise.resolve({ error: null, preview: null }),
+    getRepositories(),
+  ]);
   const createdCount = Number(params.created ?? 0);
   const skippedCount = Number(params.skipped ?? 0);
   const overwrittenCount = Number(params.overwritten ?? 0);
@@ -214,7 +254,15 @@ export default async function NewFrameworkPage({
                 Package Name
                 <input name="packageName" defaultValue={request.packageName} required />
               </label>
-              <FrameworkFolderPicker defaultValue={request.targetDirectory} />
+              <FrameworkFolderPicker
+                defaultDestinationType={request.destinationType}
+                defaultGithubBranch={request.githubBranch}
+                defaultGithubOwner={request.githubOwner}
+                defaultGithubRepositoryId={request.githubRepositoryId}
+                defaultGithubRepository={request.githubRepository}
+                defaultValue={request.targetDirectory}
+                repositories={repositories}
+              />
               <label>
                 Base URL
                 <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
@@ -289,16 +337,42 @@ export default async function NewFrameworkPage({
               <div>
                 <h2>Preview</h2>
                 <p>
-                  {preview.totalFiles} files under <code>{preview.targetDirectory}</code>. {createCount} will be created
-                  and {existingCount} already exist.
+                  {request.destinationType === "github" ? (
+                    <>
+                      {preview.totalFiles} files previewed for{" "}
+                      <code>
+                        {request.githubOwner}/{request.githubRepository}:{request.githubBranch}
+                      </code>{" "}
+                      under <code>{preview.targetDirectory}</code>.
+                    </>
+                  ) : (
+                    <>
+                      {preview.totalFiles} files under <code>{preview.targetDirectory}</code>. {createCount} will be created
+                      and {existingCount} already exist.
+                    </>
+                  )}
                 </p>
               </div>
               <span>{preview.packageName}</span>
             </div>
 
-            <form action={createFramework} className="framework-create-form">
+            {request.destinationType === "github" ? (
+              <div className="framework-create-form">
+                <div>
+                  <strong>GitHub creation coming next</strong>
+                  <small>
+                    This preview is ready for repository selection. The next slice will write these files to a branch or PR.
+                  </small>
+                </div>
+              </div>
+            ) : (
+              <form action={createFramework} className="framework-create-form">
               <input name="baseUrl" type="hidden" value={request.baseUrl} />
               <input name="destinationType" type="hidden" value={request.destinationType} />
+              <input name="githubBranch" type="hidden" value={request.githubBranch} />
+              <input name="githubOwner" type="hidden" value={request.githubOwner} />
+              <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
+              <input name="githubRepository" type="hidden" value={request.githubRepository} />
               <input name="packageName" type="hidden" value={request.packageName} />
               <input name="projectName" type="hidden" value={request.projectName} />
               <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
@@ -313,7 +387,8 @@ export default async function NewFrameworkPage({
                 </span>
               </label>
               <button type="submit">Create from Target Directory</button>
-            </form>
+              </form>
+            )}
 
             <section className="framework-next-steps">
               <div>

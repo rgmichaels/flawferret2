@@ -578,6 +578,24 @@ button {
   line-height: 1.35;
 }
 
+.framework-github-destination {
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 14px;
+}
+
+.framework-github-destination label:last-child {
+  grid-column: 1 / -1;
+}
+
+.framework-github-repository-picker {
+  grid-column: 1 / -1;
+}
+
 .framework-folder-picker {
   display: grid;
   gap: 10px;
@@ -675,6 +693,22 @@ button {
   gap: 14px;
   justify-content: space-between;
   padding: 14px;
+}
+
+.framework-create-form div {
+  display: grid;
+  gap: 4px;
+}
+
+.framework-create-form strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-create-form small {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .framework-next-steps {

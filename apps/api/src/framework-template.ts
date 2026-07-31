@@ -656,6 +656,16 @@ export const buildFrameworkTemplatePreviewWithFileStatus = async (
   { overwriteExisting = false }: { overwriteExisting?: boolean } = {},
 ): Promise<FrameworkTemplatePreviewResponse> => {
   const preview = buildFrameworkTemplatePreview(request);
+  if (request.destinationType === "github") {
+    return {
+      ...preview,
+      files: preview.files.map((file) => ({
+        ...file,
+        status: "create",
+      })),
+    };
+  }
+
   const targetRoot = resolveTargetRoot(preview.targetDirectory);
   const { files: templateFiles, targetDirectory } = getTemplateFiles(request);
   const files = await Promise.all(
@@ -682,6 +692,10 @@ export const buildFrameworkTemplatePreviewWithFileStatus = async (
 };
 
 export const createFrameworkFiles = async (request: CreateFrameworkRequest): Promise<CreateFrameworkResponse> => {
+  if (request.destinationType === "github") {
+    throw new Error("GitHub framework creation is not implemented yet. Use Local folder for this slice.");
+  }
+
   const preview = await buildFrameworkTemplatePreviewWithFileStatus(request, {
     overwriteExisting: request.overwriteExisting,
   });
