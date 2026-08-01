@@ -515,6 +515,97 @@ button {
   text-transform: uppercase;
 }
 
+.framework-wizard-steps {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.framework-wizard-steps div {
+  background: #ffffff;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.framework-wizard-steps div.active {
+  border-color: #93c5fd;
+  box-shadow: inset 0 3px 0 #2563eb;
+}
+
+.framework-wizard-steps span,
+.framework-wizard-section-header > span {
+  align-items: center;
+  background: #eff6ff;
+  border-radius: 999px;
+  color: #2563eb;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.framework-wizard-steps strong {
+  color: #172033;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.framework-wizard-steps small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.framework-wizard-section {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.framework-wizard-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.framework-wizard-section-header {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.framework-wizard-section-header h3 {
+  color: #172033;
+  font-size: 16px;
+  margin: 0 0 3px;
+}
+
+.framework-wizard-section-header p {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.framework-basics-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.framework-basics-grid label:last-child {
+  grid-column: 1 / -1;
+}
+
 .framework-destination {
   border: 1px solid #dce3ee;
   border-radius: 8px;
@@ -666,13 +757,66 @@ button {
 }
 
 .framework-option small,
-.framework-principles li {
+.framework-roadmap li {
   color: #667085;
   font-size: 13px;
   line-height: 1.35;
 }
 
-.framework-principles ul {
+.framework-builder-summary {
+  align-self: start;
+  position: sticky;
+  top: 20px;
+}
+
+.framework-plan-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.framework-plan-list div {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+
+.framework-plan-list div:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.framework-plan-list dt {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.framework-plan-list dd {
+  color: #172033;
+  font-size: 14px;
+  font-weight: 750;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.framework-roadmap {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.framework-roadmap h3 {
+  color: #172033;
+  font-size: 14px;
+  margin: 0;
+}
+
+.framework-roadmap ul {
   display: grid;
   gap: 10px;
   margin: 0;
@@ -4984,10 +5128,16 @@ textarea {
   .settings-grid,
   .settings-summary dl,
   .framework-builder-grid,
+  .framework-wizard-steps,
+  .framework-basics-grid,
   .framework-command-grid,
   .framework-next-steps ol,
   .framework-file-card {
     grid-template-columns: 1fr;
+  }
+
+  .framework-builder-summary {
+    position: static;
   }
 
   .panel-header {

@@ -242,6 +242,10 @@ export default async function NewFrameworkPage({
   const hasCreateResult = createdCount > 0 || skippedCount > 0 || overwrittenCount > 0;
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
   const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
+  const destinationLabel = request.destinationType === "github" ? "GitHub pull request" : "Local folder";
+  const includedFeatureLabels = featureOptions
+    .filter((option) => selectedFeatures.has(option.value))
+    .map((option) => option.label);
 
   return (
     <AppShell active="framework">
@@ -249,7 +253,7 @@ export default async function NewFrameworkPage({
         <header className="topbar">
           <div>
             <p className="eyebrow">Create</p>
-            <h1>Create Framework</h1>
+            <h1>Framework Builder</h1>
           </div>
         </header>
 
@@ -308,76 +312,155 @@ export default async function NewFrameworkPage({
           </div>
         ) : null}
 
+        <nav aria-label="Framework builder steps" className="framework-wizard-steps">
+          <div className="active">
+            <span>1</span>
+            <strong>Destination</strong>
+            <small>Folder or GitHub</small>
+          </div>
+          <div className="active">
+            <span>2</span>
+            <strong>Basics</strong>
+            <small>Name and URL</small>
+          </div>
+          <div className="active">
+            <span>3</span>
+            <strong>Capabilities</strong>
+            <small>Template options</small>
+          </div>
+          <div className={shouldPreview ? "active" : ""}>
+            <span>4</span>
+            <strong>Review</strong>
+            <small>Create plan</small>
+          </div>
+          <div className={hasCreateResult ? "active" : ""}>
+            <span>5</span>
+            <strong>Results</strong>
+            <small>Next actions</small>
+          </div>
+        </nav>
+
         <section className="page-grid two-column framework-builder-grid">
           <section className="panel">
             <div className="panel-header">
               <div>
-                <h2>Framework Blueprint</h2>
-                <p>Preview a fresh Playwright, TypeScript, Cucumber, and page object framework.</p>
+                <h2>Builder Setup</h2>
+                <p>Walk through the smallest set of choices needed to create a maintainable test framework.</p>
               </div>
             </div>
 
             <form className="job-form standalone-form" method="get">
               <input name="preview" type="hidden" value="true" />
-              <label>
-                Project Name
-                <input name="projectName" defaultValue={request.projectName} required />
-              </label>
-              <label>
-                Package Name
-                <input name="packageName" defaultValue={request.packageName} required />
-              </label>
-              <FrameworkFolderPicker
-                defaultDestinationType={request.destinationType}
-                defaultGithubBranch={request.githubBranch}
-                defaultGithubOwner={request.githubOwner}
-                defaultGithubRepositoryId={request.githubRepositoryId}
-                defaultGithubRepository={request.githubRepository}
-                defaultValue={request.targetDirectory}
-                repositories={repositories}
-              />
-              <label>
-                Base URL
-                <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
-              </label>
+              <section className="framework-wizard-section">
+                <div className="framework-wizard-section-header">
+                  <span>1</span>
+                  <div>
+                    <h3>Choose Destination</h3>
+                    <p>Create files locally, or create a GitHub pull request from a registered repository.</p>
+                  </div>
+                </div>
+                <FrameworkFolderPicker
+                  defaultDestinationType={request.destinationType}
+                  defaultGithubBranch={request.githubBranch}
+                  defaultGithubOwner={request.githubOwner}
+                  defaultGithubRepositoryId={request.githubRepositoryId}
+                  defaultGithubRepository={request.githubRepository}
+                  defaultValue={request.targetDirectory}
+                  repositories={repositories}
+                />
+              </section>
 
-              <fieldset className="framework-options">
-                <legend>Include</legend>
-                {featureOptions.map((option) => (
-                  <label key={option.value} className="framework-option">
-                    <input
-                      defaultChecked={selectedFeatures.has(option.value)}
-                      name="features"
-                      type="checkbox"
-                      value={option.value}
-                    />
-                    <span>
-                      <strong>{option.label}</strong>
-                      <small>{option.description}</small>
-                    </span>
+              <section className="framework-wizard-section">
+                <div className="framework-wizard-section-header">
+                  <span>2</span>
+                  <div>
+                    <h3>Framework Basics</h3>
+                    <p>Name the project and point the generated smoke test at its first base URL.</p>
+                  </div>
+                </div>
+                <div className="framework-basics-grid">
+                  <label>
+                    Project Name
+                    <input name="projectName" defaultValue={request.projectName} required />
                   </label>
-                ))}
-              </fieldset>
+                  <label>
+                    Package Name
+                    <input name="packageName" defaultValue={request.packageName} required />
+                  </label>
+                  <label>
+                    Base URL
+                    <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
+                  </label>
+                </div>
+              </section>
+
+              <section className="framework-wizard-section">
+                <div className="framework-wizard-section-header">
+                  <span>3</span>
+                  <div>
+                    <h3>Capabilities</h3>
+                    <p>Pick the framework modules that should be generated in this pass.</p>
+                  </div>
+                </div>
+                <fieldset className="framework-options">
+                  <legend>Include</legend>
+                  {featureOptions.map((option) => (
+                    <label key={option.value} className="framework-option">
+                      <input
+                        defaultChecked={selectedFeatures.has(option.value)}
+                        name="features"
+                        type="checkbox"
+                        value={option.value}
+                      />
+                      <span>
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              </section>
 
               <button type="submit">Preview Framework</button>
             </form>
           </section>
 
-          <aside className="panel framework-principles">
+          <aside className="panel framework-builder-summary">
             <div className="panel-header">
               <div>
-                <h2>Install Philosophy</h2>
-                <p>The preview is intentionally deterministic.</p>
+                <h2>Build Plan</h2>
+                <p>Current choices before preview and creation.</p>
               </div>
             </div>
-            <ul>
-              <li>No arbitrary sleeps or brittle waits.</li>
-              <li>Typed environment configuration with early failures.</li>
-              <li>Page objects own page behavior; steps stay readable.</li>
-              <li>Browser traces and screenshots are captured for failures.</li>
-              <li>API and accessibility helpers are reusable first-class modules.</li>
-              <li>CI runs typecheck before executing Cucumber tests.</li>
-            </ul>
+            <dl className="framework-plan-list">
+              <div>
+                <dt>Destination</dt>
+                <dd>{destinationLabel}</dd>
+              </div>
+              <div>
+                <dt>Target</dt>
+                <dd>{request.destinationType === "github" ? `${request.githubOwner}/${request.githubRepository}` : request.targetDirectory}</dd>
+              </div>
+              <div>
+                <dt>Base URL</dt>
+                <dd>{request.baseUrl}</dd>
+              </div>
+              <div>
+                <dt>Capabilities</dt>
+                <dd>{includedFeatureLabels.join(", ") || "None selected"}</dd>
+              </div>
+            </dl>
+            <section className="framework-roadmap">
+              <h3>Room To Add</h3>
+              <ul>
+                <li>Initialize local Git repository</li>
+                <li>Install dependencies and browsers</li>
+                <li>Run generated smoke test</li>
+                <li>Create new GitHub repository</li>
+                <li>Push initial remote branch</li>
+                <li>Configure tracker integration</li>
+              </ul>
+            </section>
           </aside>
         </section>
 
@@ -385,7 +468,8 @@ export default async function NewFrameworkPage({
           <section className="panel framework-preview">
             <div className="panel-header">
               <div>
-                <h2>Preview</h2>
+                <p className="eyebrow">Step 4</p>
+                <h2>Review & Create</h2>
                 <p>
                   {request.destinationType === "github" ? (
                     <>
