@@ -6,7 +6,10 @@ import type {
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
   GithubFrameworkPullRequest,
+  RepositoryResponse,
+  TrackerIntegrationResponse,
 } from "@flawferret2/job-schemas";
+import { prisma } from "@flawferret2/db";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 
@@ -53,6 +56,50 @@ type GitHubCreateFrameworkOptions = {
 
 const githubApiUrl = "https://api.github.com";
 
+const toRepositoryResponse = (repository: {
+  id: string;
+  provider: RepositoryResponse["provider"];
+  owner: string;
+  name: string;
+  defaultBranch: string;
+  cloneUrl: string;
+  webUrl: string;
+  localPath: string | null;
+  validationCommand: string | null;
+  trackerIntegration:
+    | {
+        id: string;
+        name: string;
+        provider: TrackerIntegrationResponse["provider"];
+        projectKey: string;
+      }
+    | null;
+  trackerIntegrationId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): RepositoryResponse => ({
+  id: repository.id,
+  provider: repository.provider,
+  owner: repository.owner,
+  name: repository.name,
+  defaultBranch: repository.defaultBranch,
+  cloneUrl: repository.cloneUrl,
+  webUrl: repository.webUrl,
+  localPath: repository.localPath,
+  validationCommand: repository.validationCommand,
+  trackerIntegration: repository.trackerIntegration
+    ? {
+        id: repository.trackerIntegration.id,
+        name: repository.trackerIntegration.name,
+        provider: repository.trackerIntegration.provider,
+        projectKey: repository.trackerIntegration.projectKey,
+      }
+    : null,
+  trackerIntegrationId: repository.trackerIntegrationId,
+  createdAt: repository.createdAt.toISOString(),
+  updatedAt: repository.updatedAt.toISOString(),
+});
+
 const normalizeTargetDirectory = (value: string) => {
   const trimmed = value.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "");
 
@@ -78,6 +125,57 @@ const assertPathInsideRoot = (root: string, path: string) => {
 
 const resolveFrameworkFilePath = (root: string, targetDirectory: string, path: string) =>
   assertPathInsideRoot(root, resolveTargetRoot(joinTargetPath(targetDirectory, path)));
+
+const repositoryNameFromPackage = (packageName: string) =>
+  packageName
+    .replace(/^@/, "")
+    .split("/")
+    .at(-1)
+    ?.replace(/[^A-Za-z0-9_.-]/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "playwright-cucumber-tests";
+
+const registerGeneratedFrameworkRepository = async (
+  request: CreateFrameworkRequest,
+  targetDirectory: string,
+): Promise<RepositoryResponse> => {
+  const localPath = resolveTargetRoot(targetDirectory);
+  const name = repositoryNameFromPackage(request.packageName);
+  const fileUrl = `file://${localPath}`;
+
+  const repository = await prisma.repository.upsert({
+    where: {
+      provider_owner_name: {
+        provider: "GITHUB",
+        owner: "local",
+        name,
+      },
+    },
+    create: {
+      provider: "GITHUB",
+      owner: "local",
+      name,
+      defaultBranch: "main",
+      cloneUrl: fileUrl,
+      webUrl: fileUrl,
+      localPath,
+      validationCommand: "pnpm test",
+      trackerIntegrationId: null,
+    },
+    update: {
+      defaultBranch: "main",
+      cloneUrl: fileUrl,
+      webUrl: fileUrl,
+      localPath,
+      validationCommand: "pnpm test",
+    },
+    include: {
+      trackerIntegration: true,
+    },
+  });
+
+  return toRepositoryResponse(repository);
+};
 
 const fileExists = async (path: string) => {
   try {
@@ -990,6 +1088,9 @@ export const createFrameworkFiles = async (request: CreateFrameworkRequest): Pro
   return {
     ...preview,
     createdFiles,
+    registeredRepository: request.registerLocalRepository
+      ? await registerGeneratedFrameworkRepository(request, targetDirectory)
+      : null,
     skippedFiles,
     overwrittenFiles,
   };

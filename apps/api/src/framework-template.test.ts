@@ -153,6 +153,7 @@ describe("framework template preview", () => {
       overwriteExisting: false,
       packageName: "created-framework",
       projectName: "Created Framework",
+      registerLocalRepository: false,
       targetDirectory,
     });
 
@@ -176,6 +177,7 @@ describe("framework template preview", () => {
       overwriteExisting: true,
       packageName: "overwritten-framework",
       projectName: "Overwritten Framework",
+      registerLocalRepository: false,
       targetDirectory,
     });
 
@@ -269,6 +271,7 @@ describe("framework template preview", () => {
         overwriteExisting: false,
         packageName: "qa-framework",
         projectName: "QA Framework",
+        registerLocalRepository: false,
         targetDirectory: "qa/e2e",
       },
       {
@@ -315,6 +318,7 @@ describe("framework template preview", () => {
             overwriteExisting: false,
             packageName: "qa-framework",
             projectName: "QA Framework",
+            registerLocalRepository: false,
             targetDirectory: "qa/e2e",
           },
           {

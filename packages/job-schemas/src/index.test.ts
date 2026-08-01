@@ -569,10 +569,12 @@ describe("job schemas", () => {
       overwriteExisting: true,
       packageName: "qa-framework",
       projectName: "QA Framework",
+      registerLocalRepository: true,
       targetDirectory: "/tmp/qa-framework",
     });
 
     assert.equal(request.overwriteExisting, true);
+    assert.equal(request.registerLocalRepository, true);
     assert.equal(request.destinationType, "local");
 
     const response = createFrameworkResponseSchema.parse({
@@ -604,6 +606,21 @@ describe("job schemas", () => {
       packageName: request.packageName,
       projectName: request.projectName,
       runCommand: "pnpm test",
+      registeredRepository: {
+        id: "repo-1",
+        provider: "GITHUB",
+        owner: "local",
+        name: "qa-framework",
+        defaultBranch: "main",
+        cloneUrl: "file:///tmp/qa-framework",
+        webUrl: "file:///tmp/qa-framework",
+        localPath: "/tmp/qa-framework",
+        validationCommand: "pnpm test",
+        trackerIntegration: null,
+        trackerIntegrationId: null,
+        createdAt: "2026-08-01T12:00:00.000Z",
+        updatedAt: "2026-08-01T12:00:00.000Z",
+      },
       skippedFiles: [],
       targetDirectory: request.targetDirectory,
       totalFiles: 1,
@@ -611,5 +628,6 @@ describe("job schemas", () => {
 
     assert.equal(response.createdFiles[0].status, "created");
     assert.equal(response.githubPullRequest?.prNumber, 12);
+    assert.equal(response.registeredRepository?.name, "qa-framework");
   });
 });
