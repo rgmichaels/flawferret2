@@ -62,6 +62,8 @@ type FrameworkNewSearchParams = {
   githubOwner?: string;
   githubRepositoryId?: string;
   githubRepository?: string;
+  prBranch?: string;
+  prCommitSha?: string;
   prNumber?: string;
   prUrl?: string;
   overwritten?: string;
@@ -199,6 +201,8 @@ async function createFramework(formData: FormData) {
     params.set("skipped", String(result.skippedFiles.length));
     params.set("overwritten", String(result.overwrittenFiles.length));
     if (result.githubPullRequest) {
+      params.set("prBranch", result.githubPullRequest.branchName);
+      params.set("prCommitSha", result.githubPullRequest.commitSha);
       params.set("prNumber", String(result.githubPullRequest.prNumber));
       params.set("prUrl", result.githubPullRequest.prUrl);
     }
@@ -240,6 +244,52 @@ export default async function NewFrameworkPage({
             <h1>Create Framework</h1>
           </div>
         </header>
+
+        {error ? (
+          <div className="notice error">
+            <strong>Preview failed</strong>
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        {params.createError ? (
+          <div className="notice error">
+            <strong>Create failed</strong>
+            <span>{params.createError}</span>
+          </div>
+        ) : null}
+
+        {hasCreateResult ? (
+          <div className={`notice success framework-create-result ${params.prUrl ? "framework-pr-success" : ""}`}>
+            <div>
+              <strong>{params.prUrl ? "Framework pull request created" : "Framework files created"}</strong>
+              <span>
+                {createdCount} created, {overwrittenCount} overwritten, {skippedCount} skipped.
+              </span>
+              {params.prBranch || params.prCommitSha ? (
+                <dl className="framework-pr-meta">
+                  {params.prBranch ? (
+                    <div>
+                      <dt>Branch</dt>
+                      <dd>{params.prBranch}</dd>
+                    </div>
+                  ) : null}
+                  {params.prCommitSha ? (
+                    <div>
+                      <dt>Commit</dt>
+                      <dd>{params.prCommitSha.slice(0, 12)}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : null}
+            </div>
+            {params.prUrl ? (
+              <a className="primary-link" href={params.prUrl}>
+                View PR #{params.prNumber}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
 
         <section className="page-grid two-column framework-builder-grid">
           <section className="panel">
@@ -313,35 +363,6 @@ export default async function NewFrameworkPage({
             </ul>
           </aside>
         </section>
-
-        {error ? (
-          <div className="notice error">
-            <strong>Preview failed</strong>
-            <span>{error}</span>
-          </div>
-        ) : null}
-
-        {params.createError ? (
-          <div className="notice error">
-            <strong>Create failed</strong>
-            <span>{params.createError}</span>
-          </div>
-        ) : null}
-
-        {hasCreateResult ? (
-          <div className="notice success">
-            <strong>{params.prUrl ? "Framework pull request created" : "Framework files created"}</strong>
-            <span>
-              {createdCount} created, {overwrittenCount} overwritten, {skippedCount} skipped.
-              {params.prUrl ? (
-                <>
-                  {" "}
-                  <a href={params.prUrl}>View PR #{params.prNumber}</a>
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
 
         {preview ? (
           <section className="panel framework-preview">

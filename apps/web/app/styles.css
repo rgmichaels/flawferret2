@@ -930,6 +930,59 @@ button {
   border-color: #bbf7d0;
 }
 
+.framework-create-result > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.framework-pr-success {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.framework-pr-success > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.framework-pr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+.framework-pr-meta div {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+}
+
+.framework-pr-meta dt {
+  color: #15803d;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.framework-pr-meta dd {
+  color: #172033;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .notice.error {
   background: #fff7ed;
   border-color: #fed7aa;
