@@ -8,6 +8,7 @@ import {
   buildFrameworkTemplatePreview,
   buildFrameworkTemplatePreviewWithFileStatus,
   createFrameworkFiles,
+  createFrameworkPullRequest,
 } from "./framework-template.js";
 
 const localDestination = {
@@ -180,6 +181,118 @@ describe("framework template preview", () => {
 
     assert.ok(result.overwrittenFiles.some((file) => file.path.endsWith("/package.json")));
     assert.match(await readFile(join(targetDirectory, "package.json"), "utf8"), /"name": "overwritten-framework"/);
+  });
+
+  it("creates a GitHub pull request for generated framework files", async () => {
+    const calls: Array<{ body: unknown; method: string; url: string }> = [];
+    const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ body, method, url: requestUrl });
+
+      if (requestUrl.endsWith("/branches/main")) {
+        return Response.json({
+          sha: "base-commit-sha",
+          commit: {
+            tree: {
+              sha: "base-tree-sha",
+            },
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/git/trees/base-tree-sha?recursive=1")) {
+        return Response.json({
+          sha: "base-tree-sha",
+          tree: [
+            {
+              path: "qa/e2e/package.json",
+              type: "blob",
+            },
+          ],
+        });
+      }
+
+      if (requestUrl.endsWith("/git/refs")) {
+        return Response.json({
+          object: {
+            sha: "base-commit-sha",
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/git/trees")) {
+        return Response.json({
+          sha: "new-tree-sha",
+        });
+      }
+
+      if (requestUrl.endsWith("/git/commits")) {
+        return Response.json({
+          sha: "new-commit-sha",
+          commit: {
+            tree: {
+              sha: "new-tree-sha",
+            },
+          },
+        });
+      }
+
+      if (requestUrl.includes("/git/refs/heads/flawferret/create-framework-")) {
+        return Response.json({
+          object: {
+            sha: "new-commit-sha",
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/pulls")) {
+        return Response.json({
+          html_url: "https://github.com/rgmichaels/qa-framework/pull/12",
+          number: 12,
+        });
+      }
+
+      return new Response("unexpected request", { status: 500 });
+    }) as typeof fetch;
+
+    const result = await createFrameworkPullRequest(
+      {
+        baseUrl: "https://example.test",
+        destinationType: "github",
+        features: ["sampleFeature"],
+        githubBranch: "main",
+        githubOwner: "rgmichaels",
+        githubRepository: "qa-framework",
+        githubRepositoryId: "repo-1",
+        overwriteExisting: false,
+        packageName: "qa-framework",
+        projectName: "QA Framework",
+        targetDirectory: "qa/e2e",
+      },
+      {
+        env: {
+          GITHUB_TOKEN: "test-token",
+        },
+        fetcher,
+        now: new Date("2026-08-01T12:34:56.000Z"),
+      },
+    );
+
+    assert.equal(result.githubPullRequest?.prNumber, 12);
+    assert.equal(result.githubPullRequest?.commitSha, "new-commit-sha");
+    assert.ok(result.skippedFiles.some((file) => file.path === "qa/e2e/package.json"));
+    assert.ok(result.createdFiles.some((file) => file.path === "qa/e2e/features/smoke/configured-base-url.feature"));
+    assert.ok(
+      calls.some(
+        (call) =>
+          call.method === "POST" &&
+          call.url.endsWith("/git/refs") &&
+          (call.body as { ref?: string }).ref === "refs/heads/flawferret/create-framework-qa-framework-20260801T123456Z",
+      ),
+    );
+    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
   });
 
 });

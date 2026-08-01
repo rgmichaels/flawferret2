@@ -522,8 +522,16 @@ export const createFrameworkFileResultSchema = z.object({
   status: z.enum(["created", "skipped", "overwritten"]),
 });
 
+export const githubFrameworkPullRequestSchema = z.object({
+  branchName: z.string(),
+  commitSha: z.string(),
+  prNumber: z.number().int().positive(),
+  prUrl: z.string().url(),
+});
+
 export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSchema.extend({
   createdFiles: z.array(createFrameworkFileResultSchema),
+  githubPullRequest: githubFrameworkPullRequestSchema.nullable().optional(),
   skippedFiles: z.array(createFrameworkFileResultSchema),
   overwrittenFiles: z.array(createFrameworkFileResultSchema),
 });
@@ -720,6 +728,7 @@ export type CreateFrameworkRequest = z.infer<typeof createFrameworkRequestSchema
 export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;
 export type FrameworkTemplatePreviewResponse = z.infer<typeof frameworkTemplatePreviewResponseSchema>;
 export type CreateFrameworkFileResult = z.infer<typeof createFrameworkFileResultSchema>;
+export type GithubFrameworkPullRequest = z.infer<typeof githubFrameworkPullRequestSchema>;
 export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;

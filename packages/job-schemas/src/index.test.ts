@@ -594,6 +594,12 @@ describe("job schemas", () => {
         },
       ],
       installCommand: "pnpm install",
+      githubPullRequest: {
+        branchName: "flawferret/create-framework-qa-framework-20260801T123456Z",
+        commitSha: "commit-sha",
+        prNumber: 12,
+        prUrl: "https://github.com/rgmichaels/qa-framework/pull/12",
+      },
       overwrittenFiles: [],
       packageName: request.packageName,
       projectName: request.projectName,
@@ -604,5 +610,6 @@ describe("job schemas", () => {
     });
 
     assert.equal(response.createdFiles[0].status, "created");
+    assert.equal(response.githubPullRequest?.prNumber, 12);
   });
 });

@@ -62,6 +62,8 @@ type FrameworkNewSearchParams = {
   githubOwner?: string;
   githubRepositoryId?: string;
   githubRepository?: string;
+  prNumber?: string;
+  prUrl?: string;
   overwritten?: string;
   packageName?: string;
   preview?: string;
@@ -196,6 +198,10 @@ async function createFramework(formData: FormData) {
     params.set("created", String(result.createdFiles.length));
     params.set("skipped", String(result.skippedFiles.length));
     params.set("overwritten", String(result.overwrittenFiles.length));
+    if (result.githubPullRequest) {
+      params.set("prNumber", String(result.githubPullRequest.prNumber));
+      params.set("prUrl", result.githubPullRequest.prUrl);
+    }
   } catch (error) {
     params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
   }
@@ -324,9 +330,15 @@ export default async function NewFrameworkPage({
 
         {hasCreateResult ? (
           <div className="notice success">
-            <strong>Framework files created</strong>
+            <strong>{params.prUrl ? "Framework pull request created" : "Framework files created"}</strong>
             <span>
               {createdCount} created, {overwrittenCount} overwritten, {skippedCount} skipped.
+              {params.prUrl ? (
+                <>
+                  {" "}
+                  <a href={params.prUrl}>View PR #{params.prNumber}</a>
+                </>
+              ) : null}
             </span>
           </div>
         ) : null}
@@ -356,17 +368,7 @@ export default async function NewFrameworkPage({
               <span>{preview.packageName}</span>
             </div>
 
-            {request.destinationType === "github" ? (
-              <div className="framework-create-form">
-                <div>
-                  <strong>GitHub creation coming next</strong>
-                  <small>
-                    This preview is ready for repository selection. The next slice will write these files to a branch or PR.
-                  </small>
-                </div>
-              </div>
-            ) : (
-              <form action={createFramework} className="framework-create-form">
+            <form action={createFramework} className="framework-create-form">
               <input name="baseUrl" type="hidden" value={request.baseUrl} />
               <input name="destinationType" type="hidden" value={request.destinationType} />
               <input name="githubBranch" type="hidden" value={request.githubBranch} />
@@ -383,12 +385,17 @@ export default async function NewFrameworkPage({
                 <input name="overwriteExisting" type="checkbox" />
                 <span>
                   <strong>Overwrite existing files</strong>
-                  <small>Server-path fallback only. Leave unchecked to create missing files and skip conflicts.</small>
+                  <small>
+                    {request.destinationType === "github"
+                      ? "Leave unchecked to skip files that already exist in the target branch."
+                      : "Leave unchecked to create missing files and skip conflicts."}
+                  </small>
                 </span>
               </label>
-              <button type="submit">Create from Target Directory</button>
-              </form>
-            )}
+              <button type="submit">
+                {request.destinationType === "github" ? "Create Pull Request" : "Create from Target Directory"}
+              </button>
+            </form>
 
             <section className="framework-next-steps">
               <div>
