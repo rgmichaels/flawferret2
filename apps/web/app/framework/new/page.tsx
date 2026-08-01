@@ -1,4 +1,5 @@
 import type {
+  CreateFrameworkRequest,
   CreateFrameworkResponse,
   FrameworkTemplateDestinationType,
   FrameworkTemplateFeature,
@@ -66,6 +67,8 @@ type FrameworkNewSearchParams = {
   prCommitSha?: string;
   prNumber?: string;
   prUrl?: string;
+  registeredRepositoryId?: string;
+  registeredRepositoryName?: string;
   overwritten?: string;
   packageName?: string;
   preview?: string;
@@ -147,7 +150,7 @@ const getFrameworkPreview = async (
   }
 };
 
-const toCreateRequest = (formData: FormData): FrameworkTemplateRequest & { overwriteExisting: boolean } => ({
+const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
   baseUrl: String(formData.get("baseUrl") ?? "").trim() || "https://example.com",
   destinationType: getDestinationType(String(formData.get("destinationType") ?? "")),
   features: getFeatureValues(formData.getAll("features").map(String)),
@@ -158,6 +161,7 @@ const toCreateRequest = (formData: FormData): FrameworkTemplateRequest & { overw
   overwriteExisting: formData.get("overwriteExisting") === "on",
   packageName: String(formData.get("packageName") ?? "").trim() || "playwright-cucumber-tests",
   projectName: String(formData.get("projectName") ?? "").trim() || "Playwright Cucumber Tests",
+  registerLocalRepository: formData.get("registerLocalRepository") === "on",
   targetDirectory: String(formData.get("targetDirectory") ?? "").trim() || "qa/e2e",
 });
 
@@ -205,6 +209,10 @@ async function createFramework(formData: FormData) {
       params.set("prCommitSha", result.githubPullRequest.commitSha);
       params.set("prNumber", String(result.githubPullRequest.prNumber));
       params.set("prUrl", result.githubPullRequest.prUrl);
+    }
+    if (result.registeredRepository) {
+      params.set("registeredRepositoryId", result.registeredRepository.id);
+      params.set("registeredRepositoryName", `${result.registeredRepository.owner}/${result.registeredRepository.name}`);
     }
   } catch (error) {
     params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
@@ -281,6 +289,15 @@ export default async function NewFrameworkPage({
                     </div>
                   ) : null}
                 </dl>
+              ) : null}
+              {params.registeredRepositoryId ? (
+                <span>
+                  Registered as{" "}
+                  <a href={`/features?repositoryId=${params.registeredRepositoryId}`}>
+                    {params.registeredRepositoryName ?? "new repository"}
+                  </a>
+                  .
+                </span>
               ) : null}
             </div>
             {params.prUrl ? (
@@ -413,6 +430,15 @@ export default async function NewFrameworkPage({
                   </small>
                 </span>
               </label>
+              {request.destinationType === "local" ? (
+                <label className="framework-overwrite-option">
+                  <input defaultChecked name="registerLocalRepository" type="checkbox" />
+                  <span>
+                    <strong>Register in FF2</strong>
+                    <small>Add this generated folder to Repositories after files are created.</small>
+                  </span>
+                </label>
+              ) : null}
               <button type="submit">
                 {request.destinationType === "github" ? "Create Pull Request" : "Create from Target Directory"}
               </button>

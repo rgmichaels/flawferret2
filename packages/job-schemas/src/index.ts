@@ -495,6 +495,7 @@ export const frameworkTemplateRequestSchema = z
 
 export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
   overwriteExisting: z.boolean().default(false),
+  registerLocalRepository: z.boolean().default(false),
 });
 
 export const frameworkTemplateFileSchema = z.object({
@@ -532,6 +533,7 @@ export const githubFrameworkPullRequestSchema = z.object({
 export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSchema.extend({
   createdFiles: z.array(createFrameworkFileResultSchema),
   githubPullRequest: githubFrameworkPullRequestSchema.nullable().optional(),
+  registeredRepository: repositoryResponseSchema.nullable().optional(),
   skippedFiles: z.array(createFrameworkFileResultSchema),
   overwrittenFiles: z.array(createFrameworkFileResultSchema),
 });
