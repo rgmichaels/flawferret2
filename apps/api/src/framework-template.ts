@@ -6,12 +6,15 @@ import type {
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
   GithubFrameworkPullRequest,
+  LocalFrameworkGitResult,
   RepositoryResponse,
   TrackerIntegrationResponse,
 } from "@flawferret2/job-schemas";
 import { prisma } from "@flawferret2/db";
+import { execFile } from "node:child_process";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { promisify } from "node:util";
 
 type TemplateFileInput = Omit<FrameworkTemplateFile, "contentPreview" | "path" | "sizeBytes"> & {
   content: string;
@@ -55,6 +58,7 @@ type GitHubCreateFrameworkOptions = {
 };
 
 const githubApiUrl = "https://api.github.com";
+const execFileAsync = promisify(execFile);
 
 const toRepositoryResponse = (repository: {
   id: string;
@@ -184,6 +188,71 @@ const fileExists = async (path: string) => {
     return true;
   } catch {
     return false;
+  }
+};
+
+const isInsideGitRepository = async (targetRoot: string) => {
+  try {
+    const { stdout } = await execFileAsync("git", ["rev-parse", "--is-inside-work-tree"], {
+      cwd: targetRoot,
+    });
+
+    return stdout.trim() === "true";
+  } catch {
+    return false;
+  }
+};
+
+const initializeLocalGitRepository = async (
+  targetRoot: string,
+  shouldInitialize: boolean | undefined,
+): Promise<LocalFrameworkGitResult> => {
+  if (!shouldInitialize) {
+    return {
+      message: "Git initialization was not requested.",
+      status: "not_requested",
+    };
+  }
+
+  if (await isInsideGitRepository(targetRoot)) {
+    return {
+      message: "Target directory is already inside a git repository.",
+      status: "already_repo",
+    };
+  }
+
+  try {
+    await execFileAsync("git", ["init"], {
+      cwd: targetRoot,
+    });
+    await execFileAsync("git", ["add", "-A"], {
+      cwd: targetRoot,
+    });
+    await execFileAsync(
+      "git",
+      [
+        "-c",
+        "user.name=FlawFerret",
+        "-c",
+        "user.email=flawferret@example.invalid",
+        "commit",
+        "-m",
+        "Initial test framework",
+      ],
+      {
+        cwd: targetRoot,
+      },
+    );
+
+    return {
+      message: "Initialized a local git repository with an initial framework commit.",
+      status: "initialized",
+    };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? `Git initialization skipped: ${error.message}` : "Git initialization skipped.",
+      status: "skipped",
+    };
   }
 };
 
@@ -1088,6 +1157,7 @@ export const createFrameworkFiles = async (request: CreateFrameworkRequest): Pro
   return {
     ...preview,
     createdFiles,
+    localGit: await initializeLocalGitRepository(targetRoot, request.initializeGitRepository),
     registeredRepository: request.registerLocalRepository
       ? await registerGeneratedFrameworkRepository(request, targetDirectory)
       : null,

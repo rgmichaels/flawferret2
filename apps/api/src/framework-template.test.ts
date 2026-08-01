@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { promisify } from "node:util";
 import {
   buildFrameworkBrowserTemplate,
   buildFrameworkTemplatePreview,
@@ -10,6 +12,8 @@ import {
   createFrameworkFiles,
   createFrameworkPullRequest,
 } from "./framework-template.js";
+
+const execFileAsync = promisify(execFile);
 
 const localDestination = {
   destinationType: "local" as const,
@@ -150,6 +154,7 @@ describe("framework template preview", () => {
       baseUrl: "https://example.test",
       ...localDestination,
       features: ["sampleFeature"],
+      initializeGitRepository: false,
       overwriteExisting: false,
       packageName: "created-framework",
       projectName: "Created Framework",
@@ -174,6 +179,7 @@ describe("framework template preview", () => {
       baseUrl: "https://example.test",
       ...localDestination,
       features: [],
+      initializeGitRepository: false,
       overwriteExisting: true,
       packageName: "overwritten-framework",
       projectName: "Overwritten Framework",
@@ -183,6 +189,71 @@ describe("framework template preview", () => {
 
     assert.ok(result.overwrittenFiles.some((file) => file.path.endsWith("/package.json")));
     assert.match(await readFile(join(targetDirectory, "package.json"), "utf8"), /"name": "overwritten-framework"/);
+  });
+
+  it("initializes a fresh local git repository when requested", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-git-init-"));
+
+    const result = await createFrameworkFiles({
+      baseUrl: "https://example.test",
+      ...localDestination,
+      features: ["sampleFeature"],
+      initializeGitRepository: true,
+      overwriteExisting: false,
+      packageName: "git-framework",
+      projectName: "Git Framework",
+      registerLocalRepository: false,
+      targetDirectory,
+    });
+
+    await access(join(targetDirectory, ".git"));
+    const { stdout } = await execFileAsync("git", ["rev-list", "--count", "HEAD"], {
+      cwd: targetDirectory,
+    });
+
+    assert.equal(result.localGit?.status, "initialized");
+    assert.equal(stdout.trim(), "1");
+  });
+
+  it("leaves an existing local git repository alone when git initialization is requested", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-git-existing-"));
+    await execFileAsync("git", ["init"], {
+      cwd: targetDirectory,
+    });
+    await execFileAsync(
+      "git",
+      [
+        "-c",
+        "user.name=FlawFerret Test",
+        "-c",
+        "user.email=flawferret-test@example.invalid",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "Existing commit",
+      ],
+      {
+        cwd: targetDirectory,
+      },
+    );
+
+    const result = await createFrameworkFiles({
+      baseUrl: "https://example.test",
+      ...localDestination,
+      features: ["sampleFeature"],
+      initializeGitRepository: true,
+      overwriteExisting: false,
+      packageName: "existing-git-framework",
+      projectName: "Existing Git Framework",
+      registerLocalRepository: false,
+      targetDirectory,
+    });
+    const { stdout } = await execFileAsync("git", ["rev-list", "--count", "HEAD"], {
+      cwd: targetDirectory,
+    });
+
+    assert.equal(result.localGit?.status, "already_repo");
+    assert.equal(stdout.trim(), "1");
   });
 
   it("creates a GitHub pull request for generated framework files", async () => {
@@ -268,6 +339,7 @@ describe("framework template preview", () => {
         githubOwner: "rgmichaels",
         githubRepository: "qa-framework",
         githubRepositoryId: "repo-1",
+        initializeGitRepository: false,
         overwriteExisting: false,
         packageName: "qa-framework",
         projectName: "QA Framework",
@@ -315,6 +387,7 @@ describe("framework template preview", () => {
             githubOwner: "rgmichaels",
             githubRepository: "qa-framework",
             githubRepositoryId: "repo-1",
+            initializeGitRepository: false,
             overwriteExisting: false,
             packageName: "qa-framework",
             projectName: "QA Framework",

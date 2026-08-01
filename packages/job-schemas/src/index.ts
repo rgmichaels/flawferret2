@@ -494,6 +494,7 @@ export const frameworkTemplateRequestSchema = z
   });
 
 export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
+  initializeGitRepository: z.boolean().default(false),
   overwriteExisting: z.boolean().default(false),
   registerLocalRepository: z.boolean().default(false),
 });
@@ -530,9 +531,15 @@ export const githubFrameworkPullRequestSchema = z.object({
   prUrl: z.string().url(),
 });
 
+export const localFrameworkGitResultSchema = z.object({
+  message: z.string(),
+  status: z.enum(["initialized", "already_repo", "skipped", "not_requested"]),
+});
+
 export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSchema.extend({
   createdFiles: z.array(createFrameworkFileResultSchema),
   githubPullRequest: githubFrameworkPullRequestSchema.nullable().optional(),
+  localGit: localFrameworkGitResultSchema.nullable().optional(),
   registeredRepository: repositoryResponseSchema.nullable().optional(),
   skippedFiles: z.array(createFrameworkFileResultSchema),
   overwrittenFiles: z.array(createFrameworkFileResultSchema),
@@ -731,6 +738,7 @@ export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;
 export type FrameworkTemplatePreviewResponse = z.infer<typeof frameworkTemplatePreviewResponseSchema>;
 export type CreateFrameworkFileResult = z.infer<typeof createFrameworkFileResultSchema>;
 export type GithubFrameworkPullRequest = z.infer<typeof githubFrameworkPullRequestSchema>;
+export type LocalFrameworkGitResult = z.infer<typeof localFrameworkGitResultSchema>;
 export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
