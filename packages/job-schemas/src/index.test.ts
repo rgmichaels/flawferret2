@@ -506,6 +506,7 @@ describe("job schemas", () => {
 
     assert.equal(request.baseUrl, "https://example.test/app");
     assert.equal(request.destinationType, "local");
+    assert.equal(request.githubRepositoryId, "");
     assert.equal(request.projectName, "Example QA Framework");
     assert.deepEqual(request.features, [
       "pageObjects",
@@ -537,6 +538,27 @@ describe("job schemas", () => {
 
     assert.equal(response.files[0].path, "qa/e2e/package.json");
     assert.equal(response.totalFiles, 1);
+  });
+
+  it("parses GitHub framework template destinations", () => {
+    const request = frameworkTemplateRequestSchema.parse({
+      baseUrl: "https://example.test",
+      destinationType: "github",
+      features: ["sampleFeature"],
+      githubBranch: "feature/framework",
+      githubOwner: "rgmichaels",
+      githubRepositoryId: "repo-1",
+      githubRepository: "qa-framework",
+      packageName: "qa-framework",
+      projectName: "QA Framework",
+      targetDirectory: ".",
+    });
+
+    assert.equal(request.destinationType, "github");
+    assert.equal(request.githubOwner, "rgmichaels");
+    assert.equal(request.githubRepositoryId, "repo-1");
+    assert.equal(request.githubRepository, "qa-framework");
+    assert.equal(request.githubBranch, "feature/framework");
   });
 
   it("parses create framework requests and responses", () => {
@@ -572,6 +594,12 @@ describe("job schemas", () => {
         },
       ],
       installCommand: "pnpm install",
+      githubPullRequest: {
+        branchName: "flawferret/create-framework-qa-framework-20260801T123456Z",
+        commitSha: "commit-sha",
+        prNumber: 12,
+        prUrl: "https://github.com/rgmichaels/qa-framework/pull/12",
+      },
       overwrittenFiles: [],
       packageName: request.packageName,
       projectName: request.projectName,
@@ -582,5 +610,6 @@ describe("job schemas", () => {
     });
 
     assert.equal(response.createdFiles[0].status, "created");
+    assert.equal(response.githubPullRequest?.prNumber, 12);
   });
 });

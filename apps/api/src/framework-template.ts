@@ -5,6 +5,7 @@ import type {
   FrameworkTemplateFile,
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
+  GithubFrameworkPullRequest,
 } from "@flawferret2/job-schemas";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
@@ -13,6 +14,44 @@ type TemplateFileInput = Omit<FrameworkTemplateFile, "contentPreview" | "path" |
   content: string;
   path: string;
 };
+
+type GitHubFetch = typeof fetch;
+
+type GitHubCommitResponse = {
+  sha: string;
+  commit: {
+    tree: {
+      sha: string;
+    };
+  };
+};
+
+type GitHubRefResponse = {
+  object: {
+    sha: string;
+  };
+};
+
+type GitHubTreeResponse = {
+  sha: string;
+  tree?: Array<{
+    path?: string;
+    type?: string;
+  }>;
+};
+
+type GitHubPullRequestResponse = {
+  html_url: string;
+  number: number;
+};
+
+type GitHubCreateFrameworkOptions = {
+  env?: NodeJS.ProcessEnv;
+  fetcher?: GitHubFetch;
+  now?: Date;
+};
+
+const githubApiUrl = "https://api.github.com";
 
 const normalizeTargetDirectory = (value: string) => {
   const trimmed = value.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "");
@@ -656,6 +695,16 @@ export const buildFrameworkTemplatePreviewWithFileStatus = async (
   { overwriteExisting = false }: { overwriteExisting?: boolean } = {},
 ): Promise<FrameworkTemplatePreviewResponse> => {
   const preview = buildFrameworkTemplatePreview(request);
+  if (request.destinationType === "github") {
+    return {
+      ...preview,
+      files: preview.files.map((file) => ({
+        ...file,
+        status: "create",
+      })),
+    };
+  }
+
   const targetRoot = resolveTargetRoot(preview.targetDirectory);
   const { files: templateFiles, targetDirectory } = getTemplateFiles(request);
   const files = await Promise.all(
@@ -681,7 +730,211 @@ export const buildFrameworkTemplatePreviewWithFileStatus = async (
   };
 };
 
+const encodeGitHubPathPart = (value: string) => encodeURIComponent(value).replaceAll("%2F", "/");
+
+const githubRequest = async <ResponseBody>(
+  fetcher: GitHubFetch,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<ResponseBody> => {
+  const response = await fetcher(`${githubApiUrl}${path}`, {
+    ...init,
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...init.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GitHub request failed with ${response.status}: ${text || response.statusText}`);
+  }
+
+  return response.json() as Promise<ResponseBody>;
+};
+
+const getExistingGitHubPaths = async (
+  fetcher: GitHubFetch,
+  token: string,
+  request: CreateFrameworkRequest,
+  baseTreeSha: string,
+) => {
+  const tree = await githubRequest<GitHubTreeResponse>(
+    fetcher,
+    token,
+    `/repos/${request.githubOwner}/${request.githubRepository}/git/trees/${baseTreeSha}?recursive=1`,
+  );
+
+  return new Set(tree.tree?.filter((item) => item.type === "blob" && item.path).map((item) => item.path as string) ?? []);
+};
+
+const frameworkBranchName = (request: CreateFrameworkRequest, now: Date) => {
+  const timestamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const slug = request.packageName
+    .replace(/^@/, "")
+    .replace(/\//g, "-")
+    .replace(/[^A-Za-z0-9._-]/g, "-")
+    .slice(0, 48);
+
+  return `flawferret/create-framework-${slug}-${timestamp}`;
+};
+
+export const createFrameworkPullRequest = async (
+  request: CreateFrameworkRequest,
+  { env = process.env, fetcher = fetch, now = new Date() }: GitHubCreateFrameworkOptions = {},
+): Promise<CreateFrameworkResponse> => {
+  const token = env.GITHUB_TOKEN?.trim();
+
+  if (!token) {
+    throw new Error("GitHub token is not configured. Add GITHUB_TOKEN to .env.");
+  }
+
+  const preview = await buildFrameworkTemplatePreviewWithFileStatus(request, {
+    overwriteExisting: request.overwriteExisting,
+  });
+  const { files: templateFiles, targetDirectory } = getTemplateFiles(request);
+  const branch = await githubRequest<GitHubCommitResponse>(
+    fetcher,
+    token,
+    `/repos/${request.githubOwner}/${request.githubRepository}/branches/${encodeURIComponent(request.githubBranch)}`,
+  );
+  const existingPaths = await getExistingGitHubPaths(fetcher, token, request, branch.commit.tree.sha);
+  const createdFiles: CreateFrameworkFileResult[] = [];
+  const skippedFiles: CreateFrameworkFileResult[] = [];
+  const overwrittenFiles: CreateFrameworkFileResult[] = [];
+  const tree = templateFiles.flatMap((file) => {
+    const path = joinTargetPath(targetDirectory, file.path);
+    const exists = existingPaths.has(path);
+
+    if (exists && !request.overwriteExisting) {
+      skippedFiles.push({
+        path,
+        status: "skipped",
+      });
+
+      return [];
+    }
+
+    if (exists) {
+      overwrittenFiles.push({
+        path,
+        status: "overwritten",
+      });
+    } else {
+      createdFiles.push({
+        path,
+        status: "created",
+      });
+    }
+
+    return [
+      {
+        content: file.content,
+        mode: "100644",
+        path,
+        type: "blob",
+      },
+    ];
+  });
+
+  if (tree.length === 0) {
+    throw new Error("No framework files are available to commit. Enable overwrite to replace existing files.");
+  }
+
+  const branchName = frameworkBranchName(request, now);
+  await githubRequest<GitHubRefResponse>(fetcher, token, `/repos/${request.githubOwner}/${request.githubRepository}/git/refs`, {
+    body: JSON.stringify({
+      ref: `refs/heads/${branchName}`,
+      sha: branch.sha,
+    }),
+    method: "POST",
+  });
+
+  const createdTree = await githubRequest<GitHubTreeResponse>(
+    fetcher,
+    token,
+    `/repos/${request.githubOwner}/${request.githubRepository}/git/trees`,
+    {
+      body: JSON.stringify({
+        base_tree: branch.commit.tree.sha,
+        tree,
+      }),
+      method: "POST",
+    },
+  );
+  const commit = await githubRequest<GitHubCommitResponse>(
+    fetcher,
+    token,
+    `/repos/${request.githubOwner}/${request.githubRepository}/git/commits`,
+    {
+      body: JSON.stringify({
+        message: `Create ${request.projectName} test framework`,
+        parents: [branch.sha],
+        tree: createdTree.sha,
+      }),
+      method: "POST",
+    },
+  );
+
+  await githubRequest<GitHubRefResponse>(
+    fetcher,
+    token,
+    `/repos/${request.githubOwner}/${request.githubRepository}/git/refs/heads/${encodeGitHubPathPart(branchName)}`,
+    {
+      body: JSON.stringify({
+        sha: commit.sha,
+      }),
+      method: "PATCH",
+    },
+  );
+
+  const pullRequest = await githubRequest<GitHubPullRequestResponse>(
+    fetcher,
+    token,
+    `/repos/${request.githubOwner}/${request.githubRepository}/pulls`,
+    {
+      body: JSON.stringify({
+        base: request.githubBranch,
+        body: [
+          `FlawFerret generated a fresh Playwright, TypeScript, Cucumber framework for ${request.projectName}.`,
+          "",
+          `Base URL: ${request.baseUrl}`,
+          `Target path: ${targetDirectory}`,
+          `Files created: ${createdFiles.length}`,
+          `Files overwritten: ${overwrittenFiles.length}`,
+          `Files skipped: ${skippedFiles.length}`,
+        ].join("\n"),
+        head: branchName,
+        title: `Create ${request.projectName} test framework`,
+      }),
+      method: "POST",
+    },
+  );
+  const githubPullRequest: GithubFrameworkPullRequest = {
+    branchName,
+    commitSha: commit.sha,
+    prNumber: pullRequest.number,
+    prUrl: pullRequest.html_url,
+  };
+
+  return {
+    ...preview,
+    createdFiles,
+    githubPullRequest,
+    overwrittenFiles,
+    skippedFiles,
+  };
+};
+
 export const createFrameworkFiles = async (request: CreateFrameworkRequest): Promise<CreateFrameworkResponse> => {
+  if (request.destinationType === "github") {
+    return createFrameworkPullRequest(request);
+  }
+
   const preview = await buildFrameworkTemplatePreviewWithFileStatus(request, {
     overwriteExisting: request.overwriteExisting,
   });

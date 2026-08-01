@@ -424,28 +424,74 @@ export const frameworkTemplateFeatureSchema = z.enum([
   "sampleFeature",
 ]);
 
-export const frameworkTemplateDestinationTypeSchema = z.enum(["local"]).default("local");
+export const frameworkTemplateDestinationTypeSchema = z.enum(["local", "github"]).default("local");
 
-export const frameworkTemplateRequestSchema = z.object({
-  baseUrl: z.string().trim().url("Base URL must be a valid URL").default("https://example.com"),
-  destinationType: frameworkTemplateDestinationTypeSchema,
-  features: z.array(frameworkTemplateFeatureSchema).default([
-    "pageObjects",
-    "apiTesting",
-    "accessibility",
-    "githubActions",
-    "sampleFeature",
-  ]),
-  packageName: z
-    .string()
-    .trim()
-    .min(1, "Package name is required")
-    .max(80, "Package name is too long")
-    .regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/, "Use a valid npm package name")
-    .default("playwright-cucumber-tests"),
-  projectName: z.string().trim().min(1, "Project name is required").max(80).default("Playwright Cucumber Tests"),
-  targetDirectory: z.string().trim().min(1, "Target directory is required").max(500).default("qa/e2e"),
-});
+const githubRepositoryPartSchema = z
+  .string()
+  .trim()
+  .max(100, "GitHub value is too long")
+  .regex(/^[A-Za-z0-9_.-]*$/, "Use only letters, numbers, dots, underscores, or dashes");
+
+const githubBranchSchema = z
+  .string()
+  .trim()
+  .max(160, "GitHub branch is too long")
+  .regex(/^[A-Za-z0-9_./-]*$/, "Use a valid GitHub branch name");
+
+export const frameworkTemplateRequestSchema = z
+  .object({
+    baseUrl: z.string().trim().url("Base URL must be a valid URL").default("https://example.com"),
+    destinationType: frameworkTemplateDestinationTypeSchema,
+    features: z.array(frameworkTemplateFeatureSchema).default([
+      "pageObjects",
+      "apiTesting",
+      "accessibility",
+      "githubActions",
+      "sampleFeature",
+    ]),
+    githubBranch: githubBranchSchema.default("main"),
+    githubOwner: githubRepositoryPartSchema.default(""),
+    githubRepositoryId: z.string().trim().default(""),
+    githubRepository: githubRepositoryPartSchema.default(""),
+    packageName: z
+      .string()
+      .trim()
+      .min(1, "Package name is required")
+      .max(80, "Package name is too long")
+      .regex(/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/, "Use a valid npm package name")
+      .default("playwright-cucumber-tests"),
+    projectName: z.string().trim().min(1, "Project name is required").max(80).default("Playwright Cucumber Tests"),
+    targetDirectory: z.string().trim().min(1, "Target directory is required").max(500).default("qa/e2e"),
+  })
+  .superRefine((request, context) => {
+    if (request.destinationType !== "github") {
+      return;
+    }
+
+    if (!request.githubOwner) {
+      context.addIssue({
+        code: "custom",
+        message: "GitHub owner is required",
+        path: ["githubOwner"],
+      });
+    }
+
+    if (!request.githubRepository) {
+      context.addIssue({
+        code: "custom",
+        message: "GitHub repository is required",
+        path: ["githubRepository"],
+      });
+    }
+
+    if (!request.githubBranch) {
+      context.addIssue({
+        code: "custom",
+        message: "GitHub branch is required",
+        path: ["githubBranch"],
+      });
+    }
+  });
 
 export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
   overwriteExisting: z.boolean().default(false),
@@ -476,8 +522,16 @@ export const createFrameworkFileResultSchema = z.object({
   status: z.enum(["created", "skipped", "overwritten"]),
 });
 
+export const githubFrameworkPullRequestSchema = z.object({
+  branchName: z.string(),
+  commitSha: z.string(),
+  prNumber: z.number().int().positive(),
+  prUrl: z.string().url(),
+});
+
 export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSchema.extend({
   createdFiles: z.array(createFrameworkFileResultSchema),
+  githubPullRequest: githubFrameworkPullRequestSchema.nullable().optional(),
   skippedFiles: z.array(createFrameworkFileResultSchema),
   overwrittenFiles: z.array(createFrameworkFileResultSchema),
 });
@@ -674,6 +728,7 @@ export type CreateFrameworkRequest = z.infer<typeof createFrameworkRequestSchema
 export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;
 export type FrameworkTemplatePreviewResponse = z.infer<typeof frameworkTemplatePreviewResponseSchema>;
 export type CreateFrameworkFileResult = z.infer<typeof createFrameworkFileResultSchema>;
+export type GithubFrameworkPullRequest = z.infer<typeof githubFrameworkPullRequestSchema>;
 export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
