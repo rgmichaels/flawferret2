@@ -63,6 +63,9 @@ type FrameworkNewSearchParams = {
   githubOwner?: string;
   githubRepositoryId?: string;
   githubRepository?: string;
+  initializeGitRepository?: string;
+  localGitMessage?: string;
+  localGitStatus?: string;
   prBranch?: string;
   prCommitSha?: string;
   prNumber?: string;
@@ -152,6 +155,7 @@ const buildFrameworkHref = (params: FrameworkNewSearchParams, step: FrameworkWiz
     "githubOwner",
     "githubRepositoryId",
     "githubRepository",
+    "initializeGitRepository",
     "packageName",
     "preview",
     "projectName",
@@ -181,6 +185,8 @@ const buildFrameworkHref = (params: FrameworkNewSearchParams, step: FrameworkWiz
       "registeredRepositoryId",
       "registeredRepositoryName",
       "skipped",
+      "localGitMessage",
+      "localGitStatus",
     ];
 
     for (const key of resultKeys) {
@@ -272,6 +278,7 @@ const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
   githubOwner: String(formData.get("githubOwner") ?? "").trim(),
   githubRepositoryId: String(formData.get("githubRepositoryId") ?? "").trim(),
   githubRepository: String(formData.get("githubRepository") ?? "").trim(),
+  initializeGitRepository: formData.get("initializeGitRepository") === "on",
   overwriteExisting: formData.get("overwriteExisting") === "on",
   packageName: String(formData.get("packageName") ?? "").trim() || "playwright-cucumber-tests",
   projectName: String(formData.get("projectName") ?? "").trim() || "Playwright Cucumber Tests",
@@ -290,6 +297,7 @@ async function createFramework(formData: FormData) {
     githubOwner: request.githubOwner,
     githubRepositoryId: request.githubRepositoryId,
     githubRepository: request.githubRepository,
+    initializeGitRepository: String(request.initializeGitRepository),
     packageName: request.packageName,
     preview: "true",
     projectName: request.projectName,
@@ -324,6 +332,10 @@ async function createFramework(formData: FormData) {
       params.set("prCommitSha", result.githubPullRequest.commitSha);
       params.set("prNumber", String(result.githubPullRequest.prNumber));
       params.set("prUrl", result.githubPullRequest.prUrl);
+    }
+    if (result.localGit) {
+      params.set("localGitMessage", result.localGit.message);
+      params.set("localGitStatus", result.localGit.status);
     }
     if (result.registeredRepository) {
       params.set("registeredRepositoryId", result.registeredRepository.id);
@@ -681,6 +693,11 @@ export default async function NewFrameworkPage({
                   <span>
                     {createdCount} created, {overwrittenCount} overwritten, {skippedCount} skipped.
                   </span>
+                  {params.localGitStatus ? (
+                    <span>
+                      Git: {params.localGitStatus.replace(/_/g, " ")}. {params.localGitMessage}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="framework-wizard-actions">
                   {params.prUrl ? (
@@ -721,13 +738,22 @@ export default async function NewFrameworkPage({
                   </span>
                 </label>
                 {request.destinationType === "local" ? (
-                  <label className="framework-overwrite-option">
-                    <input defaultChecked name="registerLocalRepository" type="checkbox" />
-                    <span>
-                      <strong>Register in FF2</strong>
-                      <small>Add this generated folder to Repositories after files are created.</small>
-                    </span>
-                  </label>
+                  <>
+                    <label className="framework-overwrite-option">
+                      <input defaultChecked name="initializeGitRepository" type="checkbox" />
+                      <span>
+                        <strong>Initialize git repository</strong>
+                        <small>Create a local git repo and initial commit after files are generated.</small>
+                      </span>
+                    </label>
+                    <label className="framework-overwrite-option">
+                      <input defaultChecked name="registerLocalRepository" type="checkbox" />
+                      <span>
+                        <strong>Register in FF2</strong>
+                        <small>Add this generated folder to Repositories after files are created.</small>
+                      </span>
+                    </label>
+                  </>
                 ) : null}
                 <div className="framework-create-actions">
                   <a className="secondary-button" href={buildFrameworkHref(params, "capabilities")}>
