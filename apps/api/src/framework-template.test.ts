@@ -295,4 +295,37 @@ describe("framework template preview", () => {
     assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/pulls")));
   });
 
+  it("explains which GitHub branch lookup failed", async () => {
+    const fetcher = (async () =>
+      new Response('{"message":"Branch not found"}', {
+        status: 404,
+      })) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        createFrameworkPullRequest(
+          {
+            baseUrl: "https://example.test",
+            destinationType: "github",
+            features: ["sampleFeature"],
+            githubBranch: "release/candidate",
+            githubOwner: "rgmichaels",
+            githubRepository: "qa-framework",
+            githubRepositoryId: "repo-1",
+            overwriteExisting: false,
+            packageName: "qa-framework",
+            projectName: "QA Framework",
+            targetDirectory: "qa/e2e",
+          },
+          {
+            env: {
+              GITHUB_TOKEN: "test-token",
+            },
+            fetcher,
+          },
+        ),
+      /Unable to read GitHub branch release\/candidate in rgmichaels\/qa-framework failed with 404/,
+    );
+  });
+
 });

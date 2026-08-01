@@ -736,22 +736,23 @@ const githubRequest = async <ResponseBody>(
   fetcher: GitHubFetch,
   token: string,
   path: string,
-  init: RequestInit = {},
+  init: RequestInit & { operation?: string } = {},
 ): Promise<ResponseBody> => {
+  const { operation = "GitHub request", ...requestInit } = init;
   const response = await fetcher(`${githubApiUrl}${path}`, {
-    ...init,
+    ...requestInit,
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
       "X-GitHub-Api-Version": "2022-11-28",
-      ...init.headers,
+      ...requestInit.headers,
     },
   });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`GitHub request failed with ${response.status}: ${text || response.statusText}`);
+    throw new Error(`${operation} failed with ${response.status}: ${text || response.statusText}`);
   }
 
   return response.json() as Promise<ResponseBody>;
@@ -767,6 +768,9 @@ const getExistingGitHubPaths = async (
     fetcher,
     token,
     `/repos/${request.githubOwner}/${request.githubRepository}/git/trees/${baseTreeSha}?recursive=1`,
+    {
+      operation: `Unable to inspect GitHub repository tree for ${request.githubOwner}/${request.githubRepository}`,
+    },
   );
 
   return new Set(tree.tree?.filter((item) => item.type === "blob" && item.path).map((item) => item.path as string) ?? []);
@@ -801,6 +805,9 @@ export const createFrameworkPullRequest = async (
     fetcher,
     token,
     `/repos/${request.githubOwner}/${request.githubRepository}/branches/${encodeURIComponent(request.githubBranch)}`,
+    {
+      operation: `Unable to read GitHub branch ${request.githubBranch} in ${request.githubOwner}/${request.githubRepository}`,
+    },
   );
   const existingPaths = await getExistingGitHubPaths(fetcher, token, request, branch.commit.tree.sha);
   const createdFiles: CreateFrameworkFileResult[] = [];
@@ -852,6 +859,7 @@ export const createFrameworkPullRequest = async (
       sha: branch.sha,
     }),
     method: "POST",
+    operation: `Unable to create GitHub branch ${branchName}`,
   });
 
   const createdTree = await githubRequest<GitHubTreeResponse>(
@@ -864,6 +872,7 @@ export const createFrameworkPullRequest = async (
         tree,
       }),
       method: "POST",
+      operation: `Unable to create GitHub tree for ${branchName}`,
     },
   );
   const commit = await githubRequest<GitHubCommitResponse>(
@@ -877,6 +886,7 @@ export const createFrameworkPullRequest = async (
         tree: createdTree.sha,
       }),
       method: "POST",
+      operation: `Unable to create GitHub commit for ${branchName}`,
     },
   );
 
@@ -889,6 +899,7 @@ export const createFrameworkPullRequest = async (
         sha: commit.sha,
       }),
       method: "PATCH",
+      operation: `Unable to update GitHub branch ${branchName}`,
     },
   );
 
@@ -912,6 +923,7 @@ export const createFrameworkPullRequest = async (
         title: `Create ${request.projectName} test framework`,
       }),
       method: "POST",
+      operation: `Unable to create GitHub pull request for ${branchName}`,
     },
   );
   const githubPullRequest: GithubFrameworkPullRequest = {
