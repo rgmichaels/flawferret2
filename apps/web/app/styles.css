@@ -981,6 +981,35 @@ button {
   gap: 4px;
 }
 
+.framework-results-hero {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.framework-results-hero div {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.framework-results-hero span {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.framework-results-hero strong {
+  color: #172033;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
 .framework-results-checklist {
   display: grid;
   gap: 8px;
@@ -1184,6 +1213,51 @@ button {
 
 .framework-inline-action-form {
   margin: 0;
+}
+
+.framework-action-center {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.framework-action-card {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.framework-action-card div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.framework-action-card strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+.framework-action-card span {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.framework-action-card code {
+  color: #334155;
+  font-size: 12px;
+}
+
+.framework-action-card button,
+.framework-action-card .primary-link,
+.framework-action-card .secondary-button {
+  justify-self: start;
 }
 
 .framework-build-history {
@@ -5846,6 +5920,11 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .framework-action-center,
+  .framework-results-hero {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .framework-build-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -5985,8 +6064,10 @@ textarea {
   .framework-builder-grid,
   .framework-wizard-steps,
   .framework-basics-grid,
+  .framework-action-center,
   .framework-command-grid,
   .framework-next-steps ol,
+  .framework-results-hero,
   .framework-file-card {
     grid-template-columns: 1fr;
   }

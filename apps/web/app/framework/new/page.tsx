@@ -1,16 +1,19 @@
-import type {
-  CreateFrameworkRequest,
-  CreateFrameworkResponse,
-  CreateRepositoryRequest,
-  FrameworkBuildResponse,
-  FrameworkDependencyInstallResponse,
-  FrameworkOpenFolderResponse,
-  FrameworkTemplateDestinationType,
-  FrameworkTemplateFeature,
-  FrameworkTemplatePreviewResponse,
-  FrameworkTemplateRequest,
-  FrameworkSmokeValidationResponse,
-  RepositoryResponse,
+import {
+  frameworkDependencyInstallResponseSchema,
+  frameworkOpenFolderResponseSchema,
+  frameworkSmokeValidationResponseSchema,
+  type CreateFrameworkRequest,
+  type CreateFrameworkResponse,
+  type CreateRepositoryRequest,
+  type FrameworkBuildResponse,
+  type FrameworkDependencyInstallResponse,
+  type FrameworkOpenFolderResponse,
+  type FrameworkSmokeValidationResponse,
+  type FrameworkTemplateDestinationType,
+  type FrameworkTemplateFeature,
+  type FrameworkTemplatePreviewResponse,
+  type FrameworkTemplateRequest,
+  type RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { redirect } from "next/navigation";
 import { AppShell } from "../../app-shell";
@@ -444,17 +447,61 @@ async function getFrameworkBuilds(): Promise<FrameworkBuildResponse[]> {
   }
 }
 
-const buildPreviewRequest = (params: FrameworkNewSearchParams): FrameworkTemplateRequest => ({
-  baseUrl: params.baseUrl?.trim() || "https://example.com",
-  destinationType: getDestinationType(params.destinationType),
+async function getFrameworkBuild(id: string | undefined): Promise<FrameworkBuildResponse | null> {
+  if (!id) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/builds/${id}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json() as Promise<FrameworkBuildResponse>;
+  } catch {
+    return null;
+  }
+}
+
+const parseFrameworkInstallResult = (value: unknown): FrameworkDependencyInstallResponse | null => {
+  const result = frameworkDependencyInstallResponseSchema.safeParse(value);
+
+  return result.success ? result.data : null;
+};
+
+const parseFrameworkOpenFolderResult = (value: unknown): FrameworkOpenFolderResponse | null => {
+  const result = frameworkOpenFolderResponseSchema.safeParse(value);
+
+  return result.success ? result.data : null;
+};
+
+const parseFrameworkSmokeResult = (value: unknown): FrameworkSmokeValidationResponse | null => {
+  const result = frameworkSmokeValidationResponseSchema.safeParse(value);
+
+  return result.success ? result.data : null;
+};
+
+const buildPreviewRequest = (
+  params: FrameworkNewSearchParams,
+  savedBuild?: FrameworkBuildResponse | null,
+): FrameworkTemplateRequest => ({
+  baseUrl: params.baseUrl?.trim() || savedBuild?.baseUrl || "https://example.com",
+  destinationType: getDestinationType(params.destinationType ?? savedBuild?.destinationType),
   features: getFeatureValues(params.features),
-  githubBranch: params.githubBranch?.trim() || "main",
-  githubOwner: params.githubOwner?.trim() || "",
+  githubBranch: params.githubBranch?.trim() || savedBuild?.targetBranch || "main",
+  githubOwner: params.githubOwner?.trim() || savedBuild?.githubOwner || "",
   githubRepositoryId: params.githubRepositoryId?.trim() || "",
-  githubRepository: params.githubRepository?.trim() || "",
-  packageName: params.packageName?.trim() || "playwright-cucumber-tests",
-  projectName: params.projectName?.trim() || "Playwright Cucumber Tests",
-  targetDirectory: params.targetDirectory?.trim() || (params.destinationType === "github" ? "." : "qa/e2e"),
+  githubRepository: params.githubRepository?.trim() || savedBuild?.githubRepository || "",
+  packageName: params.packageName?.trim() || savedBuild?.packageName || "playwright-cucumber-tests",
+  projectName: params.projectName?.trim() || savedBuild?.projectName || "Playwright Cucumber Tests",
+  targetDirectory:
+    params.targetDirectory?.trim() ||
+    savedBuild?.targetDirectory ||
+    (params.destinationType === "github" || savedBuild?.destinationType === "github" ? "." : "qa/e2e"),
 });
 
 const getFrameworkPreview = async (
@@ -768,13 +815,14 @@ export default async function NewFrameworkPage({
   searchParams: Promise<FrameworkNewSearchParams>;
 }) {
   const params = await searchParams;
-  const request = buildPreviewRequest(params);
+  const frameworkBuildId = getLastParamValue(params.frameworkBuildId);
+  const savedBuild = await getFrameworkBuild(frameworkBuildId);
+  const request = buildPreviewRequest(params, savedBuild);
   const selectedFeatures = new Set(request.features);
-  const createdCount = Number(params.created ?? 0);
-  const skippedCount = Number(params.skipped ?? 0);
-  const overwrittenCount = Number(params.overwritten ?? 0);
-  const hasCreateResult = createdCount > 0 || skippedCount > 0 || overwrittenCount > 0;
-  const currentStep = getWizardStep(params.step, hasCreateResult);
+  const hasCreateResultFromQuery =
+    Number(params.created ?? 0) > 0 || Number(params.skipped ?? 0) > 0 || Number(params.overwritten ?? 0) > 0;
+  const hasSavedCreateResult = Boolean(savedBuild);
+  const currentStep = getWizardStep(params.step, hasCreateResultFromQuery || hasSavedCreateResult);
   const currentStepIndex = wizardStepOrder.indexOf(currentStep);
   const shouldPreview = params.preview === "true" || currentStep === "validate";
   const [{ error, preview }, repositories, frameworkBuilds] = await Promise.all([
@@ -784,6 +832,38 @@ export default async function NewFrameworkPage({
     getRepositories(),
     getFrameworkBuilds(),
   ]);
+  const createdCount = Number(params.created ?? savedBuild?.createdFileCount ?? 0);
+  const skippedCount = Number(params.skipped ?? savedBuild?.skippedFileCount ?? 0);
+  const overwrittenCount = Number(params.overwritten ?? savedBuild?.overwrittenFileCount ?? 0);
+  const hasCreateResult = hasCreateResultFromQuery || Boolean(savedBuild) || createdCount > 0 || skippedCount > 0 || overwrittenCount > 0;
+  const savedInstallResult = parseFrameworkInstallResult(savedBuild?.installResult);
+  const savedOpenFolderResult = parseFrameworkOpenFolderResult(savedBuild?.openFolderResult);
+  const savedValidationResult = parseFrameworkSmokeResult(savedBuild?.smokeValidationResult);
+  const openFolderStatus = params.openFolderStatus ?? savedOpenFolderResult?.status ?? savedBuild?.openFolderStatus ?? undefined;
+  const openFolderMessage = params.openFolderMessage ?? savedOpenFolderResult?.message;
+  const openFolderDurationMs =
+    params.openFolderDurationMs ?? (savedOpenFolderResult ? String(savedOpenFolderResult.durationMs) : undefined);
+  const installStatus = params.installStatus ?? savedInstallResult?.status ?? savedBuild?.installStatus ?? undefined;
+  const installCommand = params.installCommand ?? savedInstallResult?.command;
+  const installDurationMs = params.installDurationMs ?? (savedInstallResult ? String(savedInstallResult.durationMs) : undefined);
+  const installExitCode =
+    params.installExitCode ?? (savedInstallResult?.exitCode !== null && savedInstallResult?.exitCode !== undefined
+      ? String(savedInstallResult.exitCode)
+      : undefined);
+  const installMessage = params.installMessage ?? savedInstallResult?.message;
+  const installStderr = params.installStderr ?? savedInstallResult?.stderr;
+  const installStdout = params.installStdout ?? savedInstallResult?.stdout;
+  const validationStatus = params.validationStatus ?? savedValidationResult?.status ?? savedBuild?.smokeValidationStatus ?? undefined;
+  const validationCommand = params.validationCommand ?? savedValidationResult?.command;
+  const validationDurationMs =
+    params.validationDurationMs ?? (savedValidationResult ? String(savedValidationResult.durationMs) : undefined);
+  const validationExitCode =
+    params.validationExitCode ?? (savedValidationResult?.exitCode !== null && savedValidationResult?.exitCode !== undefined
+      ? String(savedValidationResult.exitCode)
+      : undefined);
+  const validationMessage = params.validationMessage ?? savedValidationResult?.message;
+  const validationStderr = params.validationStderr ?? savedValidationResult?.stderr;
+  const validationStdout = params.validationStdout ?? savedValidationResult?.stdout;
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
   const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
   const destinationLabel = request.destinationType === "github" ? "GitHub pull request" : "Local folder";
@@ -793,8 +873,27 @@ export default async function NewFrameworkPage({
   const shouldInitializeGit = getCheckedParam(params.initializeGitRepository, true);
   const shouldRegisterLocalRepository = getCheckedParam(params.registerLocalRepository, true);
   const shouldCreateGithubRepository = getCheckedParam(params.createGithubRepository, false);
-  const localGitStatus = params.localGitStatus?.replace(/_/g, " ");
-  const githubRemoteStatus = params.githubRemoteStatus?.replace(/_/g, " ");
+  const localGitStatus = (params.localGitStatus ?? savedBuild?.localGitStatus ?? undefined)?.replace(/_/g, " ");
+  const githubRemoteStatus = (params.githubRemoteStatus ?? savedBuild?.githubRemoteStatus ?? undefined)?.replace(/_/g, " ");
+  const registeredRepositoryId = params.registeredRepositoryId ?? savedBuild?.registeredRepositoryId ?? undefined;
+  const registeredRepositoryName =
+    params.registeredRepositoryName ?? (registeredRepositoryId ? `Repository ${registeredRepositoryId.slice(0, 8)}` : undefined);
+  const recommendedNextAction =
+    !hasCreateResult
+      ? "Create the framework files to unlock install, validation, and registration actions."
+      : request.destinationType === "local" && !openFolderStatus
+        ? "Open the generated folder and inspect the files that were created."
+        : !installStatus
+          ? "Install dependencies so the generated framework can run locally."
+          : installStatus !== "installed"
+            ? "Review the dependency install output before running smoke validation."
+            : !validationStatus
+              ? "Run smoke validation to prove the generated sample test works."
+              : validationStatus !== "passed"
+                ? "Review the smoke validation output before using this framework."
+                : shouldRegisterLocalRepository && !registeredRepositoryId
+                  ? "Register this framework in FF2 so Features, Discover, and Jobs can use it."
+                  : "Framework is ready for the next setup slice.";
   const pipelineSteps = [
     {
       detail: hasCreateResult
@@ -843,43 +942,43 @@ export default async function NewFrameworkPage({
     },
     {
       detail: shouldRegisterLocalRepository
-        ? params.registrationMessage || params.registeredRepositoryName || "Register the generated local folder so FF2 can use it."
+        ? params.registrationMessage || registeredRepositoryName || "Register the generated local folder so FF2 can use it."
         : "Skipped by current plan.",
       label: "FF2 registration",
       state: shouldRegisterLocalRepository
-        ? params.registeredRepositoryId
+        ? registeredRepositoryId
           ? "complete"
           : params.registrationStatus === "failed"
             ? "attention"
             : "pending"
         : "skipped",
       status: shouldRegisterLocalRepository
-        ? params.registeredRepositoryId
+        ? registeredRepositoryId
           ? "Registered"
           : params.registrationStatus ?? "Pending"
         : "Skipped",
     },
     {
-      detail: params.installMessage || "Run pnpm install from the generated framework folder.",
+      detail: installMessage || "Run pnpm install from the generated framework folder.",
       label: "Dependencies",
       state:
-        params.installStatus === "installed"
+        installStatus === "installed"
           ? "complete"
-          : params.installStatus === "failed" || params.installStatus === "skipped"
+          : installStatus === "failed" || installStatus === "skipped"
             ? "attention"
             : "pending",
-      status: params.installStatus ?? "Pending",
+      status: installStatus ?? "Pending",
     },
     {
-      detail: params.validationMessage || "Run the generated sample smoke test.",
+      detail: validationMessage || "Run the generated sample smoke test.",
       label: "Smoke validation",
       state:
-        params.validationStatus === "passed"
+        validationStatus === "passed"
           ? "complete"
-          : params.validationStatus === "failed" || params.validationStatus === "skipped"
+          : validationStatus === "failed" || validationStatus === "skipped"
             ? "attention"
             : "pending",
-      status: params.validationStatus ?? "Pending",
+      status: validationStatus ?? "Pending",
     },
   ];
   const nextStep: FrameworkWizardStep =
@@ -993,11 +1092,11 @@ export default async function NewFrameworkPage({
                   ) : null}
                 </dl>
               ) : null}
-              {params.registeredRepositoryId ? (
+              {registeredRepositoryId ? (
                 <span>
                   Registered as{" "}
-                  <a href={`/features?repositoryId=${params.registeredRepositoryId}`}>
-                    {params.registeredRepositoryName ?? "new repository"}
+                  <a href={`/features?repositoryId=${registeredRepositoryId}`}>
+                    {registeredRepositoryName ?? "new repository"}
                   </a>
                   .
                 </span>
@@ -1320,11 +1419,29 @@ export default async function NewFrameworkPage({
             {hasCreateResult ? (
               <section className="framework-results-panel framework-results-checklist-panel">
                 <div className="framework-results-heading">
-                  <strong>{params.prUrl ? "Pull request is ready for review." : "Framework pipeline"}</strong>
+                  <strong>{params.prUrl ? "Pull request is ready for review." : "Framework action center"}</strong>
                   <span>
-                    Review what completed and choose the next action.
-                    {params.frameworkBuildId ? ` Saved build ${params.frameworkBuildId.slice(0, 8)}.` : ""}
+                    {recommendedNextAction}
+                    {frameworkBuildId ? ` Saved build ${frameworkBuildId.slice(0, 8)}.` : ""}
                   </span>
+                </div>
+                <div className="framework-results-hero">
+                  <div>
+                    <span>Created</span>
+                    <strong>{createdCount}</strong>
+                  </div>
+                  <div>
+                    <span>Overwritten</span>
+                    <strong>{overwrittenCount}</strong>
+                  </div>
+                  <div>
+                    <span>Skipped</span>
+                    <strong>{skippedCount}</strong>
+                  </div>
+                  <div>
+                    <span>Target</span>
+                    <strong>{request.targetDirectory}</strong>
+                  </div>
                 </div>
                 <ol className="framework-results-checklist">
                   {pipelineSteps.map((step) => (
@@ -1351,86 +1468,134 @@ export default async function NewFrameworkPage({
                   </div>
                   <div>
                     <dt>FF2 repository</dt>
-                    <dd>{params.registeredRepositoryName ?? "Not registered"}</dd>
+                    <dd>{registeredRepositoryName ?? "Not registered"}</dd>
                   </div>
                 </dl>
-                {params.openFolderStatus ? (
-                  <div className={`framework-folder-open-status ${params.openFolderStatus}`}>
-                    <strong>{params.openFolderStatus}</strong>
+                {openFolderStatus ? (
+                  <div className={`framework-folder-open-status ${openFolderStatus}`}>
+                    <strong>{openFolderStatus}</strong>
                     <span>
-                      {params.openFolderMessage ?? "Folder action finished."}
-                      {params.openFolderDurationMs ? ` (${params.openFolderDurationMs}ms)` : ""}
+                      {openFolderMessage ?? "Folder action finished."}
+                      {openFolderDurationMs ? ` (${openFolderDurationMs}ms)` : ""}
                     </span>
                   </div>
                 ) : null}
-                <div className="framework-wizard-actions">
+                <div className="framework-action-center">
                   {request.destinationType === "local" ? (
                     <>
-                      <form action={openGeneratedFrameworkFolder} className="framework-inline-action-form">
-                        <FrameworkActionHiddenFields
-                          createdCount={createdCount}
-                          overwrittenCount={overwrittenCount}
-                          params={params}
-                          request={request}
-                          skippedCount={skippedCount}
-                        />
-                        <button type="submit">Open Generated Folder</button>
-                      </form>
-                      <form action={installFrameworkDependencies} className="framework-inline-action-form">
-                        <FrameworkActionHiddenFields
-                          createdCount={createdCount}
-                          overwrittenCount={overwrittenCount}
-                          params={params}
-                          request={request}
-                          skippedCount={skippedCount}
-                        />
-                        <button type="submit">Install Dependencies</button>
-                      </form>
-                      <form action={validateFramework} className="framework-inline-action-form">
-                        <FrameworkActionHiddenFields
-                          createdCount={createdCount}
-                          overwrittenCount={overwrittenCount}
-                          params={params}
-                          request={request}
-                          skippedCount={skippedCount}
-                        />
-                        <button type="submit">Run Smoke Validation</button>
-                      </form>
+                      <article className="framework-action-card">
+                        <div>
+                          <strong>Inspect Files</strong>
+                          <span>Open the generated framework folder locally.</span>
+                        </div>
+                        <form action={openGeneratedFrameworkFolder} className="framework-inline-action-form">
+                          <FrameworkActionHiddenFields
+                            createdCount={createdCount}
+                            overwrittenCount={overwrittenCount}
+                            params={params}
+                            request={request}
+                            skippedCount={skippedCount}
+                          />
+                          <button type="submit">Open Folder</button>
+                        </form>
+                      </article>
+                      <article className="framework-action-card">
+                        <div>
+                          <strong>Install Dependencies</strong>
+                          <span>Run <code>pnpm install</code> in the framework folder.</span>
+                        </div>
+                        <form action={installFrameworkDependencies} className="framework-inline-action-form">
+                          <FrameworkActionHiddenFields
+                            createdCount={createdCount}
+                            overwrittenCount={overwrittenCount}
+                            params={params}
+                            request={request}
+                            skippedCount={skippedCount}
+                          />
+                          <button type="submit">Install</button>
+                        </form>
+                      </article>
+                      <article className="framework-action-card">
+                        <div>
+                          <strong>Smoke Validation</strong>
+                          <span>Run the generated sample Cucumber smoke test.</span>
+                        </div>
+                        <form action={validateFramework} className="framework-inline-action-form">
+                          <FrameworkActionHiddenFields
+                            createdCount={createdCount}
+                            overwrittenCount={overwrittenCount}
+                            params={params}
+                            request={request}
+                            skippedCount={skippedCount}
+                          />
+                          <button type="submit">Run Smoke</button>
+                        </form>
+                      </article>
                     </>
                   ) : null}
                   {params.githubRemoteWebUrl ? (
-                    <a className="primary-link" href={params.githubRemoteWebUrl}>
-                      Open GitHub Repo
-                    </a>
+                    <article className="framework-action-card">
+                      <div>
+                        <strong>GitHub Repository</strong>
+                        <span>Open the remote project created for this framework.</span>
+                      </div>
+                      <a className="primary-link" href={params.githubRemoteWebUrl}>
+                        Open Repo
+                      </a>
+                    </article>
                   ) : null}
                   {params.prUrl ? (
-                    <a className="primary-link" href={params.prUrl}>
-                      Open Pull Request
-                    </a>
+                    <article className="framework-action-card">
+                      <div>
+                        <strong>Pull Request</strong>
+                        <span>Review the generated framework changes in GitHub.</span>
+                      </div>
+                      <a className="primary-link" href={params.prUrl}>
+                        Open PR
+                      </a>
+                    </article>
                   ) : null}
-                  {params.registeredRepositoryId ? (
+                  {registeredRepositoryId ? (
                     <>
-                      <a className="secondary-button" href="/repositories">
-                        Open Repository Settings
-                      </a>
-                      <a className="secondary-button" href={`/features?repositoryId=${params.registeredRepositoryId}`}>
-                        Open Feature Catalog
-                      </a>
+                      <article className="framework-action-card">
+                        <div>
+                          <strong>FF2 Repository</strong>
+                          <span>Manage how this generated framework is tracked.</span>
+                        </div>
+                        <a className="secondary-button" href="/repositories">
+                          Settings
+                        </a>
+                      </article>
+                      <article className="framework-action-card">
+                        <div>
+                          <strong>Feature Catalog</strong>
+                          <span>Open parsed Cucumber features for this framework.</span>
+                        </div>
+                        <a className="secondary-button" href={`/features?repositoryId=${registeredRepositoryId}`}>
+                          Open Catalog
+                        </a>
+                      </article>
                     </>
                   ) : request.destinationType === "local" ? (
-                    <form action={registerGeneratedFramework} className="framework-inline-action-form">
-                      <FrameworkActionHiddenFields
-                        createdCount={createdCount}
-                        overwrittenCount={overwrittenCount}
-                        overrides={{
-                          registerLocalRepository: "true",
-                        }}
-                        params={params}
-                        request={request}
-                        skippedCount={skippedCount}
-                      />
-                      <button type="submit">Register This Framework</button>
-                    </form>
+                    <article className="framework-action-card">
+                      <div>
+                        <strong>Register in FF2</strong>
+                        <span>Add this local folder to the repository catalog.</span>
+                      </div>
+                      <form action={registerGeneratedFramework} className="framework-inline-action-form">
+                        <FrameworkActionHiddenFields
+                          createdCount={createdCount}
+                          overwrittenCount={overwrittenCount}
+                          overrides={{
+                            registerLocalRepository: "true",
+                          }}
+                          params={params}
+                          request={request}
+                          skippedCount={skippedCount}
+                        />
+                        <button type="submit">Register</button>
+                      </form>
+                    </article>
                   ) : null}
                 </div>
               </section>
@@ -1495,31 +1660,31 @@ export default async function NewFrameworkPage({
               </form>
             )}
 
-            {hasCreateResult && params.installStatus ? (
-              <section className={`framework-validation-panel ${params.installStatus}`}>
+            {hasCreateResult && installStatus ? (
+              <section className={`framework-validation-panel ${installStatus}`}>
                 <div className="framework-validation-summary">
-                  <span>{params.installStatus}</span>
+                  <span>{installStatus}</span>
                   <div>
-                    <strong>{params.installMessage ?? "Dependency install finished."}</strong>
+                    <strong>{installMessage ?? "Dependency install finished."}</strong>
                     <small>
-                      {params.installCommand ?? "pnpm install"}
-                      {params.installExitCode ? ` · exit ${params.installExitCode}` : ""}
-                      {params.installDurationMs ? ` · ${params.installDurationMs}ms` : ""}
+                      {installCommand ?? "pnpm install"}
+                      {installExitCode !== undefined ? ` · exit ${installExitCode}` : ""}
+                      {installDurationMs ? ` · ${installDurationMs}ms` : ""}
                     </small>
                   </div>
                 </div>
-                {params.installStdout || params.installStderr ? (
+                {installStdout || installStderr ? (
                   <div className="framework-validation-output">
-                    {params.installStdout ? (
+                    {installStdout ? (
                       <div>
                         <strong>stdout</strong>
-                        <pre>{params.installStdout}</pre>
+                        <pre>{installStdout}</pre>
                       </div>
                     ) : null}
-                    {params.installStderr ? (
+                    {installStderr ? (
                       <div>
                         <strong>stderr</strong>
-                        <pre>{params.installStderr}</pre>
+                        <pre>{installStderr}</pre>
                       </div>
                     ) : null}
                   </div>
@@ -1527,31 +1692,31 @@ export default async function NewFrameworkPage({
               </section>
             ) : null}
 
-            {hasCreateResult && params.validationStatus ? (
-              <section className={`framework-validation-panel ${params.validationStatus}`}>
+            {hasCreateResult && validationStatus ? (
+              <section className={`framework-validation-panel ${validationStatus}`}>
                 <div className="framework-validation-summary">
-                  <span>{params.validationStatus}</span>
+                  <span>{validationStatus}</span>
                   <div>
-                    <strong>{params.validationMessage ?? "Validation finished."}</strong>
+                    <strong>{validationMessage ?? "Validation finished."}</strong>
                     <small>
-                      {params.validationCommand ?? "pnpm test:smoke"}
-                      {params.validationExitCode ? ` · exit ${params.validationExitCode}` : ""}
-                      {params.validationDurationMs ? ` · ${params.validationDurationMs}ms` : ""}
+                      {validationCommand ?? "pnpm test:smoke"}
+                      {validationExitCode !== undefined ? ` · exit ${validationExitCode}` : ""}
+                      {validationDurationMs ? ` · ${validationDurationMs}ms` : ""}
                     </small>
                   </div>
                 </div>
-                {params.validationStdout || params.validationStderr ? (
+                {validationStdout || validationStderr ? (
                   <div className="framework-validation-output">
-                    {params.validationStdout ? (
+                    {validationStdout ? (
                       <div>
                         <strong>stdout</strong>
-                        <pre>{params.validationStdout}</pre>
+                        <pre>{validationStdout}</pre>
                       </div>
                     ) : null}
-                    {params.validationStderr ? (
+                    {validationStderr ? (
                       <div>
                         <strong>stderr</strong>
-                        <pre>{params.validationStderr}</pre>
+                        <pre>{validationStderr}</pre>
                       </div>
                     ) : null}
                   </div>
