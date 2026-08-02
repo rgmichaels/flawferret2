@@ -215,6 +215,8 @@ const frameworkBuildResponseSchema = {
 
 type RouteOpenApiDocs = {
   body?: keyof typeof openApiComponentSchemas;
+  params?: Record<string, unknown>;
+  querystring?: Record<string, unknown>;
   response?: Record<number, keyof typeof openApiComponentSchemas>;
 };
 
@@ -227,6 +229,101 @@ declare module "fastify" {
 const componentRef = (name: keyof typeof openApiComponentSchemas) => ({
   $ref: `#/components/schemas/${name}`,
 });
+
+const uuidRouteParamsSchema = {
+  type: "object",
+  required: ["id"],
+  properties: {
+    id: {
+      format: "uuid",
+      type: "string",
+    },
+  },
+} as const;
+
+const paginationQueryProperties = {
+  page: {
+    default: 1,
+    minimum: 1,
+    type: "integer",
+  },
+  pageSize: {
+    default: 25,
+    maximum: 50,
+    minimum: 1,
+    type: "integer",
+  },
+  paginated: {
+    enum: ["true", "false"],
+    type: "string",
+  },
+} as const;
+
+const frameworkBuildsQueryOpenApiSchema = {
+  type: "object",
+  properties: paginationQueryProperties,
+} as const;
+
+const jobsQueryOpenApiSchema = {
+  type: "object",
+  properties: {
+    includeCanceled: {
+      enum: ["true", "false"],
+      type: "string",
+    },
+    ...paginationQueryProperties,
+    pageSize: {
+      default: 10,
+      maximum: 50,
+      minimum: 1,
+      type: "integer",
+    },
+    sort: {
+      default: "updated_desc",
+      enum: ["status_asc", "status_desc", "updated_asc", "updated_desc"],
+      type: "string",
+    },
+    status: {
+      enum: jobStatusSchema.options,
+      type: "string",
+    },
+  },
+} as const;
+
+const featureDetailQueryOpenApiSchema = {
+  type: "object",
+  required: ["path"],
+  properties: {
+    path: {
+      minLength: 1,
+      type: "string",
+    },
+  },
+} as const;
+
+const localTestRunsQueryOpenApiSchema = {
+  type: "object",
+  properties: {
+    featurePath: {
+      type: "string",
+    },
+    limit: {
+      default: 3,
+      maximum: 25,
+      minimum: 1,
+      type: "integer",
+    },
+    page: {
+      default: 1,
+      minimum: 1,
+      type: "integer",
+    },
+    scenarioLine: {
+      minimum: 1,
+      type: "integer",
+    },
+  },
+} as const;
 
 const routeDocs = (summary: string, tags: string[], openApiDocs?: RouteOpenApiDocs) => ({
   config: openApiDocs
@@ -1190,6 +1287,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         documentedSchema.body = componentRef(docs.body);
       }
 
+      if (docs.params) {
+        documentedSchema.params = docs.params as FastifySchema["params"];
+      }
+
+      if (docs.querystring) {
+        documentedSchema.querystring = docs.querystring as FastifySchema["querystring"];
+      }
+
       if (docs.response) {
         documentedSchema.response = Object.fromEntries(
           Object.entries(docs.response).map(([statusCode, schemaName]) => [statusCode, componentRef(schemaName)]),
@@ -1284,12 +1389,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return buildFrameworkTemplatePreviewWithFileStatus(body);
   });
 
-  server.get("/frameworks/builds", {
-    schema: {
-      summary: "List recent framework builds",
-      tags: ["Frameworks"],
-    },
-  }, async (request) => {
+  server.get(
+    "/frameworks/builds",
+    routeDocs("List recent framework builds", ["Frameworks"], {
+      querystring: frameworkBuildsQueryOpenApiSchema,
+      response: {
+        200: "PaginatedFrameworkBuildsResponse",
+      },
+    }),
+    async (request) => {
     const query = frameworkBuildsQuerySchema.parse(request.query);
     const [builds, total] = await Promise.all([
       prisma.frameworkBuild.findMany({
@@ -1313,7 +1421,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return mappedBuilds;
-  });
+    },
+  );
 
   server.get("/frameworks/builds/:id", {
     schema: {
@@ -1571,7 +1680,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     },
   );
 
-  server.get("/discover/runs/:id", routeDocs("Get a saved page discovery run", ["Discovery"]), async (request, reply) => {
+  server.get(
+    "/discover/runs/:id",
+    routeDocs("Get a saved page discovery run", ["Discovery"], {
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "DiscoverRunResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const run = await prisma.discoverRun.findUnique({
       include: {
@@ -1594,9 +1711,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return toDiscoverRunResponse(run);
-  });
+    },
+  );
 
-  server.put("/discover/runs/:id/queued", routeDocs("Mark discovery recommendations as queued", ["Discovery"]), async (request, reply) => {
+  server.put(
+    "/discover/runs/:id/queued",
+    routeDocs("Mark discovery recommendations as queued", ["Discovery"], {
+      body: "UpdateDiscoverRunQueuedRequest",
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "DiscoverRunResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = updateDiscoverRunQueuedRequestSchema.parse(request.body);
     const existingRun = await prisma.discoverRun.findUnique({
@@ -1633,9 +1760,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toDiscoverRunResponse(run);
-  });
+    },
+  );
 
-  server.delete("/discover/runs/:id", routeDocs("Delete a saved page discovery run", ["Discovery"]), async (request, reply) => {
+  server.delete(
+    "/discover/runs/:id",
+    routeDocs("Delete a saved page discovery run", ["Discovery"], {
+      params: uuidRouteParamsSchema,
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const existingRun = await prisma.discoverRun.findUnique({
       where: {
@@ -1657,7 +1790,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return reply.status(204).send();
-  });
+    },
+  );
 
   server.get("/readiness", routeDocs("Get system readiness and next actions", ["System"]), async () => {
     await prisma.$queryRaw`SELECT 1`;
@@ -2047,7 +2181,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     },
   );
 
-  server.get("/repositories/:id", routeDocs("Get a registered repository", ["Repositories"]), async (request, reply) => {
+  server.get(
+    "/repositories/:id",
+    routeDocs("Get a registered repository", ["Repositories"], {
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "RepositoryResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const repository = await prisma.repository.findUnique({
@@ -2067,12 +2209,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return toRepositoryResponse(repository);
-  });
+    },
+  );
 
   server.put(
     "/repositories/:id",
     routeDocs("Update a registered repository", ["Repositories"], {
       body: "CreateRepositoryRequest",
+      params: uuidRouteParamsSchema,
       response: {
         200: "RepositoryResponse",
       },
@@ -2120,7 +2264,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     },
   );
 
-  server.delete("/repositories/:id", routeDocs("Delete a registered repository", ["Repositories"]), async (request, reply) => {
+  server.delete(
+    "/repositories/:id",
+    routeDocs("Delete a registered repository", ["Repositories"], {
+      params: uuidRouteParamsSchema,
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const existingRepository = await prisma.repository.findUnique({
@@ -2143,9 +2292,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return reply.status(204).send();
-  });
+    },
+  );
 
-  server.get("/repositories/:id/features", routeDocs("List Cucumber features for a repository", ["Features"]), async (request, reply) => {
+  server.get(
+    "/repositories/:id/features",
+    routeDocs("List Cucumber features for a repository", ["Features"], {
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "CucumberFeatureCatalogResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const repository = await prisma.repository.findUnique({
@@ -2174,9 +2332,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: error instanceof Error ? error.message : "Unable to read feature catalog.",
       });
     }
-  });
+    },
+  );
 
-  server.get("/repositories/:id/features/detail", routeDocs("Get Cucumber feature details", ["Features"]), async (request, reply) => {
+  server.get(
+    "/repositories/:id/features/detail",
+    routeDocs("Get Cucumber feature details", ["Features"], {
+      params: uuidRouteParamsSchema,
+      querystring: featureDetailQueryOpenApiSchema,
+      response: {
+        200: "CucumberFeatureDetailResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const query = z
       .object({
@@ -2220,9 +2388,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: error instanceof Error ? error.message : "Unable to read feature detail.",
       });
     }
-  });
+    },
+  );
 
-  server.post("/repositories/:id/features/explain", routeDocs("Explain a Cucumber scenario", ["Features"]), async (request, reply) => {
+  server.post(
+    "/repositories/:id/features/explain",
+    routeDocs("Explain a Cucumber scenario", ["Features"], {
+      body: "ExplainCucumberScenarioRequest",
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "ExplainCucumberScenarioResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const body = explainCucumberScenarioRequestSchema.parse(request.body);
 
@@ -2274,9 +2452,16 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         message: error instanceof Error ? error.message : "Unable to explain scenario.",
       });
     }
-  });
+    },
+  );
 
-  server.get("/repositories/:id/features/local-test-runs", routeDocs("List local feature test runs", ["Features"]), async (request, reply) => {
+  server.get(
+    "/repositories/:id/features/local-test-runs",
+    routeDocs("List local feature test runs", ["Features"], {
+      params: uuidRouteParamsSchema,
+      querystring: localTestRunsQueryOpenApiSchema,
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const query = z
       .object({
@@ -2326,9 +2511,19 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     ]);
 
     return reply.header("x-total-count", totalRuns).send(runs.map(toLocalTestRunResponse));
-  });
+    },
+  );
 
-  server.get("/repositories/:id/features/local-test-runs/stats", routeDocs("Get local feature test run stats", ["Features"]), async (request, reply) => {
+  server.get(
+    "/repositories/:id/features/local-test-runs/stats",
+    routeDocs("Get local feature test run stats", ["Features"], {
+      params: uuidRouteParamsSchema,
+      querystring: localTestRunsQueryOpenApiSchema,
+      response: {
+        200: "LocalTestRunStatsResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const query = z
       .object({
@@ -2367,12 +2562,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toLocalTestRunStatsResponse(runs);
-  });
+    },
+  );
 
   server.post(
     "/repositories/:id/features/local-test-runs",
     routeDocs("Queue a local feature or scenario test run", ["Features"], {
       body: "CreateLocalTestRunRequest",
+      params: uuidRouteParamsSchema,
       response: {
         201: "LocalTestRunResponse",
       },
@@ -2445,7 +2642,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     },
   );
 
-  server.get("/local-test-runs/:id", routeDocs("Get a local test run", ["Features"]), async (request, reply) => {
+  server.get(
+    "/local-test-runs/:id",
+    routeDocs("Get a local test run", ["Features"], {
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "LocalTestRunResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const run = await prisma.localTestRun.findUnique({
       include: {
@@ -2468,9 +2673,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return toLocalTestRunResponse(run);
-  });
+    },
+  );
 
-  server.get("/local-test-runs/:id/output", routeDocs("Get local test run output", ["Features"]), async (request, reply) => {
+  server.get(
+    "/local-test-runs/:id/output",
+    routeDocs("Get local test run output", ["Features"], {
+      params: uuidRouteParamsSchema,
+      response: {
+        200: "LocalTestRunOutputResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const run = await prisma.localTestRun.findUnique({
       where: {
@@ -2498,7 +2712,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     };
 
     return output;
-  });
+    },
+  );
 
   server.post("/dev/sample-review-job", routeDocs("Create a development sample review job", ["Jobs"]), async (_request, reply) => {
     if (process.env.NODE_ENV === "production") {
@@ -2965,7 +3180,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(approvedJob);
   });
 
-  server.get("/jobs", routeDocs("List jobs", ["Jobs"]), async (request) => {
+  server.get(
+    "/jobs",
+    routeDocs("List jobs", ["Jobs"], {
+      querystring: jobsQueryOpenApiSchema,
+      response: {
+        200: "PaginatedJobsResponse",
+      },
+    }),
+    async (request) => {
     const query = includeCanceledQuerySchema.parse(request.query);
     const where: Prisma.JobWhereInput = {
       ...(query.includeCanceled
@@ -3025,7 +3248,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return mappedJobs;
-  });
+    },
+  );
 
   server.post("/jobs/:id/cancel", routeDocs("Cancel a job before runner pickup", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
