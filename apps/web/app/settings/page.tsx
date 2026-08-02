@@ -70,6 +70,7 @@ export default async function SettingsPage() {
     getTrackerIntegrations(),
     getReadiness(),
   ]);
+  const apiDocumentationUrl = `${apiUrl}/documentation`;
   const queueState = readiness ? (readiness.queue.paused ? "Paused" : "Active") : "Unknown";
 
   return (
@@ -100,6 +101,12 @@ export default async function SettingsPage() {
             <strong>{queueState}</strong>
             <p>{readiness?.runner.healthText ?? "Check API, queue, runner, validation, and PR readiness."}</p>
           </a>
+
+          <a className="settings-card" href={apiDocumentationUrl}>
+            <span>API Docs</span>
+            <strong>Swagger</strong>
+            <p>Open the generated API documentation for routes, tags, and the OpenAPI JSON contract.</p>
+          </a>
         </section>
 
         <section className="panel settings-summary">
@@ -125,6 +132,10 @@ export default async function SettingsPage() {
             <div>
               <dt>Tracked jobs</dt>
               <dd>{readiness?.counts.jobs ?? 0}</dd>
+            </div>
+            <div>
+              <dt>API docs</dt>
+              <dd>Available</dd>
             </div>
           </dl>
         </section>
