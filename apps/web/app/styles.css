@@ -797,7 +797,8 @@ button {
 }
 
 .framework-option small,
-.framework-roadmap li {
+.framework-roadmap li,
+.framework-pipeline-note p {
   color: #667085;
   font-size: 13px;
   line-height: 1.35;
@@ -858,11 +859,63 @@ button {
   margin: 0;
 }
 
-.framework-roadmap ul {
+.framework-roadmap ul,
+.framework-pipeline-list {
   display: grid;
   gap: 10px;
   margin: 0;
   padding-left: 18px;
+}
+
+.framework-pipeline-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.framework-pipeline-list li {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+}
+
+.framework-pipeline-list li.ready {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.framework-pipeline-list li.future {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.framework-pipeline-list li.muted {
+  background: #f8fafc;
+}
+
+.framework-pipeline-list strong {
+  color: #172033;
+  font-size: 13px;
+}
+
+.framework-pipeline-note {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+}
+
+.framework-pipeline-note strong {
+  color: #9a3412;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.framework-pipeline-note p {
+  margin: 0;
 }
 
 .framework-preview {
