@@ -1,4 +1,6 @@
 import cors from "@fastify/cors";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import {
   appendJobEvent,
   approveJobForCodex,
@@ -28,6 +30,7 @@ import {
   updateTrackerIntegrationRequestSchema,
   updateReviewJobRequestSchema,
   type DiscoverRunResponse,
+  type FrameworkBuildResponse,
   type JobDiffResponse,
   type JobEventResponse,
   type JobResponse,
@@ -67,6 +70,125 @@ const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
 const DIFF_PROCESS_BUFFER = 5_000_000;
 const LOCAL_TEST_OUTPUT_LIMIT = 60_000;
+
+const errorResponseSchema = {
+  type: "object",
+  properties: {
+    error: {
+      type: "string",
+    },
+    message: {
+      type: "string",
+    },
+  },
+} as const;
+
+const frameworkBuildResponseSchema = {
+  type: "object",
+  required: [
+    "id",
+    "baseUrl",
+    "createdAt",
+    "createdFileCount",
+    "destinationType",
+    "overwrittenFileCount",
+    "packageName",
+    "projectName",
+    "registeredRepositoryId",
+    "skippedFileCount",
+    "targetBranch",
+    "targetDirectory",
+    "totalFileCount",
+    "updatedAt",
+  ],
+  properties: {
+    id: {
+      type: "string",
+    },
+    baseUrl: {
+      type: "string",
+    },
+    createdAt: {
+      type: "string",
+    },
+    createdFileCount: {
+      type: "number",
+    },
+    destinationType: {
+      enum: ["local", "github"],
+      type: "string",
+    },
+    githubOwner: {
+      nullable: true,
+      type: "string",
+    },
+    githubPullRequestUrl: {
+      nullable: true,
+      type: "string",
+    },
+    githubRemoteStatus: {
+      nullable: true,
+      type: "string",
+    },
+    githubRepository: {
+      nullable: true,
+      type: "string",
+    },
+    installResult: {
+      nullable: true,
+    },
+    installStatus: {
+      nullable: true,
+      type: "string",
+    },
+    localGitStatus: {
+      nullable: true,
+      type: "string",
+    },
+    openFolderResult: {
+      nullable: true,
+    },
+    openFolderStatus: {
+      nullable: true,
+      type: "string",
+    },
+    overwrittenFileCount: {
+      type: "number",
+    },
+    packageName: {
+      type: "string",
+    },
+    projectName: {
+      type: "string",
+    },
+    registeredRepositoryId: {
+      nullable: true,
+      type: "string",
+    },
+    skippedFileCount: {
+      type: "number",
+    },
+    smokeValidationResult: {
+      nullable: true,
+    },
+    smokeValidationStatus: {
+      nullable: true,
+      type: "string",
+    },
+    targetBranch: {
+      type: "string",
+    },
+    targetDirectory: {
+      type: "string",
+    },
+    totalFileCount: {
+      type: "number",
+    },
+    updatedAt: {
+      type: "string",
+    },
+  },
+} as const;
 
 const toJobResponse = (job: {
   id: string;
@@ -173,6 +295,79 @@ const toRepositoryResponse = (repository: {
   createdAt: repository.createdAt.toISOString(),
   updatedAt: repository.updatedAt.toISOString(),
 });
+
+const toFrameworkBuildResponse = (build: {
+  id: string;
+  baseUrl: string;
+  createdAt: Date;
+  createdFileCount: number;
+  destinationType: string;
+  githubOwner: string | null;
+  githubPullRequestUrl: string | null;
+  githubRemoteStatus: string | null;
+  githubRepository: string | null;
+  installResult: unknown | null;
+  installStatus: string | null;
+  localGitStatus: string | null;
+  openFolderResult: unknown | null;
+  openFolderStatus: string | null;
+  overwrittenFileCount: number;
+  packageName: string;
+  projectName: string;
+  registeredRepositoryId: string | null;
+  skippedFileCount: number;
+  smokeValidationResult: unknown | null;
+  smokeValidationStatus: string | null;
+  targetBranch: string;
+  targetDirectory: string;
+  totalFileCount: number;
+  updatedAt: Date;
+}): FrameworkBuildResponse => ({
+  id: build.id,
+  baseUrl: build.baseUrl,
+  createdAt: build.createdAt.toISOString(),
+  createdFileCount: build.createdFileCount,
+  destinationType: build.destinationType === "github" ? "github" : "local",
+  githubOwner: build.githubOwner,
+  githubPullRequestUrl: build.githubPullRequestUrl,
+  githubRemoteStatus: build.githubRemoteStatus,
+  githubRepository: build.githubRepository,
+  installResult: build.installResult,
+  installStatus: build.installStatus,
+  localGitStatus: build.localGitStatus,
+  openFolderResult: build.openFolderResult,
+  openFolderStatus: build.openFolderStatus,
+  overwrittenFileCount: build.overwrittenFileCount,
+  packageName: build.packageName,
+  projectName: build.projectName,
+  registeredRepositoryId: build.registeredRepositoryId,
+  skippedFileCount: build.skippedFileCount,
+  smokeValidationResult: build.smokeValidationResult,
+  smokeValidationStatus: build.smokeValidationStatus,
+  targetBranch: build.targetBranch,
+  targetDirectory: build.targetDirectory,
+  totalFileCount: build.totalFileCount,
+  updatedAt: build.updatedAt.toISOString(),
+});
+
+const updateFrameworkBuildAction = async ({
+  buildId,
+  data,
+}: {
+  buildId: string | undefined;
+  data: Prisma.FrameworkBuildUpdateInput;
+}) => {
+  if (!buildId) {
+    return;
+  }
+
+  await prisma.frameworkBuild.updateMany({
+    data,
+    where: {
+      id: buildId,
+    },
+  });
+};
 
 const toTrackerIntegrationResponse = (integration: {
   id: string;
@@ -539,6 +734,15 @@ const includeCanceledQuerySchema = z.object({
   status: jobStatusSchema.optional(),
 });
 
+const frameworkBuildsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(50).default(25),
+  paginated: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+});
+
 const repositoryParamsSchema = z.object({
   id: z.string().uuid(),
 });
@@ -829,6 +1033,54 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     origin: config.WEB_ORIGIN,
   });
 
+  await server.register(swagger, {
+    openapi: {
+      info: {
+        description: "FlawFerret 2 orchestration API for jobs, repositories, Cucumber features, and framework creation.",
+        title: "FlawFerret 2 API",
+        version: "0.1.0",
+      },
+      tags: [
+        {
+          name: "System",
+          description: "Health, readiness, and queue controls.",
+        },
+        {
+          name: "Jobs",
+          description: "Runner work requests and approvals.",
+        },
+        {
+          name: "Repositories",
+          description: "Registered test-suite repositories.",
+        },
+        {
+          name: "Features",
+          description: "Cucumber feature catalog and local test runs.",
+        },
+        {
+          name: "Discovery",
+          description: "AI-assisted page test recommendations.",
+        },
+        {
+          name: "Frameworks",
+          description: "Framework builder previews, creation, and build history.",
+        },
+        {
+          name: "Integrations",
+          description: "External work trackers such as Jira.",
+        },
+      ],
+    },
+  });
+
+  await server.register(swaggerUi, {
+    routePrefix: "/documentation",
+    uiConfig: {
+      deepLinking: true,
+      docExpansion: "list",
+    },
+  });
+
   server.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError) {
       return reply.status(400).send({
@@ -845,16 +1097,45 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
   });
 
-  server.get("/health", async () => {
-    await prisma.$queryRaw`SELECT 1`;
+  server.get(
+    "/health",
+    {
+      schema: {
+        summary: "Check API and database connectivity",
+        tags: ["System"],
+        response: {
+          200: {
+            type: "object",
+            required: ["ok", "service"],
+            properties: {
+              ok: {
+                type: "boolean",
+              },
+              service: {
+                type: "string",
+              },
+            },
+          },
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async () => {
+      await prisma.$queryRaw`SELECT 1`;
 
-    return {
-      ok: true,
-      service: "flawferret2-api",
-    };
-  });
+      return {
+        ok: true,
+        service: "flawferret2-api",
+      };
+    },
+  );
 
-  server.post("/discover/recommendations", async (request) => {
+  server.post("/discover/recommendations", {
+    schema: {
+      summary: "Recommend high-impact tests for a page",
+      tags: ["Discovery"],
+    },
+  }, async (request) => {
     const body = discoverTestRecommendationsRequestSchema.parse(request.body);
 
     return buildDiscoverRecommendations({
@@ -862,34 +1143,169 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
   });
 
-  server.post("/frameworks/preview", async (request) => {
+  server.post("/frameworks/preview", {
+    schema: {
+      summary: "Preview generated framework files",
+      tags: ["Frameworks"],
+    },
+  }, async (request) => {
     const body = frameworkTemplateRequestSchema.parse(request.body);
 
     return buildFrameworkTemplatePreviewWithFileStatus(body);
   });
 
-  server.post("/frameworks/create", async (request, reply) => {
-    const body = createFrameworkRequestSchema.parse(request.body);
+  server.get("/frameworks/builds", {
+    schema: {
+      summary: "List recent framework builds",
+      tags: ["Frameworks"],
+    },
+  }, async (request) => {
+    const query = frameworkBuildsQuerySchema.parse(request.query);
+    const [builds, total] = await Promise.all([
+      prisma.frameworkBuild.findMany({
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip: query.paginated ? (query.page - 1) * query.pageSize : 0,
+        take: query.paginated ? query.pageSize : 5,
+      }),
+      query.paginated ? prisma.frameworkBuild.count() : Promise.resolve(0),
+    ]);
+    const mappedBuilds = builds.map(toFrameworkBuildResponse);
 
-    return reply.status(201).send(await createFrameworkFiles(body));
+    if (query.paginated) {
+      return {
+        builds: mappedBuilds,
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+      };
+    }
+
+    return mappedBuilds;
+  });
+
+  server.get("/frameworks/builds/:id", {
+    schema: {
+      summary: "Get a framework build",
+      tags: ["Frameworks"],
+      params: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: {
+            format: "uuid",
+            type: "string",
+          },
+        },
+      },
+      response: {
+        200: frameworkBuildResponseSchema,
+        404: errorResponseSchema,
+      },
+    },
+  }, async (request, reply) => {
+    const params = z
+      .object({
+        id: z.string().uuid(),
+      })
+      .parse(request.params);
+    const build = await prisma.frameworkBuild.findUnique({
+      where: {
+        id: params.id,
+      },
+    });
+
+    if (!build) {
+      return reply.status(404).send({
+        error: "FrameworkBuildNotFound",
+        message: "Framework build not found.",
+      });
+    }
+
+    return toFrameworkBuildResponse(build);
+  });
+
+  server.post("/frameworks/create", {
+    schema: {
+      summary: "Create framework files",
+      tags: ["Frameworks"],
+    },
+  }, async (request, reply) => {
+    const body = createFrameworkRequestSchema.parse(request.body);
+    const result = await createFrameworkFiles(body);
+    const buildRecord = await prisma.frameworkBuild.create({
+      data: {
+        baseUrl: body.baseUrl,
+        createdFileCount: result.createdFiles.length,
+        destinationType: body.destinationType,
+        githubOwner: body.githubOwner || null,
+        githubPullRequestUrl: result.githubPullRequest?.prUrl ?? null,
+        githubRemoteStatus: result.githubRemote?.status ?? null,
+        githubRepository: body.githubRepository || null,
+        localGitStatus: result.localGit?.status ?? null,
+        overwrittenFileCount: result.overwrittenFiles.length,
+        packageName: result.packageName,
+        projectName: result.projectName,
+        registeredRepositoryId: result.registeredRepository?.id ?? null,
+        request: body as Prisma.InputJsonValue,
+        result: result as Prisma.InputJsonValue,
+        skippedFileCount: result.skippedFiles.length,
+        targetBranch: body.githubBranch,
+        targetDirectory: result.targetDirectory,
+        totalFileCount: result.totalFiles,
+      },
+    });
+
+    return reply.status(201).send({
+      ...result,
+      buildRecord: toFrameworkBuildResponse(buildRecord),
+    });
   });
 
   server.post("/frameworks/install-dependencies", async (request) => {
     const body = frameworkDependencyInstallRequestSchema.parse(request.body);
+    const result = await installFrameworkDependencies(body);
 
-    return installFrameworkDependencies(body);
+    await updateFrameworkBuildAction({
+      buildId: body.frameworkBuildId,
+      data: {
+        installResult: result as Prisma.InputJsonValue,
+        installStatus: result.status,
+      },
+    });
+
+    return result;
   });
 
   server.post("/frameworks/open-folder", async (request) => {
     const body = frameworkOpenFolderRequestSchema.parse(request.body);
+    const result = await openFrameworkFolder(body);
 
-    return openFrameworkFolder(body);
+    await updateFrameworkBuildAction({
+      buildId: body.frameworkBuildId,
+      data: {
+        openFolderResult: result as Prisma.InputJsonValue,
+        openFolderStatus: result.status,
+      },
+    });
+
+    return result;
   });
 
   server.post("/frameworks/validate-smoke", async (request) => {
     const body = frameworkSmokeValidationRequestSchema.parse(request.body);
+    const result = await validateFrameworkSmokeTest(body);
 
-    return validateFrameworkSmokeTest(body);
+    await updateFrameworkBuildAction({
+      buildId: body.frameworkBuildId,
+      data: {
+        smokeValidationResult: result as Prisma.InputJsonValue,
+        smokeValidationStatus: result.status,
+      },
+    });
+
+    return result;
   });
 
   server.post("/frameworks/browser-template", async (request) => {

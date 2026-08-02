@@ -19,6 +19,7 @@ import {
   frameworkDependencyInstallResponseSchema,
   frameworkOpenFolderRequestSchema,
   frameworkOpenFolderResponseSchema,
+  paginatedFrameworkBuildsResponseSchema,
   frameworkTemplatePreviewResponseSchema,
   frameworkTemplateRequestSchema,
   jobEventTypeSchema,
@@ -588,6 +589,39 @@ describe("job schemas", () => {
           status: "created",
         },
       ],
+      buildRecord: {
+        id: "00000000-0000-4000-8000-000000000001",
+        baseUrl: "https://example.test",
+        createdAt: "2026-08-01T12:00:00.000Z",
+        createdFileCount: 1,
+        destinationType: "local",
+        githubOwner: null,
+        githubPullRequestUrl: "https://github.com/rgmichaels/qa-framework/pull/12",
+        githubRemoteStatus: null,
+        githubRepository: null,
+        installResult: {
+          command: "pnpm install",
+          status: "installed",
+        },
+        installStatus: "installed",
+        localGitStatus: "initialized",
+        openFolderResult: null,
+        openFolderStatus: null,
+        overwrittenFileCount: 0,
+        packageName: "qa-framework",
+        projectName: "QA Framework",
+        registeredRepositoryId: "00000000-0000-4000-8000-000000000002",
+        skippedFileCount: 0,
+        smokeValidationResult: {
+          command: "pnpm test:smoke",
+          status: "passed",
+        },
+        smokeValidationStatus: "passed",
+        targetBranch: "main",
+        targetDirectory: "/tmp/qa-framework",
+        totalFileCount: 1,
+        updatedAt: "2026-08-01T12:00:00.000Z",
+      },
       directories: ["/tmp/qa-framework"],
       files: [
         {
@@ -611,7 +645,7 @@ describe("job schemas", () => {
       projectName: request.projectName,
       runCommand: "pnpm test",
       registeredRepository: {
-        id: "repo-1",
+        id: "00000000-0000-4000-8000-000000000002",
         provider: "GITHUB",
         owner: "local",
         name: "qa-framework",
@@ -631,15 +665,27 @@ describe("job schemas", () => {
     });
 
     assert.equal(response.createdFiles[0].status, "created");
+    assert.equal(response.buildRecord?.createdFileCount, 1);
     assert.equal(response.githubPullRequest?.prNumber, 12);
     assert.equal(response.registeredRepository?.name, "qa-framework");
+
+    const paginatedBuilds = paginatedFrameworkBuildsResponseSchema.parse({
+      builds: [response.buildRecord],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+    });
+
+    assert.equal(paginatedBuilds.builds[0]?.id, response.buildRecord?.id);
   });
 
   it("parses framework dependency install requests and responses", () => {
     const request = frameworkDependencyInstallRequestSchema.parse({
+      frameworkBuildId: "00000000-0000-4000-8000-000000000001",
       targetDirectory: " /tmp/qa-framework ",
     });
 
+    assert.equal(request.frameworkBuildId, "00000000-0000-4000-8000-000000000001");
     assert.equal(request.targetDirectory, "/tmp/qa-framework");
 
     const response = frameworkDependencyInstallResponseSchema.parse({
@@ -659,9 +705,11 @@ describe("job schemas", () => {
 
   it("parses framework open folder requests and responses", () => {
     const request = frameworkOpenFolderRequestSchema.parse({
+      frameworkBuildId: "00000000-0000-4000-8000-000000000001",
       targetDirectory: " /tmp/qa-framework ",
     });
 
+    assert.equal(request.frameworkBuildId, "00000000-0000-4000-8000-000000000001");
     assert.equal(request.targetDirectory, "/tmp/qa-framework");
 
     const response = frameworkOpenFolderResponseSchema.parse({

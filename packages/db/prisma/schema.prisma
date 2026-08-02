@@ -145,6 +145,7 @@ model Repository {
   updatedAt            DateTime            @updatedAt @map("updated_at")
   jobs                 Job[]
   discoverRuns         DiscoverRun[]
+  frameworkBuilds      FrameworkBuild[]
   localTestRuns        LocalTestRun[]
   trackerIntegration   TrackerIntegration? @relation(fields: [trackerIntegrationId], references: [id], onDelete: SetNull)
 
@@ -153,11 +154,46 @@ model Repository {
   @@map("repositories")
 }
 
+model FrameworkBuild {
+  id                     String      @id @default(uuid()) @db.Uuid
+  projectName            String      @map("project_name")
+  packageName            String      @map("package_name")
+  destinationType        String      @map("destination_type")
+  targetDirectory        String      @map("target_directory")
+  baseUrl                String      @map("base_url")
+  targetBranch           String      @map("target_branch")
+  githubOwner            String?     @map("github_owner")
+  githubRepository       String?     @map("github_repository")
+  createdFileCount       Int         @default(0) @map("created_file_count")
+  overwrittenFileCount   Int         @default(0) @map("overwritten_file_count")
+  skippedFileCount       Int         @default(0) @map("skipped_file_count")
+  totalFileCount         Int         @default(0) @map("total_file_count")
+  localGitStatus         String?     @map("local_git_status")
+  githubRemoteStatus     String?     @map("github_remote_status")
+  githubPullRequestUrl   String?     @map("github_pull_request_url")
+  registeredRepositoryId String?     @map("registered_repository_id") @db.Uuid
+  installStatus          String?     @map("install_status")
+  installResult          Json?       @map("install_result")
+  openFolderStatus       String?     @map("open_folder_status")
+  openFolderResult       Json?       @map("open_folder_result")
+  smokeValidationStatus  String?     @map("smoke_validation_status")
+  smokeValidationResult  Json?       @map("smoke_validation_result")
+  request                Json
+  result                 Json
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+  registeredRepository   Repository? @relation(fields: [registeredRepositoryId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([registeredRepositoryId])
+  @@map("framework_builds")
+}
+
 model LocalTestRun {
   id           String             @id @default(uuid()) @db.Uuid
   repositoryId String             @map("repository_id") @db.Uuid
-  scope        LocalTestRunScope   @default(FEATURE)
-  status       LocalTestRunStatus  @default(QUEUED)
+  scope        LocalTestRunScope  @default(FEATURE)
+  status       LocalTestRunStatus @default(QUEUED)
   featurePath  String             @map("feature_path")
   scenarioLine Int?               @map("scenario_line")
   command      String?

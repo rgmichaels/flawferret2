@@ -545,7 +545,43 @@ export const localFrameworkGithubResultSchema = z.object({
   webUrl: z.string().url().nullable(),
 });
 
+export const frameworkBuildResponseSchema = z.object({
+  id: z.string(),
+  baseUrl: z.string(),
+  createdAt: z.string(),
+  createdFileCount: z.number().int().nonnegative(),
+  destinationType: frameworkTemplateDestinationTypeSchema,
+  githubOwner: z.string().nullable(),
+  githubPullRequestUrl: z.string().url().nullable(),
+  githubRemoteStatus: z.string().nullable(),
+  githubRepository: z.string().nullable(),
+  installResult: z.unknown().nullable().optional(),
+  installStatus: z.string().nullable(),
+  localGitStatus: z.string().nullable(),
+  openFolderResult: z.unknown().nullable().optional(),
+  openFolderStatus: z.string().nullable(),
+  overwrittenFileCount: z.number().int().nonnegative(),
+  packageName: z.string(),
+  projectName: z.string(),
+  registeredRepositoryId: z.string().nullable(),
+  skippedFileCount: z.number().int().nonnegative(),
+  smokeValidationResult: z.unknown().nullable().optional(),
+  smokeValidationStatus: z.string().nullable(),
+  targetBranch: z.string(),
+  targetDirectory: z.string(),
+  totalFileCount: z.number().int().nonnegative(),
+  updatedAt: z.string(),
+});
+
+export const paginatedFrameworkBuildsResponseSchema = z.object({
+  builds: z.array(frameworkBuildResponseSchema),
+  page: z.number().int().positive(),
+  pageSize: z.number().int().positive(),
+  total: z.number().int().nonnegative(),
+});
+
 export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSchema.extend({
+  buildRecord: frameworkBuildResponseSchema.nullable().optional(),
   createdFiles: z.array(createFrameworkFileResultSchema),
   githubRemote: localFrameworkGithubResultSchema.nullable().optional(),
   githubPullRequest: githubFrameworkPullRequestSchema.nullable().optional(),
@@ -556,14 +592,17 @@ export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSch
 });
 
 export const frameworkSmokeValidationRequestSchema = z.object({
+  frameworkBuildId: z.string().uuid().optional(),
   targetDirectory: z.string().trim().min(1, "Target directory is required").max(500),
 });
 
 export const frameworkDependencyInstallRequestSchema = z.object({
+  frameworkBuildId: z.string().uuid().optional(),
   targetDirectory: z.string().trim().min(1, "Target directory is required").max(500),
 });
 
 export const frameworkOpenFolderRequestSchema = z.object({
+  frameworkBuildId: z.string().uuid().optional(),
   targetDirectory: z.string().trim().min(1, "Target directory is required").max(500),
 });
 
@@ -792,6 +831,8 @@ export type CreateFrameworkFileResult = z.infer<typeof createFrameworkFileResult
 export type GithubFrameworkPullRequest = z.infer<typeof githubFrameworkPullRequestSchema>;
 export type LocalFrameworkGithubResult = z.infer<typeof localFrameworkGithubResultSchema>;
 export type LocalFrameworkGitResult = z.infer<typeof localFrameworkGitResultSchema>;
+export type FrameworkBuildResponse = z.infer<typeof frameworkBuildResponseSchema>;
+export type PaginatedFrameworkBuildsResponse = z.infer<typeof paginatedFrameworkBuildsResponseSchema>;
 export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
 export type FrameworkDependencyInstallRequest = z.infer<typeof frameworkDependencyInstallRequestSchema>;
 export type FrameworkDependencyInstallResponse = z.infer<typeof frameworkDependencyInstallResponseSchema>;
