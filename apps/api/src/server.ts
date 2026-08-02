@@ -72,7 +72,7 @@ import {
   sendSlackNotification,
   shortJobId,
 } from "@flawferret2/shared";
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifySchema } from "fastify";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -213,7 +213,27 @@ const frameworkBuildResponseSchema = {
   },
 } as const;
 
-const routeDocs = (summary: string, tags: string[]) => ({
+type RouteOpenApiDocs = {
+  body?: keyof typeof openApiComponentSchemas;
+  response?: Record<number, keyof typeof openApiComponentSchemas>;
+};
+
+declare module "fastify" {
+  interface FastifyContextConfig {
+    openApiDocs?: RouteOpenApiDocs;
+  }
+}
+
+const componentRef = (name: keyof typeof openApiComponentSchemas) => ({
+  $ref: `#/components/schemas/${name}`,
+});
+
+const routeDocs = (summary: string, tags: string[], openApiDocs?: RouteOpenApiDocs) => ({
+  config: openApiDocs
+    ? {
+        openApiDocs,
+      }
+    : undefined,
   schema: {
     summary,
     tags,
@@ -1152,6 +1172,35 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         },
       ],
     },
+    transform: ({ schema, url, route }) => {
+      const docs = route.config?.openApiDocs;
+
+      if (!docs) {
+        return {
+          schema,
+          url,
+        };
+      }
+
+      const documentedSchema: FastifySchema = {
+        ...schema,
+      };
+
+      if (docs.body) {
+        documentedSchema.body = componentRef(docs.body);
+      }
+
+      if (docs.response) {
+        documentedSchema.response = Object.fromEntries(
+          Object.entries(docs.response).map(([statusCode, schemaName]) => [statusCode, componentRef(schemaName)]),
+        );
+      }
+
+      return {
+        schema: documentedSchema,
+        url,
+      };
+    },
   });
 
   await server.register(swaggerUi, {
@@ -1308,6 +1357,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
   });
 
   server.post("/frameworks/create", {
+    config: {
+      openApiDocs: {
+        body: "CreateFrameworkRequest",
+        response: {
+          201: "CreateFrameworkResponse",
+        },
+      },
+    },
     schema: {
       summary: "Create framework files",
       tags: ["Frameworks"],
@@ -1344,7 +1401,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
   });
 
-  server.post("/frameworks/install-dependencies", routeDocs("Install generated framework dependencies", ["Frameworks"]), async (request) => {
+  server.post(
+    "/frameworks/install-dependencies",
+    routeDocs("Install generated framework dependencies", ["Frameworks"], {
+      body: "FrameworkDependencyInstallRequest",
+      response: {
+        200: "FrameworkDependencyInstallResponse",
+      },
+    }),
+    async (request) => {
     const body = frameworkDependencyInstallRequestSchema.parse(request.body);
     const result = await installFrameworkDependencies(body);
 
@@ -1357,9 +1422,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return result;
-  });
+    },
+  );
 
-  server.post("/frameworks/open-folder", routeDocs("Open a generated framework folder", ["Frameworks"]), async (request) => {
+  server.post(
+    "/frameworks/open-folder",
+    routeDocs("Open a generated framework folder", ["Frameworks"], {
+      body: "FrameworkOpenFolderRequest",
+      response: {
+        200: "FrameworkOpenFolderResponse",
+      },
+    }),
+    async (request) => {
     const body = frameworkOpenFolderRequestSchema.parse(request.body);
     const result = await openFrameworkFolder(body);
 
@@ -1372,9 +1446,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return result;
-  });
+    },
+  );
 
-  server.post("/frameworks/validate-smoke", routeDocs("Run the generated framework smoke test", ["Frameworks"]), async (request) => {
+  server.post(
+    "/frameworks/validate-smoke",
+    routeDocs("Run the generated framework smoke test", ["Frameworks"], {
+      body: "FrameworkSmokeValidationRequest",
+      response: {
+        200: "FrameworkSmokeValidationResponse",
+      },
+    }),
+    async (request) => {
     const body = frameworkSmokeValidationRequestSchema.parse(request.body);
     const result = await validateFrameworkSmokeTest(body);
 
@@ -1387,13 +1470,23 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return result;
-  });
+    },
+  );
 
-  server.post("/frameworks/browser-template", routeDocs("Build browser-writable framework files", ["Frameworks"]), async (request) => {
+  server.post(
+    "/frameworks/browser-template",
+    routeDocs("Build browser-writable framework files", ["Frameworks"], {
+      body: "FrameworkTemplateRequest",
+      response: {
+        200: "FrameworkTemplatePreviewResponse",
+      },
+    }),
+    async (request) => {
     const body = frameworkTemplateRequestSchema.parse(request.body);
 
     return buildFrameworkBrowserTemplate(body);
-  });
+    },
+  );
 
   server.get("/frameworks/pick-folder", routeDocs("Open the native folder picker", ["Frameworks"]), async (_request, reply) => {
     try {
@@ -1431,7 +1524,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return runs.map(toDiscoverRunResponse);
   });
 
-  server.post("/discover/runs", routeDocs("Save a page discovery run", ["Discovery"]), async (request, reply) => {
+  server.post(
+    "/discover/runs",
+    routeDocs("Save a page discovery run", ["Discovery"], {
+      body: "CreateDiscoverRunRequest",
+      response: {
+        201: "DiscoverRunResponse",
+      },
+    }),
+    async (request, reply) => {
     const body = createDiscoverRunRequestSchema.parse(request.body);
     const repository = await prisma.repository.findUnique({
       where: {
@@ -1467,7 +1568,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return reply.status(201).send(toDiscoverRunResponse(run));
-  });
+    },
+  );
 
   server.get("/discover/runs/:id", routeDocs("Get a saved page discovery run", ["Discovery"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
@@ -1741,7 +1843,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return integrations.map(toTrackerIntegrationResponse);
   });
 
-  server.post("/tracker-integrations", routeDocs("Create or update a tracker integration", ["Integrations"]), async (request, reply) => {
+  server.post(
+    "/tracker-integrations",
+    routeDocs("Create or update a tracker integration", ["Integrations"], {
+      body: "CreateTrackerIntegrationRequest",
+      response: {
+        201: "TrackerIntegrationResponse",
+      },
+    }),
+    async (request, reply) => {
     const body = createTrackerIntegrationRequestSchema.parse(request.body);
 
     const integration = await prisma.trackerIntegration.upsert({
@@ -1770,9 +1880,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return reply.status(201).send(toTrackerIntegrationResponse(integration));
-  });
+    },
+  );
 
-  server.put("/tracker-integrations/:id", routeDocs("Update a tracker integration", ["Integrations"]), async (request, reply) => {
+  server.put(
+    "/tracker-integrations/:id",
+    routeDocs("Update a tracker integration", ["Integrations"], {
+      body: "UpdateTrackerIntegrationRequest",
+      response: {
+        200: "TrackerIntegrationResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = trackerIntegrationParamsSchema.parse(request.params);
     const body = updateTrackerIntegrationRequestSchema.parse(request.body);
 
@@ -1805,7 +1924,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toTrackerIntegrationResponse(integration);
-  });
+    },
+  );
 
   server.delete("/tracker-integrations/:id", routeDocs("Delete a tracker integration", ["Integrations"]), async (request, reply) => {
     const params = trackerIntegrationParamsSchema.parse(request.params);
@@ -1832,7 +1952,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(204).send();
   });
 
-  server.post("/tracker-integrations/:id/test", routeDocs("Test a tracker integration", ["Integrations"]), async (request, reply) => {
+  server.post(
+    "/tracker-integrations/:id/test",
+    routeDocs("Test a tracker integration", ["Integrations"], {
+      response: {
+        200: "TrackerIntegrationTestResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = trackerIntegrationParamsSchema.parse(request.params);
     const integration = await prisma.trackerIntegration.findUnique({
       where: {
@@ -1850,7 +1977,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const result = await testJiraIntegration(integration);
 
     return reply.status(result.ok ? 200 : 502).send(result);
-  });
+    },
+  );
 
   server.get("/repositories", routeDocs("List registered repositories", ["Repositories"]), async () => {
     const repositories = await prisma.repository.findMany({
@@ -1870,7 +1998,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return repositories.map(toRepositoryResponse);
   });
 
-  server.post("/repositories", routeDocs("Register or update a repository", ["Repositories"]), async (request, reply) => {
+  server.post(
+    "/repositories",
+    routeDocs("Register or update a repository", ["Repositories"], {
+      body: "CreateRepositoryRequest",
+      response: {
+        201: "RepositoryResponse",
+      },
+    }),
+    async (request, reply) => {
     const body = createRepositoryRequestSchema.parse(request.body);
     const cloneUrl = githubCloneUrl(body);
     const webUrl = githubRepositoryUrl(body);
@@ -1908,7 +2044,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return reply.status(201).send(toRepositoryResponse(repository));
-  });
+    },
+  );
 
   server.get("/repositories/:id", routeDocs("Get a registered repository", ["Repositories"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
@@ -1932,7 +2069,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toRepositoryResponse(repository);
   });
 
-  server.put("/repositories/:id", routeDocs("Update a registered repository", ["Repositories"]), async (request, reply) => {
+  server.put(
+    "/repositories/:id",
+    routeDocs("Update a registered repository", ["Repositories"], {
+      body: "CreateRepositoryRequest",
+      response: {
+        200: "RepositoryResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const body = createRepositoryRequestSchema.parse(request.body);
     const cloneUrl = githubCloneUrl(body);
@@ -1972,7 +2117,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toRepositoryResponse(repository);
-  });
+    },
+  );
 
   server.delete("/repositories/:id", routeDocs("Delete a registered repository", ["Repositories"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
@@ -2223,7 +2369,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toLocalTestRunStatsResponse(runs);
   });
 
-  server.post("/repositories/:id/features/local-test-runs", routeDocs("Queue a local feature or scenario test run", ["Features"]), async (request, reply) => {
+  server.post(
+    "/repositories/:id/features/local-test-runs",
+    routeDocs("Queue a local feature or scenario test run", ["Features"], {
+      body: "CreateLocalTestRunRequest",
+      response: {
+        201: "LocalTestRunResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const body = createLocalTestRunRequestSchema.parse(request.body);
 
@@ -2288,7 +2442,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return reply.status(201).send(toLocalTestRunResponse(run));
-  });
+    },
+  );
 
   server.get("/local-test-runs/:id", routeDocs("Get a local test run", ["Features"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
@@ -2448,7 +2603,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toJobResponseWithRepository(job));
   });
 
-  server.post("/jobs", routeDocs("Create a job for review", ["Jobs"]), async (request, reply) => {
+  server.post(
+    "/jobs",
+    routeDocs("Create a job for review", ["Jobs"], {
+      body: "CreateJobRequest",
+      response: {
+        201: "JobResponse",
+      },
+    }),
+    async (request, reply) => {
     const body = createJobRequestSchema.parse(request.body);
 
     const repository = await prisma.repository.findUnique({
@@ -2527,9 +2690,18 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     return reply.status(201).send(toJobResponseWithRepository(job));
-  });
+    },
+  );
 
-  server.put("/jobs/:id/review-request", routeDocs("Edit a job while it needs review", ["Jobs"]), async (request, reply) => {
+  server.put(
+    "/jobs/:id/review-request",
+    routeDocs("Edit a job while it needs review", ["Jobs"], {
+      body: "UpdateReviewJobRequest",
+      response: {
+        200: "JobResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = updateReviewJobRequestSchema.parse(request.body);
 
@@ -2642,7 +2814,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toJobResponseWithRepository(updatedJob);
-  });
+    },
+  );
 
   server.post("/jobs/:id/approve-review", routeDocs("Approve a reviewed job into the active queue", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
@@ -3109,7 +3282,15 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(requeuedJob);
   });
 
-  server.post("/jobs/:id/retry-stage", routeDocs("Retry the failed stage for a job", ["Jobs"]), async (request, reply) => {
+  server.post(
+    "/jobs/:id/retry-stage",
+    routeDocs("Retry the failed stage for a job", ["Jobs"], {
+      body: "RetryStageRequest",
+      response: {
+        200: "JobResponse",
+      },
+    }),
+    async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = retryStageRequestSchema.parse(request.body ?? {});
     const feedback = body.feedback?.trim();
@@ -3262,7 +3443,8 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
 
     return toJobResponseWithRepository(retriedJob);
-  });
+    },
+  );
 
   server.get("/jobs/:id", routeDocs("Get a job", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
