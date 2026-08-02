@@ -634,6 +634,85 @@ export default async function NewFrameworkPage({
   const shouldInitializeGit = getCheckedParam(params.initializeGitRepository, true);
   const shouldRegisterLocalRepository = getCheckedParam(params.registerLocalRepository, true);
   const shouldCreateGithubRepository = getCheckedParam(params.createGithubRepository, false);
+  const localGitStatus = params.localGitStatus?.replace(/_/g, " ");
+  const githubRemoteStatus = params.githubRemoteStatus?.replace(/_/g, " ");
+  const pipelineSteps = [
+    {
+      detail: hasCreateResult
+        ? `${createdCount} created, ${overwrittenCount} overwritten, ${skippedCount} skipped.`
+        : "Generate the framework files first.",
+      label: "Framework files",
+      state: hasCreateResult ? "complete" : "pending",
+      status: hasCreateResult ? "Complete" : "Pending",
+    },
+    {
+      detail: shouldInitializeGit
+        ? params.localGitMessage || "Create a local git repo and initial framework commit."
+        : "Skipped by current plan.",
+      label: "Local git repo",
+      state: shouldInitializeGit ? (params.localGitStatus ? "complete" : "pending") : "skipped",
+      status: shouldInitializeGit ? localGitStatus || "Pending" : "Skipped",
+    },
+    {
+      detail:
+        request.destinationType === "github"
+          ? params.prUrl || "Create a pull request in the selected GitHub repository."
+          : shouldCreateGithubRepository
+            ? params.githubRemoteMessage || "Create a GitHub repository and push the generated framework."
+            : "Skipped by current plan.",
+      label: request.destinationType === "github" ? "GitHub pull request" : "GitHub repository",
+      state:
+        request.destinationType === "github"
+          ? params.prUrl
+            ? "complete"
+            : "pending"
+          : shouldCreateGithubRepository
+            ? params.githubRemoteStatus === "failed"
+              ? "attention"
+              : params.githubRemoteStatus
+                ? "complete"
+                : "pending"
+            : "skipped",
+      status:
+        request.destinationType === "github"
+          ? params.prUrl
+            ? `PR #${params.prNumber ?? ""}`.trim()
+            : "Pending"
+          : shouldCreateGithubRepository
+            ? githubRemoteStatus || "Pending"
+            : "Skipped",
+    },
+    {
+      detail: shouldRegisterLocalRepository
+        ? params.registeredRepositoryName || "Register the generated local folder so FF2 can use it."
+        : "Skipped by current plan.",
+      label: "FF2 registration",
+      state: shouldRegisterLocalRepository ? (params.registeredRepositoryId ? "complete" : "pending") : "skipped",
+      status: shouldRegisterLocalRepository ? (params.registeredRepositoryId ? "Registered" : "Pending") : "Skipped",
+    },
+    {
+      detail: params.installMessage || "Run pnpm install from the generated framework folder.",
+      label: "Dependencies",
+      state:
+        params.installStatus === "installed"
+          ? "complete"
+          : params.installStatus === "failed" || params.installStatus === "skipped"
+            ? "attention"
+            : "pending",
+      status: params.installStatus ?? "Pending",
+    },
+    {
+      detail: params.validationMessage || "Run the generated sample smoke test.",
+      label: "Smoke validation",
+      state:
+        params.validationStatus === "passed"
+          ? "complete"
+          : params.validationStatus === "failed" || params.validationStatus === "skipped"
+            ? "attention"
+            : "pending",
+      status: params.validationStatus ?? "Pending",
+    },
+  ];
   const nextStep: FrameworkWizardStep =
     currentStep === "framework"
       ? "local-git"
@@ -1070,23 +1149,25 @@ export default async function NewFrameworkPage({
             </div>
 
             {hasCreateResult ? (
-              <section className="framework-results-panel">
-                <div>
-                  <strong>{params.prUrl ? "Pull request is ready for review." : "Files are ready locally."}</strong>
-                  <span>
-                    {createdCount} created, {overwrittenCount} overwritten, {skippedCount} skipped.
-                  </span>
-                  {params.localGitStatus ? (
-                    <span>
-                      Git: {params.localGitStatus.replace(/_/g, " ")}. {params.localGitMessage}
-                    </span>
-                  ) : null}
-                  {params.githubRemoteStatus ? (
-                    <span>
-                      GitHub: {params.githubRemoteStatus.replace(/_/g, " ")}. {params.githubRemoteMessage}
-                    </span>
-                  ) : null}
+              <section className="framework-results-panel framework-results-checklist-panel">
+                <div className="framework-results-heading">
+                  <strong>{params.prUrl ? "Pull request is ready for review." : "Framework pipeline"}</strong>
+                  <span>Review what completed and choose the next action.</span>
                 </div>
+                <ol className="framework-results-checklist">
+                  {pipelineSteps.map((step) => (
+                    <li className={step.state} key={step.label}>
+                      <span aria-hidden="true" className="framework-results-checkmark">
+                        {step.state === "complete" ? "OK" : step.state === "attention" ? "!" : step.state === "skipped" ? "SKIP" : ""}
+                      </span>
+                      <div>
+                        <strong>{step.label}</strong>
+                        <small>{step.detail}</small>
+                      </div>
+                      <mark>{step.status}</mark>
+                    </li>
+                  ))}
+                </ol>
                 <div className="framework-wizard-actions">
                   {request.destinationType === "local" ? (
                     <>
