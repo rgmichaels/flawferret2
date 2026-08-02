@@ -1142,6 +1142,47 @@ button {
   overflow-wrap: anywhere;
 }
 
+.framework-build-shortcuts {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.framework-build-shortcuts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.framework-build-shortcuts strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-build-shortcuts span,
+.framework-build-shortcuts small {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.framework-build-shortcuts nav {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.framework-build-shortcuts small {
+  grid-column: 1 / -1;
+}
+
 .framework-folder-open-status {
   align-items: center;
   background: #f8fafc;
@@ -5927,6 +5968,15 @@ textarea {
 
   .framework-build-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .framework-build-shortcuts {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .framework-build-shortcuts nav {
+    justify-content: flex-start;
   }
 
   .framework-build-action-result dl {
