@@ -320,6 +320,8 @@ const formatFrameworkBuildDate = (value: string) =>
     timeStyle: "short",
   }).format(new Date(value));
 
+const buildFrameworkResultHref = (buildId: string) => `/framework/new?frameworkBuildId=${buildId}&preview=true&step=validate`;
+
 const appendFrameworkActionState = (params: URLSearchParams, formData: FormData) => {
   for (const key of frameworkActionPassthroughKeys) {
     const value = formData.get(key);
@@ -864,6 +866,8 @@ export default async function NewFrameworkPage({
   const validationMessage = params.validationMessage ?? savedValidationResult?.message;
   const validationStderr = params.validationStderr ?? savedValidationResult?.stderr;
   const validationStdout = params.validationStdout ?? savedValidationResult?.stdout;
+  const latestFrameworkBuild = frameworkBuilds.at(0);
+  const latestFrameworkBuildIsCurrent = Boolean(frameworkBuildId && latestFrameworkBuild?.id === frameworkBuildId);
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
   const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
   const destinationLabel = request.destinationType === "github" ? "GitHub pull request" : "Local folder";
@@ -1471,6 +1475,41 @@ export default async function NewFrameworkPage({
                     <dd>{registeredRepositoryName ?? "Not registered"}</dd>
                   </div>
                 </dl>
+                <div className="framework-build-shortcuts">
+                  <div>
+                    <strong>Build history</strong>
+                    <span>
+                      {frameworkBuildId
+                        ? `Current build ${frameworkBuildId.slice(0, 8)} is available for detailed review.`
+                        : "Save a framework build to reopen results and action output later."}
+                    </span>
+                  </div>
+                  <nav aria-label="Framework build shortcuts">
+                    {frameworkBuildId ? (
+                      <>
+                        <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
+                          Current Details
+                        </a>
+                        <a className="secondary-button" href={buildFrameworkResultHref(frameworkBuildId)}>
+                          Reopen Current
+                        </a>
+                      </>
+                    ) : null}
+                    {latestFrameworkBuild && !latestFrameworkBuildIsCurrent ? (
+                      <a className="secondary-button" href={buildFrameworkResultHref(latestFrameworkBuild.id)}>
+                        Reopen Latest
+                      </a>
+                    ) : null}
+                    <a className="secondary-button" href="/framework/builds">
+                      All Builds
+                    </a>
+                  </nav>
+                  {latestFrameworkBuild ? (
+                    <small>
+                      Latest: {latestFrameworkBuild.projectName} · {formatFrameworkBuildDate(latestFrameworkBuild.createdAt)}
+                    </small>
+                  ) : null}
+                </div>
                 {openFolderStatus ? (
                   <div className={`framework-folder-open-status ${openFolderStatus}`}>
                     <strong>{openFolderStatus}</strong>
