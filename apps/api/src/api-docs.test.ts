@@ -24,6 +24,16 @@ describe("api documentation", () => {
 
     assert.equal(response.statusCode, 200);
     const document = response.json<{
+      components?: {
+        schemas?: Record<
+          string,
+          {
+            properties?: Record<string, unknown>;
+            required?: string[];
+            type?: string;
+          }
+        >;
+      };
       info: {
         title: string;
       };
@@ -55,5 +65,27 @@ describe("api documentation", () => {
     ["System", "Jobs", "Repositories", "Features", "Discovery", "Frameworks", "Integrations"].forEach((tagName) => {
       assert.ok(document.tags.some((tag) => tag.name === tagName), `Expected ${tagName} tag`);
     });
+
+    const schemas = document.components?.schemas ?? {};
+    [
+      "CreateJobRequest",
+      "JobResponse",
+      "CreateRepositoryRequest",
+      "RepositoryResponse",
+      "CreateFrameworkRequest",
+      "CreateFrameworkResponse",
+      "DiscoverTestRecommendationsRequest",
+      "DiscoverRunResponse",
+      "CucumberFeatureCatalogResponse",
+      "LocalTestRunResponse",
+      "ReadinessResponse",
+      "TrackerIntegrationResponse",
+    ].forEach((schemaName) => {
+      assert.ok(schemas[schemaName], `Expected ${schemaName} component schema`);
+    });
+
+    assert.equal(schemas.CreateJobRequest?.type, "object");
+    assert.ok(schemas.CreateJobRequest?.properties?.payload);
+    assert.ok(schemas.RepositoryResponse?.properties?.owner);
   });
 });
