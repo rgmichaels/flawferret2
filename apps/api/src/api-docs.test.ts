@@ -38,7 +38,37 @@ describe("api documentation", () => {
         title: string;
       };
       openapi: string;
-      paths: Record<string, unknown>;
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            requestBody?: {
+              content?: Record<
+                string,
+                {
+                  schema?: {
+                    $ref?: string;
+                  };
+                }
+              >;
+            };
+            responses?: Record<
+              string,
+              {
+                content?: Record<
+                  string,
+                  {
+                    schema?: {
+                      $ref?: string;
+                    };
+                  }
+                >;
+              }
+            >;
+          }
+        >
+      >;
       tags: Array<{
         name: string;
       }>;
@@ -87,5 +117,22 @@ describe("api documentation", () => {
     assert.equal(schemas.CreateJobRequest?.type, "object");
     assert.ok(schemas.CreateJobRequest?.properties?.payload);
     assert.ok(schemas.RepositoryResponse?.properties?.owner);
+
+    assert.equal(
+      document.paths["/jobs"]?.post?.requestBody?.content?.["application/json"]?.schema?.$ref,
+      "#/components/schemas/CreateJobRequest",
+    );
+    assert.equal(
+      document.paths["/jobs"]?.post?.responses?.["201"]?.content?.["application/json"]?.schema?.$ref,
+      "#/components/schemas/JobResponse",
+    );
+    assert.equal(
+      document.paths["/frameworks/create"]?.post?.requestBody?.content?.["application/json"]?.schema?.$ref,
+      "#/components/schemas/CreateFrameworkRequest",
+    );
+    assert.equal(
+      document.paths["/repositories"]?.post?.requestBody?.content?.["application/json"]?.schema?.$ref,
+      "#/components/schemas/CreateRepositoryRequest",
+    );
   });
 });
