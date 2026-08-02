@@ -1,6 +1,8 @@
 import type {
   FrameworkDependencyInstallRequest,
   FrameworkDependencyInstallResponse,
+  FrameworkOpenFolderRequest,
+  FrameworkOpenFolderResponse,
   FrameworkSmokeValidationRequest,
   FrameworkSmokeValidationResponse,
 } from "@flawferret2/job-schemas";
@@ -13,6 +15,7 @@ const execFileAsync = promisify(execFile);
 const outputLimit = 20_000;
 const processBuffer = 1_000_000;
 const installCommand = "pnpm install" as const;
+const openFolderCommand = "open" as const;
 const smokeCommand = "pnpm test:smoke" as const;
 
 type CommandError = Error & {
@@ -106,6 +109,50 @@ export const installFrameworkDependencies = async (
       status: "failed",
       stderr: truncateOutput(commandError.stderr ?? commandError.message),
       stdout: truncateOutput(commandError.stdout ?? ""),
+      targetDirectory,
+    };
+  }
+};
+
+export const openFrameworkFolder = async (
+  request: FrameworkOpenFolderRequest,
+  { canAccess = access, runner = defaultRunner }: FrameworkSmokeValidationOptions = {},
+): Promise<FrameworkOpenFolderResponse> => {
+  const startedAt = Date.now();
+  const targetDirectory = resolve(request.targetDirectory);
+
+  try {
+    await canAccess(targetDirectory);
+  } catch {
+    return {
+      command: openFolderCommand,
+      durationMs: Date.now() - startedAt,
+      message: "Target directory does not exist yet.",
+      status: "skipped",
+      targetDirectory,
+    };
+  }
+
+  try {
+    await runner("open", [targetDirectory], {
+      cwd: targetDirectory,
+      maxBuffer: processBuffer,
+      timeout: 30_000,
+    });
+
+    return {
+      command: openFolderCommand,
+      durationMs: Date.now() - startedAt,
+      message: "Generated framework folder opened.",
+      status: "opened",
+      targetDirectory,
+    };
+  } catch (error) {
+    return {
+      command: openFolderCommand,
+      durationMs: Date.now() - startedAt,
+      message: error instanceof Error ? error.message : "Unable to open generated framework folder.",
+      status: "failed",
       targetDirectory,
     };
   }

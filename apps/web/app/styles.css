@@ -1113,6 +1113,60 @@ button {
   overflow-wrap: anywhere;
 }
 
+.framework-folder-open-status {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.framework-folder-open-status.opened {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.framework-folder-open-status.failed {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.framework-folder-open-status.skipped {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.framework-folder-open-status strong {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.framework-folder-open-status.opened strong {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.framework-folder-open-status.failed strong {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.framework-folder-open-status.skipped strong {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.framework-folder-open-status span {
+  color: #344054;
+  font-size: 13px;
+}
+
 .framework-results-panel div:first-child {
   display: grid;
   gap: 4px;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { installFrameworkDependencies, validateFrameworkSmokeTest } from "./framework-validation.js";
+import { installFrameworkDependencies, openFrameworkFolder, validateFrameworkSmokeTest } from "./framework-validation.js";
 
 describe("framework dependency install", () => {
   it("skips installation when package.json is missing", async () => {
@@ -80,6 +80,73 @@ describe("framework dependency install", () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.stderr, "install failed");
     assert.equal(result.stdout, "resolving packages");
+  });
+});
+
+describe("framework folder opener", () => {
+  it("skips opening when the target directory is missing", async () => {
+    const result = await openFrameworkFolder(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {
+          throw new Error("missing");
+        },
+      },
+    );
+
+    assert.equal(result.status, "skipped");
+    assert.match(result.message, /does not exist/);
+  });
+
+  it("opens the target directory", async () => {
+    const targetDirectory = "/tmp/generated-framework";
+    const calls: Array<{ args: string[]; command: string; cwd: string }> = [];
+    const result = await openFrameworkFolder(
+      {
+        targetDirectory,
+      },
+      {
+        canAccess: async (path) => {
+          assert.equal(path, resolve(targetDirectory));
+        },
+        runner: async (command, args, options) => {
+          calls.push({ args, command, cwd: options.cwd });
+
+          return {
+            stderr: "",
+            stdout: "",
+          };
+        },
+      },
+    );
+
+    assert.equal(result.status, "opened");
+    assert.deepEqual(calls, [
+      {
+        args: [resolve(targetDirectory)],
+        command: "open",
+        cwd: resolve(targetDirectory),
+      },
+    ]);
+  });
+
+  it("captures open command failures", async () => {
+    const result = await openFrameworkFolder(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        runner: async () => {
+          throw new Error("open failed");
+        },
+      },
+    );
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.message, "open failed");
   });
 });
 
