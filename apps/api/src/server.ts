@@ -190,6 +190,13 @@ const frameworkBuildResponseSchema = {
   },
 } as const;
 
+const routeDocs = (summary: string, tags: string[]) => ({
+  schema: {
+    summary,
+    tags,
+  },
+});
+
 const toJobResponse = (job: {
   id: string;
   jobType: JobResponse["jobType"];
@@ -1263,7 +1270,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     });
   });
 
-  server.post("/frameworks/install-dependencies", async (request) => {
+  server.post("/frameworks/install-dependencies", routeDocs("Install generated framework dependencies", ["Frameworks"]), async (request) => {
     const body = frameworkDependencyInstallRequestSchema.parse(request.body);
     const result = await installFrameworkDependencies(body);
 
@@ -1278,7 +1285,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return result;
   });
 
-  server.post("/frameworks/open-folder", async (request) => {
+  server.post("/frameworks/open-folder", routeDocs("Open a generated framework folder", ["Frameworks"]), async (request) => {
     const body = frameworkOpenFolderRequestSchema.parse(request.body);
     const result = await openFrameworkFolder(body);
 
@@ -1293,7 +1300,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return result;
   });
 
-  server.post("/frameworks/validate-smoke", async (request) => {
+  server.post("/frameworks/validate-smoke", routeDocs("Run the generated framework smoke test", ["Frameworks"]), async (request) => {
     const body = frameworkSmokeValidationRequestSchema.parse(request.body);
     const result = await validateFrameworkSmokeTest(body);
 
@@ -1308,13 +1315,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return result;
   });
 
-  server.post("/frameworks/browser-template", async (request) => {
+  server.post("/frameworks/browser-template", routeDocs("Build browser-writable framework files", ["Frameworks"]), async (request) => {
     const body = frameworkTemplateRequestSchema.parse(request.body);
 
     return buildFrameworkBrowserTemplate(body);
   });
 
-  server.get("/frameworks/pick-folder", async (_request, reply) => {
+  server.get("/frameworks/pick-folder", routeDocs("Open the native folder picker", ["Frameworks"]), async (_request, reply) => {
     try {
       const { stdout } = await execFileAsync("osascript", [
         "-e",
@@ -1332,7 +1339,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
   });
 
-  server.get("/discover/runs", async () => {
+  server.get("/discover/runs", routeDocs("List saved page discovery runs", ["Discovery"]), async () => {
     const runs = await prisma.discoverRun.findMany({
       include: {
         repository: {
@@ -1350,7 +1357,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return runs.map(toDiscoverRunResponse);
   });
 
-  server.post("/discover/runs", async (request, reply) => {
+  server.post("/discover/runs", routeDocs("Save a page discovery run", ["Discovery"]), async (request, reply) => {
     const body = createDiscoverRunRequestSchema.parse(request.body);
     const repository = await prisma.repository.findUnique({
       where: {
@@ -1388,7 +1395,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toDiscoverRunResponse(run));
   });
 
-  server.get("/discover/runs/:id", async (request, reply) => {
+  server.get("/discover/runs/:id", routeDocs("Get a saved page discovery run", ["Discovery"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const run = await prisma.discoverRun.findUnique({
       include: {
@@ -1413,7 +1420,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toDiscoverRunResponse(run);
   });
 
-  server.put("/discover/runs/:id/queued", async (request, reply) => {
+  server.put("/discover/runs/:id/queued", routeDocs("Mark discovery recommendations as queued", ["Discovery"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = updateDiscoverRunQueuedRequestSchema.parse(request.body);
     const existingRun = await prisma.discoverRun.findUnique({
@@ -1452,7 +1459,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toDiscoverRunResponse(run);
   });
 
-  server.delete("/discover/runs/:id", async (request, reply) => {
+  server.delete("/discover/runs/:id", routeDocs("Delete a saved page discovery run", ["Discovery"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const existingRun = await prisma.discoverRun.findUnique({
       where: {
@@ -1476,7 +1483,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(204).send();
   });
 
-  server.get("/readiness", async () => {
+  server.get("/readiness", routeDocs("Get system readiness and next actions", ["System"]), async () => {
     await prisma.$queryRaw`SELECT 1`;
 
     const [
@@ -1627,25 +1634,25 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     };
   });
 
-  server.get("/queue", async () => {
+  server.get("/queue", routeDocs("Get queue pause state", ["System"]), async () => {
     const queueControl = await getQueueControl();
 
     return toQueueControlResponse(queueControl);
   });
 
-  server.post("/queue/pause", async () => {
+  server.post("/queue/pause", routeDocs("Pause queue pickup", ["System"]), async () => {
     const queueControl = await pauseQueue();
 
     return toQueueControlResponse(queueControl);
   });
 
-  server.post("/queue/resume", async () => {
+  server.post("/queue/resume", routeDocs("Resume queue pickup", ["System"]), async () => {
     const queueControl = await resumeQueue();
 
     return toQueueControlResponse(queueControl);
   });
 
-  server.get("/tracker-integrations", async () => {
+  server.get("/tracker-integrations", routeDocs("List tracker integrations", ["Integrations"]), async () => {
     const integrations = await prisma.trackerIntegration.findMany({
       orderBy: [
         {
@@ -1660,7 +1667,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return integrations.map(toTrackerIntegrationResponse);
   });
 
-  server.post("/tracker-integrations", async (request, reply) => {
+  server.post("/tracker-integrations", routeDocs("Create or update a tracker integration", ["Integrations"]), async (request, reply) => {
     const body = createTrackerIntegrationRequestSchema.parse(request.body);
 
     const integration = await prisma.trackerIntegration.upsert({
@@ -1691,7 +1698,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toTrackerIntegrationResponse(integration));
   });
 
-  server.put("/tracker-integrations/:id", async (request, reply) => {
+  server.put("/tracker-integrations/:id", routeDocs("Update a tracker integration", ["Integrations"]), async (request, reply) => {
     const params = trackerIntegrationParamsSchema.parse(request.params);
     const body = updateTrackerIntegrationRequestSchema.parse(request.body);
 
@@ -1726,7 +1733,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toTrackerIntegrationResponse(integration);
   });
 
-  server.delete("/tracker-integrations/:id", async (request, reply) => {
+  server.delete("/tracker-integrations/:id", routeDocs("Delete a tracker integration", ["Integrations"]), async (request, reply) => {
     const params = trackerIntegrationParamsSchema.parse(request.params);
 
     const existingIntegration = await prisma.trackerIntegration.findUnique({
@@ -1751,7 +1758,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(204).send();
   });
 
-  server.post("/tracker-integrations/:id/test", async (request, reply) => {
+  server.post("/tracker-integrations/:id/test", routeDocs("Test a tracker integration", ["Integrations"]), async (request, reply) => {
     const params = trackerIntegrationParamsSchema.parse(request.params);
     const integration = await prisma.trackerIntegration.findUnique({
       where: {
@@ -1771,7 +1778,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(result.ok ? 200 : 502).send(result);
   });
 
-  server.get("/repositories", async () => {
+  server.get("/repositories", routeDocs("List registered repositories", ["Repositories"]), async () => {
     const repositories = await prisma.repository.findMany({
       include: {
         trackerIntegration: true,
@@ -1789,7 +1796,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return repositories.map(toRepositoryResponse);
   });
 
-  server.post("/repositories", async (request, reply) => {
+  server.post("/repositories", routeDocs("Register or update a repository", ["Repositories"]), async (request, reply) => {
     const body = createRepositoryRequestSchema.parse(request.body);
     const cloneUrl = githubCloneUrl(body);
     const webUrl = githubRepositoryUrl(body);
@@ -1829,7 +1836,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toRepositoryResponse(repository));
   });
 
-  server.get("/repositories/:id", async (request, reply) => {
+  server.get("/repositories/:id", routeDocs("Get a registered repository", ["Repositories"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const repository = await prisma.repository.findUnique({
@@ -1851,7 +1858,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toRepositoryResponse(repository);
   });
 
-  server.put("/repositories/:id", async (request, reply) => {
+  server.put("/repositories/:id", routeDocs("Update a registered repository", ["Repositories"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const body = createRepositoryRequestSchema.parse(request.body);
     const cloneUrl = githubCloneUrl(body);
@@ -1893,7 +1900,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toRepositoryResponse(repository);
   });
 
-  server.delete("/repositories/:id", async (request, reply) => {
+  server.delete("/repositories/:id", routeDocs("Delete a registered repository", ["Repositories"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const existingRepository = await prisma.repository.findUnique({
@@ -1918,7 +1925,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(204).send();
   });
 
-  server.get("/repositories/:id/features", async (request, reply) => {
+  server.get("/repositories/:id/features", routeDocs("List Cucumber features for a repository", ["Features"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
 
     const repository = await prisma.repository.findUnique({
@@ -1949,7 +1956,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
   });
 
-  server.get("/repositories/:id/features/detail", async (request, reply) => {
+  server.get("/repositories/:id/features/detail", routeDocs("Get Cucumber feature details", ["Features"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const query = z
       .object({
@@ -1995,7 +2002,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
   });
 
-  server.post("/repositories/:id/features/explain", async (request, reply) => {
+  server.post("/repositories/:id/features/explain", routeDocs("Explain a Cucumber scenario", ["Features"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const body = explainCucumberScenarioRequestSchema.parse(request.body);
 
@@ -2049,7 +2056,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
   });
 
-  server.get("/repositories/:id/features/local-test-runs", async (request, reply) => {
+  server.get("/repositories/:id/features/local-test-runs", routeDocs("List local feature test runs", ["Features"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const query = z
       .object({
@@ -2101,7 +2108,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.header("x-total-count", totalRuns).send(runs.map(toLocalTestRunResponse));
   });
 
-  server.get("/repositories/:id/features/local-test-runs/stats", async (request, reply) => {
+  server.get("/repositories/:id/features/local-test-runs/stats", routeDocs("Get local feature test run stats", ["Features"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const query = z
       .object({
@@ -2142,7 +2149,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toLocalTestRunStatsResponse(runs);
   });
 
-  server.post("/repositories/:id/features/local-test-runs", async (request, reply) => {
+  server.post("/repositories/:id/features/local-test-runs", routeDocs("Queue a local feature or scenario test run", ["Features"]), async (request, reply) => {
     const params = repositoryParamsSchema.parse(request.params);
     const body = createLocalTestRunRequestSchema.parse(request.body);
 
@@ -2209,7 +2216,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toLocalTestRunResponse(run));
   });
 
-  server.get("/local-test-runs/:id", async (request, reply) => {
+  server.get("/local-test-runs/:id", routeDocs("Get a local test run", ["Features"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const run = await prisma.localTestRun.findUnique({
       include: {
@@ -2234,7 +2241,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toLocalTestRunResponse(run);
   });
 
-  server.get("/local-test-runs/:id/output", async (request, reply) => {
+  server.get("/local-test-runs/:id/output", routeDocs("Get local test run output", ["Features"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const run = await prisma.localTestRun.findUnique({
       where: {
@@ -2264,7 +2271,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return output;
   });
 
-  server.post("/dev/sample-review-job", async (_request, reply) => {
+  server.post("/dev/sample-review-job", routeDocs("Create a development sample review job", ["Jobs"]), async (_request, reply) => {
     if (process.env.NODE_ENV === "production") {
       return reply.status(404).send({
         error: "NotFound",
@@ -2367,7 +2374,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toJobResponseWithRepository(job));
   });
 
-  server.post("/jobs", async (request, reply) => {
+  server.post("/jobs", routeDocs("Create a job for review", ["Jobs"]), async (request, reply) => {
     const body = createJobRequestSchema.parse(request.body);
 
     const repository = await prisma.repository.findUnique({
@@ -2448,7 +2455,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return reply.status(201).send(toJobResponseWithRepository(job));
   });
 
-  server.put("/jobs/:id/review-request", async (request, reply) => {
+  server.put("/jobs/:id/review-request", routeDocs("Edit a job while it needs review", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = updateReviewJobRequestSchema.parse(request.body);
 
@@ -2563,7 +2570,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(updatedJob);
   });
 
-  server.post("/jobs/:id/approve-review", async (request, reply) => {
+  server.post("/jobs/:id/approve-review", routeDocs("Approve a reviewed job into the active queue", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = approveReviewRequestSchema.parse(request.body ?? {});
 
@@ -2711,7 +2718,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(approvedJob);
   });
 
-  server.get("/jobs", async (request) => {
+  server.get("/jobs", routeDocs("List jobs", ["Jobs"]), async (request) => {
     const query = includeCanceledQuerySchema.parse(request.query);
     const where: Prisma.JobWhereInput = {
       ...(query.includeCanceled
@@ -2773,7 +2780,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return mappedJobs;
   });
 
-  server.post("/jobs/:id/cancel", async (request, reply) => {
+  server.post("/jobs/:id/cancel", routeDocs("Cancel a job before runner pickup", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
 
     const job = await prisma.job.findUnique({
@@ -2853,7 +2860,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(canceledJob);
   });
 
-  server.post("/jobs/:id/approve-codex", async (request, reply) => {
+  server.post("/jobs/:id/approve-codex", routeDocs("Approve Codex execution for a job", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
 
     const approvalResult = await approveJobForCodex({
@@ -2911,7 +2918,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(approvedJob);
   });
 
-  server.post("/jobs/:id/approve-pr", async (request, reply) => {
+  server.post("/jobs/:id/approve-pr", routeDocs("Approve draft PR creation for a job", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const approvalResult = await approveJobForPrCreation({
       jobId: params.id,
@@ -2968,7 +2975,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(approvedJob);
   });
 
-  server.post("/jobs/:id/requeue", async (request, reply) => {
+  server.post("/jobs/:id/requeue", routeDocs("Requeue a retryable job", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const job = await prisma.job.findUnique({
       where: {
@@ -3028,7 +3035,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(requeuedJob);
   });
 
-  server.post("/jobs/:id/retry-stage", async (request, reply) => {
+  server.post("/jobs/:id/retry-stage", routeDocs("Retry the failed stage for a job", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
     const body = retryStageRequestSchema.parse(request.body ?? {});
     const feedback = body.feedback?.trim();
@@ -3183,7 +3190,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(retriedJob);
   });
 
-  server.get("/jobs/:id", async (request, reply) => {
+  server.get("/jobs/:id", routeDocs("Get a job", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
 
     const job = await prisma.job.findUnique({
@@ -3215,7 +3222,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return toJobResponseWithRepository(job);
   });
 
-  server.get("/jobs/:id/diff", async (request, reply) => {
+  server.get("/jobs/:id/diff", routeDocs("Get generated job diff", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
 
     const job = await prisma.job.findUnique({
@@ -3250,7 +3257,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return readGeneratedDiff(latestRun.metadata);
   });
 
-  server.get("/jobs/:id/events", async (request, reply) => {
+  server.get("/jobs/:id/events", routeDocs("List job timeline events", ["Jobs"]), async (request, reply) => {
     const params = jobParamsSchema.parse(request.params);
 
     const events = await prisma.jobEvent.findMany({
@@ -3265,7 +3272,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     return events.map(toJobEventResponse);
   });
 
-  server.get("/jobs/:id/runs", async (request) => {
+  server.get("/jobs/:id/runs", routeDocs("List job execution runs", ["Jobs"]), async (request) => {
     const params = jobParamsSchema.parse(request.params);
 
     const runs = await prisma.run.findMany({
