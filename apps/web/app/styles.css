@@ -1076,6 +1076,43 @@ button {
   color: #9a3412;
 }
 
+.framework-generated-repo-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+}
+
+.framework-generated-repo-card div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.framework-generated-repo-card div + div {
+  border-left: 1px solid #e2e8f0;
+}
+
+.framework-generated-repo-card dt {
+  color: #667085;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.framework-generated-repo-card dd {
+  color: #172033;
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .framework-results-panel div:first-child {
   display: grid;
   gap: 4px;
