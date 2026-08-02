@@ -43,6 +43,16 @@ describe("api documentation", () => {
         Record<
           string,
           {
+            parameters?: Array<{
+              in: string;
+              name: string;
+              required?: boolean;
+              schema?: {
+                enum?: string[];
+                $ref?: string;
+                type?: string;
+              };
+            }>;
             requestBody?: {
               content?: Record<
                 string,
@@ -133,6 +143,37 @@ describe("api documentation", () => {
     assert.equal(
       document.paths["/repositories"]?.post?.requestBody?.content?.["application/json"]?.schema?.$ref,
       "#/components/schemas/CreateRepositoryRequest",
+    );
+
+    assert.ok(
+      document.paths["/jobs"]?.get?.parameters?.some(
+        (parameter) => parameter.in === "query" && parameter.name === "status",
+      ),
+      "Expected jobs status query parameter",
+    );
+    assert.ok(
+      document.paths["/jobs"]?.get?.parameters?.some(
+        (parameter) => parameter.in === "query" && parameter.name === "pageSize",
+      ),
+      "Expected jobs pageSize query parameter",
+    );
+    assert.ok(
+      document.paths["/repositories/{id}/features/detail"]?.get?.parameters?.some(
+        (parameter) => parameter.in === "path" && parameter.name === "id" && parameter.required,
+      ),
+      "Expected feature detail repository id path parameter",
+    );
+    assert.ok(
+      document.paths["/repositories/{id}/features/detail"]?.get?.parameters?.some(
+        (parameter) => parameter.in === "query" && parameter.name === "path" && parameter.required,
+      ),
+      "Expected feature detail path query parameter",
+    );
+    assert.ok(
+      document.paths["/repositories/{id}/features/local-test-runs"]?.get?.parameters?.some(
+        (parameter) => parameter.in === "query" && parameter.name === "scenarioLine",
+      ),
+      "Expected local test run scenarioLine query parameter",
     );
   });
 });
