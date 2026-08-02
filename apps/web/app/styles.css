@@ -984,6 +984,108 @@ button {
   font-size: 13px;
 }
 
+.framework-inline-action-form {
+  margin: 0;
+}
+
+.framework-validation-panel {
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.framework-validation-panel.passed {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.framework-validation-panel.failed {
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+
+.framework-validation-panel.skipped {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.framework-validation-summary {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.framework-validation-summary > span {
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.framework-validation-panel.passed .framework-validation-summary > span {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.framework-validation-panel.failed .framework-validation-summary > span {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.framework-validation-panel.skipped .framework-validation-summary > span {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.framework-validation-summary div {
+  display: grid;
+  gap: 3px;
+}
+
+.framework-validation-summary strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-validation-summary small {
+  color: #667085;
+  font-size: 13px;
+}
+
+.framework-validation-output {
+  display: grid;
+  gap: 10px;
+}
+
+.framework-validation-output div {
+  display: grid;
+  gap: 6px;
+}
+
+.framework-validation-output strong {
+  color: #667085;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.framework-validation-output pre {
+  background: #0f172a;
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
 .framework-next-steps {
   background: #f8fafc;
   border: 1px solid #dce3ee;

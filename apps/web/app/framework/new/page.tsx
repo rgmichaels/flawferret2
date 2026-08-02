@@ -5,6 +5,7 @@ import type {
   FrameworkTemplateFeature,
   FrameworkTemplatePreviewResponse,
   FrameworkTemplateRequest,
+  FrameworkSmokeValidationResponse,
   RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { redirect } from "next/navigation";
@@ -86,6 +87,13 @@ type FrameworkNewSearchParams = {
   skipped?: string;
   step?: string;
   targetDirectory?: string;
+  validationCommand?: string;
+  validationDurationMs?: string;
+  validationExitCode?: string;
+  validationMessage?: string;
+  validationStatus?: string;
+  validationStderr?: string;
+  validationStdout?: string;
 };
 
 type FrameworkWizardStep = "framework" | "local-git" | "github" | "register" | "validate";
@@ -197,6 +205,13 @@ const buildFrameworkHref = (params: FrameworkNewSearchParams, step: FrameworkWiz
       "skipped",
       "localGitMessage",
       "localGitStatus",
+      "validationCommand",
+      "validationDurationMs",
+      "validationExitCode",
+      "validationMessage",
+      "validationStatus",
+      "validationStderr",
+      "validationStdout",
     ];
 
     for (const key of resultKeys) {
@@ -228,6 +243,11 @@ const getCheckedParam = (value: string | string[] | undefined, defaultValue: boo
 
 const getDestinationType = (value: string | undefined): FrameworkTemplateDestinationType =>
   value === "github" ? "github" : "local";
+
+const queryOutputLimit = 4_000;
+
+const trimQueryOutput = (value: string) =>
+  value.length > queryOutputLimit ? `${value.slice(0, queryOutputLimit)}\n... truncated ...` : value;
 
 const getCheckedFormValue = (formData: FormData, name: string) => {
   const values = formData.getAll(name).map(String);
@@ -389,6 +409,90 @@ async function createFramework(formData: FormData) {
   } catch (error) {
     params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
     params.set("step", "validate");
+  }
+
+  redirect(`/framework/new?${params.toString()}`);
+}
+
+async function validateFramework(formData: FormData) {
+  "use server";
+
+  const params = new URLSearchParams();
+  const passthroughKeys = [
+    "baseUrl",
+    "createGithubRepository",
+    "created",
+    "destinationType",
+    "githubBranch",
+    "githubOwner",
+    "githubRemoteMessage",
+    "githubRemoteRepository",
+    "githubRemoteStatus",
+    "githubRemoteUrl",
+    "githubRemoteWebUrl",
+    "githubRepository",
+    "githubRepositoryId",
+    "initializeGitRepository",
+    "localGitMessage",
+    "localGitStatus",
+    "overwritten",
+    "packageName",
+    "preview",
+    "projectName",
+    "prBranch",
+    "prCommitSha",
+    "prNumber",
+    "prUrl",
+    "registeredRepositoryId",
+    "registeredRepositoryName",
+    "registerLocalRepository",
+    "skipped",
+    "targetDirectory",
+  ];
+
+  for (const key of passthroughKeys) {
+    const value = formData.get(key);
+    if (value) {
+      params.set(key, String(value));
+    }
+  }
+
+  for (const feature of formData.getAll("features")) {
+    params.append("features", String(feature));
+  }
+
+  params.set("preview", "true");
+  params.set("step", "validate");
+
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
+      body: JSON.stringify({
+        targetDirectory: String(formData.get("targetDirectory") ?? ""),
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error((await response.text()) || "Unable to validate framework.");
+    }
+
+    const result = (await response.json()) as FrameworkSmokeValidationResponse;
+    params.set("validationCommand", result.command);
+    params.set("validationDurationMs", String(result.durationMs));
+    params.set("validationMessage", result.message);
+    params.set("validationStatus", result.status);
+    params.set("validationStderr", trimQueryOutput(result.stderr));
+    params.set("validationStdout", trimQueryOutput(result.stdout));
+    if (result.exitCode !== null) {
+      params.set("validationExitCode", String(result.exitCode));
+    }
+  } catch (error) {
+    params.set("validationMessage", error instanceof Error ? error.message : "Unable to validate framework.");
+    params.set("validationStatus", "failed");
   }
 
   redirect(`/framework/new?${params.toString()}`);
@@ -878,6 +982,50 @@ export default async function NewFrameworkPage({
                   ) : null}
                 </div>
                 <div className="framework-wizard-actions">
+                  {request.destinationType === "local" ? (
+                    <form action={validateFramework} className="framework-inline-action-form">
+                      <input name="baseUrl" type="hidden" value={request.baseUrl} />
+                      <input name="createGithubRepository" type="hidden" value={String(shouldCreateGithubRepository)} />
+                      <input name="created" type="hidden" value={String(createdCount)} />
+                      <input name="destinationType" type="hidden" value={request.destinationType} />
+                      <input name="githubBranch" type="hidden" value={request.githubBranch} />
+                      <input name="githubOwner" type="hidden" value={request.githubOwner} />
+                      <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
+                      <input name="githubRepository" type="hidden" value={request.githubRepository} />
+                      <input name="initializeGitRepository" type="hidden" value={String(shouldInitializeGit)} />
+                      <input name="overwritten" type="hidden" value={String(overwrittenCount)} />
+                      <input name="packageName" type="hidden" value={request.packageName} />
+                      <input name="projectName" type="hidden" value={request.projectName} />
+                      <input name="registerLocalRepository" type="hidden" value={String(shouldRegisterLocalRepository)} />
+                      <input name="skipped" type="hidden" value={String(skippedCount)} />
+                      <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
+                      {params.githubRemoteMessage ? (
+                        <input name="githubRemoteMessage" type="hidden" value={params.githubRemoteMessage} />
+                      ) : null}
+                      {params.githubRemoteRepository ? (
+                        <input name="githubRemoteRepository" type="hidden" value={params.githubRemoteRepository} />
+                      ) : null}
+                      {params.githubRemoteStatus ? (
+                        <input name="githubRemoteStatus" type="hidden" value={params.githubRemoteStatus} />
+                      ) : null}
+                      {params.githubRemoteUrl ? <input name="githubRemoteUrl" type="hidden" value={params.githubRemoteUrl} /> : null}
+                      {params.githubRemoteWebUrl ? (
+                        <input name="githubRemoteWebUrl" type="hidden" value={params.githubRemoteWebUrl} />
+                      ) : null}
+                      {params.localGitMessage ? <input name="localGitMessage" type="hidden" value={params.localGitMessage} /> : null}
+                      {params.localGitStatus ? <input name="localGitStatus" type="hidden" value={params.localGitStatus} /> : null}
+                      {params.registeredRepositoryId ? (
+                        <input name="registeredRepositoryId" type="hidden" value={params.registeredRepositoryId} />
+                      ) : null}
+                      {params.registeredRepositoryName ? (
+                        <input name="registeredRepositoryName" type="hidden" value={params.registeredRepositoryName} />
+                      ) : null}
+                      {request.features.map((feature) => (
+                        <input key={feature} name="features" type="hidden" value={feature} />
+                      ))}
+                      <button type="submit">Run Smoke Validation</button>
+                    </form>
+                  ) : null}
                   {params.githubRemoteWebUrl ? (
                     <a className="primary-link" href={params.githubRemoteWebUrl}>
                       Open GitHub Repo
@@ -955,6 +1103,38 @@ export default async function NewFrameworkPage({
                 </div>
               </form>
             )}
+
+            {hasCreateResult && params.validationStatus ? (
+              <section className={`framework-validation-panel ${params.validationStatus}`}>
+                <div className="framework-validation-summary">
+                  <span>{params.validationStatus}</span>
+                  <div>
+                    <strong>{params.validationMessage ?? "Validation finished."}</strong>
+                    <small>
+                      {params.validationCommand ?? "pnpm test:smoke"}
+                      {params.validationExitCode ? ` · exit ${params.validationExitCode}` : ""}
+                      {params.validationDurationMs ? ` · ${params.validationDurationMs}ms` : ""}
+                    </small>
+                  </div>
+                </div>
+                {params.validationStdout || params.validationStderr ? (
+                  <div className="framework-validation-output">
+                    {params.validationStdout ? (
+                      <div>
+                        <strong>stdout</strong>
+                        <pre>{params.validationStdout}</pre>
+                      </div>
+                    ) : null}
+                    {params.validationStderr ? (
+                      <div>
+                        <strong>stderr</strong>
+                        <pre>{params.validationStderr}</pre>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             <section className="framework-next-steps">
               <div>

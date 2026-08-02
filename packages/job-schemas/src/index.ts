@@ -555,6 +555,21 @@ export const createFrameworkResponseSchema = frameworkTemplatePreviewResponseSch
   overwrittenFiles: z.array(createFrameworkFileResultSchema),
 });
 
+export const frameworkSmokeValidationRequestSchema = z.object({
+  targetDirectory: z.string().trim().min(1, "Target directory is required").max(500),
+});
+
+export const frameworkSmokeValidationResponseSchema = z.object({
+  command: z.literal("pnpm test:smoke"),
+  durationMs: z.number().int().nonnegative(),
+  exitCode: z.number().int().nullable(),
+  message: z.string(),
+  status: z.enum(["passed", "failed", "skipped"]),
+  stderr: z.string(),
+  stdout: z.string(),
+  targetDirectory: z.string(),
+});
+
 export const jobResponseSchema = z.object({
   id: z.string(),
   jobType: jobTypeSchema,
@@ -751,6 +766,8 @@ export type GithubFrameworkPullRequest = z.infer<typeof githubFrameworkPullReque
 export type LocalFrameworkGithubResult = z.infer<typeof localFrameworkGithubResultSchema>;
 export type LocalFrameworkGitResult = z.infer<typeof localFrameworkGitResultSchema>;
 export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
+export type FrameworkSmokeValidationRequest = z.infer<typeof frameworkSmokeValidationRequestSchema>;
+export type FrameworkSmokeValidationResponse = z.infer<typeof frameworkSmokeValidationResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;
 export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;

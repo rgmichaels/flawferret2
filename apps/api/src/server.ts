@@ -18,6 +18,7 @@ import {
   createFrameworkRequestSchema,
   discoverTestRecommendationsRequestSchema,
   explainCucumberScenarioRequestSchema,
+  frameworkSmokeValidationRequestSchema,
   frameworkTemplateRequestSchema,
   jobStatusSchema,
   retryStageRequestSchema,
@@ -58,6 +59,7 @@ import {
   buildFrameworkTemplatePreviewWithFileStatus,
   createFrameworkFiles,
 } from "./framework-template.js";
+import { validateFrameworkSmokeTest } from "./framework-validation.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -868,6 +870,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const body = createFrameworkRequestSchema.parse(request.body);
 
     return reply.status(201).send(await createFrameworkFiles(body));
+  });
+
+  server.post("/frameworks/validate-smoke", async (request) => {
+    const body = frameworkSmokeValidationRequestSchema.parse(request.body);
+
+    return validateFrameworkSmokeTest(body);
   });
 
   server.post("/frameworks/browser-template", async (request) => {
