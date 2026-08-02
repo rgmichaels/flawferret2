@@ -3,6 +3,7 @@ import type {
   CreateFrameworkResponse,
   CreateRepositoryRequest,
   FrameworkDependencyInstallResponse,
+  FrameworkOpenFolderResponse,
   FrameworkTemplateDestinationType,
   FrameworkTemplateFeature,
   FrameworkTemplatePreviewResponse,
@@ -82,6 +83,9 @@ type FrameworkNewSearchParams = {
   installStdout?: string;
   localGitMessage?: string;
   localGitStatus?: string;
+  openFolderDurationMs?: string;
+  openFolderMessage?: string;
+  openFolderStatus?: string;
   prBranch?: string;
   prCommitSha?: string;
   prNumber?: string;
@@ -167,6 +171,9 @@ const frameworkActionPassthroughKeys: Array<keyof FrameworkNewSearchParams> = [
   "installStdout",
   "localGitMessage",
   "localGitStatus",
+  "openFolderDurationMs",
+  "openFolderMessage",
+  "openFolderStatus",
   "overwritten",
   "packageName",
   "preview",
@@ -353,6 +360,9 @@ function FrameworkActionHiddenFields({
     installStdout: params.installStdout,
     localGitMessage: params.localGitMessage,
     localGitStatus: params.localGitStatus,
+    openFolderDurationMs: params.openFolderDurationMs,
+    openFolderMessage: params.openFolderMessage,
+    openFolderStatus: params.openFolderStatus,
     overwritten: String(overwrittenCount),
     packageName: request.packageName,
     preview: "true",
@@ -588,6 +598,43 @@ async function installFrameworkDependencies(formData: FormData) {
   } catch (error) {
     params.set("installMessage", error instanceof Error ? error.message : "Unable to install framework dependencies.");
     params.set("installStatus", "failed");
+  }
+
+  redirect(`/framework/new?${params.toString()}`);
+}
+
+async function openGeneratedFrameworkFolder(formData: FormData) {
+  "use server";
+
+  const params = new URLSearchParams();
+  appendFrameworkActionState(params, formData);
+
+  params.set("preview", "true");
+  params.set("step", "validate");
+
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/open-folder`, {
+      body: JSON.stringify({
+        targetDirectory: String(formData.get("targetDirectory") ?? ""),
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error((await response.text()) || "Unable to open generated framework folder.");
+    }
+
+    const result = (await response.json()) as FrameworkOpenFolderResponse;
+    params.set("openFolderDurationMs", String(result.durationMs));
+    params.set("openFolderMessage", result.message);
+    params.set("openFolderStatus", result.status);
+  } catch (error) {
+    params.set("openFolderMessage", error instanceof Error ? error.message : "Unable to open generated framework folder.");
+    params.set("openFolderStatus", "failed");
   }
 
   redirect(`/framework/new?${params.toString()}`);
@@ -1271,9 +1318,28 @@ export default async function NewFrameworkPage({
                     <dd>{params.registeredRepositoryName ?? "Not registered"}</dd>
                   </div>
                 </dl>
+                {params.openFolderStatus ? (
+                  <div className={`framework-folder-open-status ${params.openFolderStatus}`}>
+                    <strong>{params.openFolderStatus}</strong>
+                    <span>
+                      {params.openFolderMessage ?? "Folder action finished."}
+                      {params.openFolderDurationMs ? ` (${params.openFolderDurationMs}ms)` : ""}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="framework-wizard-actions">
                   {request.destinationType === "local" ? (
                     <>
+                      <form action={openGeneratedFrameworkFolder} className="framework-inline-action-form">
+                        <FrameworkActionHiddenFields
+                          createdCount={createdCount}
+                          overwrittenCount={overwrittenCount}
+                          params={params}
+                          request={request}
+                          skippedCount={skippedCount}
+                        />
+                        <button type="submit">Open Generated Folder</button>
+                      </form>
                       <form action={installFrameworkDependencies} className="framework-inline-action-form">
                         <FrameworkActionHiddenFields
                           createdCount={createdCount}

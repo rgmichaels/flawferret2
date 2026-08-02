@@ -19,6 +19,7 @@ import {
   discoverTestRecommendationsRequestSchema,
   explainCucumberScenarioRequestSchema,
   frameworkDependencyInstallRequestSchema,
+  frameworkOpenFolderRequestSchema,
   frameworkSmokeValidationRequestSchema,
   frameworkTemplateRequestSchema,
   jobStatusSchema,
@@ -60,7 +61,7 @@ import {
   buildFrameworkTemplatePreviewWithFileStatus,
   createFrameworkFiles,
 } from "./framework-template.js";
-import { installFrameworkDependencies, validateFrameworkSmokeTest } from "./framework-validation.js";
+import { installFrameworkDependencies, openFrameworkFolder, validateFrameworkSmokeTest } from "./framework-validation.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -877,6 +878,12 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const body = frameworkDependencyInstallRequestSchema.parse(request.body);
 
     return installFrameworkDependencies(body);
+  });
+
+  server.post("/frameworks/open-folder", async (request) => {
+    const body = frameworkOpenFolderRequestSchema.parse(request.body);
+
+    return openFrameworkFolder(body);
   });
 
   server.post("/frameworks/validate-smoke", async (request) => {

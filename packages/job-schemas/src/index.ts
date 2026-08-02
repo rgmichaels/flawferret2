@@ -563,6 +563,10 @@ export const frameworkDependencyInstallRequestSchema = z.object({
   targetDirectory: z.string().trim().min(1, "Target directory is required").max(500),
 });
 
+export const frameworkOpenFolderRequestSchema = z.object({
+  targetDirectory: z.string().trim().min(1, "Target directory is required").max(500),
+});
+
 export const frameworkDependencyInstallResponseSchema = z.object({
   command: z.literal("pnpm install"),
   durationMs: z.number().int().nonnegative(),
@@ -571,6 +575,14 @@ export const frameworkDependencyInstallResponseSchema = z.object({
   status: z.enum(["installed", "failed", "skipped"]),
   stderr: z.string(),
   stdout: z.string(),
+  targetDirectory: z.string(),
+});
+
+export const frameworkOpenFolderResponseSchema = z.object({
+  command: z.literal("open"),
+  durationMs: z.number().int().nonnegative(),
+  message: z.string(),
+  status: z.enum(["opened", "failed", "skipped"]),
   targetDirectory: z.string(),
 });
 
@@ -783,6 +795,8 @@ export type LocalFrameworkGitResult = z.infer<typeof localFrameworkGitResultSche
 export type CreateFrameworkResponse = z.infer<typeof createFrameworkResponseSchema>;
 export type FrameworkDependencyInstallRequest = z.infer<typeof frameworkDependencyInstallRequestSchema>;
 export type FrameworkDependencyInstallResponse = z.infer<typeof frameworkDependencyInstallResponseSchema>;
+export type FrameworkOpenFolderRequest = z.infer<typeof frameworkOpenFolderRequestSchema>;
+export type FrameworkOpenFolderResponse = z.infer<typeof frameworkOpenFolderResponseSchema>;
 export type FrameworkSmokeValidationRequest = z.infer<typeof frameworkSmokeValidationRequestSchema>;
 export type FrameworkSmokeValidationResponse = z.infer<typeof frameworkSmokeValidationResponseSchema>;
 export type JobResponse = z.infer<typeof jobResponseSchema>;

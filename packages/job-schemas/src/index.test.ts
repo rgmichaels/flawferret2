@@ -17,6 +17,8 @@ import {
   explainCucumberScenarioResponseSchema,
   frameworkDependencyInstallRequestSchema,
   frameworkDependencyInstallResponseSchema,
+  frameworkOpenFolderRequestSchema,
+  frameworkOpenFolderResponseSchema,
   frameworkTemplatePreviewResponseSchema,
   frameworkTemplateRequestSchema,
   jobEventTypeSchema,
@@ -653,5 +655,24 @@ describe("job schemas", () => {
 
     assert.equal(response.status, "installed");
     assert.equal(response.command, "pnpm install");
+  });
+
+  it("parses framework open folder requests and responses", () => {
+    const request = frameworkOpenFolderRequestSchema.parse({
+      targetDirectory: " /tmp/qa-framework ",
+    });
+
+    assert.equal(request.targetDirectory, "/tmp/qa-framework");
+
+    const response = frameworkOpenFolderResponseSchema.parse({
+      command: "open",
+      durationMs: 120,
+      message: "Generated framework folder opened.",
+      status: "opened",
+      targetDirectory: request.targetDirectory,
+    });
+
+    assert.equal(response.status, "opened");
+    assert.equal(response.command, "open");
   });
 });
