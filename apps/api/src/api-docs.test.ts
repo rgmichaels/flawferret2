@@ -36,8 +36,24 @@ describe("api documentation", () => {
 
     assert.equal(document.info.title, "FlawFerret 2 API");
     assert.ok(document.openapi.startsWith("3."));
-    assert.ok(document.paths["/health"]);
-    assert.ok(document.paths["/frameworks/create"]);
-    assert.ok(document.tags.some((tag) => tag.name === "Frameworks"));
+    [
+      "/health",
+      "/readiness",
+      "/repositories",
+      "/repositories/{id}/features",
+      "/repositories/{id}/features/local-test-runs",
+      "/jobs",
+      "/jobs/{id}",
+      "/jobs/{id}/approve-review",
+      "/discover/runs",
+      "/tracker-integrations",
+      "/frameworks/create",
+      "/frameworks/builds/{id}",
+    ].forEach((path) => {
+      assert.ok(document.paths[path], `Expected ${path} in OpenAPI paths`);
+    });
+    ["System", "Jobs", "Repositories", "Features", "Discovery", "Frameworks", "Integrations"].forEach((tagName) => {
+      assert.ok(document.tags.some((tag) => tag.name === tagName), `Expected ${tagName} tag`);
+    });
   });
 });
