@@ -2,6 +2,7 @@ import type {
   CreateFrameworkRequest,
   CreateFrameworkResponse,
   CreateRepositoryRequest,
+  FrameworkBuildResponse,
   FrameworkDependencyInstallResponse,
   FrameworkOpenFolderResponse,
   FrameworkTemplateDestinationType,
@@ -81,6 +82,7 @@ type FrameworkNewSearchParams = {
   installStatus?: string;
   installStderr?: string;
   installStdout?: string;
+  frameworkBuildId?: string;
   localGitMessage?: string;
   localGitStatus?: string;
   openFolderDurationMs?: string;
@@ -169,6 +171,7 @@ const frameworkActionPassthroughKeys: Array<keyof FrameworkNewSearchParams> = [
   "installStatus",
   "installStderr",
   "installStdout",
+  "frameworkBuildId",
   "localGitMessage",
   "localGitStatus",
   "openFolderDurationMs",
@@ -308,6 +311,12 @@ const getCheckedFormValue = (formData: FormData, name: string) => {
   return lastValue === "true" || lastValue === "on";
 };
 
+const formatFrameworkBuildDate = (value: string) =>
+  new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+
 const appendFrameworkActionState = (params: URLSearchParams, formData: FormData) => {
   for (const key of frameworkActionPassthroughKeys) {
     const value = formData.get(key);
@@ -358,6 +367,7 @@ function FrameworkActionHiddenFields({
     installStatus: params.installStatus,
     installStderr: params.installStderr,
     installStdout: params.installStdout,
+    frameworkBuildId: params.frameworkBuildId,
     localGitMessage: params.localGitMessage,
     localGitStatus: params.localGitStatus,
     openFolderDurationMs: params.openFolderDurationMs,
@@ -413,6 +423,22 @@ async function getRepositories(): Promise<RepositoryResponse[]> {
     }
 
     return response.json() as Promise<RepositoryResponse[]>;
+  } catch {
+    return [];
+  }
+}
+
+async function getFrameworkBuilds(): Promise<FrameworkBuildResponse[]> {
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/builds`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json() as Promise<FrameworkBuildResponse[]>;
   } catch {
     return [];
   }
@@ -525,6 +551,9 @@ async function createFramework(formData: FormData) {
     params.set("created", String(result.createdFiles.length));
     params.set("skipped", String(result.skippedFiles.length));
     params.set("overwritten", String(result.overwrittenFiles.length));
+    if (result.buildRecord) {
+      params.set("frameworkBuildId", result.buildRecord.id);
+    }
     if (result.githubPullRequest) {
       params.set("prBranch", result.githubPullRequest.branchName);
       params.set("prCommitSha", result.githubPullRequest.commitSha);
@@ -572,6 +601,7 @@ async function installFrameworkDependencies(formData: FormData) {
   try {
     const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
       body: JSON.stringify({
+        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
         targetDirectory: String(formData.get("targetDirectory") ?? ""),
       }),
       cache: "no-store",
@@ -615,6 +645,7 @@ async function openGeneratedFrameworkFolder(formData: FormData) {
   try {
     const response = await fetch(`${apiUrl}/frameworks/open-folder`, {
       body: JSON.stringify({
+        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
         targetDirectory: String(formData.get("targetDirectory") ?? ""),
       }),
       cache: "no-store",
@@ -699,6 +730,7 @@ async function validateFramework(formData: FormData) {
   try {
     const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
       body: JSON.stringify({
+        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
         targetDirectory: String(formData.get("targetDirectory") ?? ""),
       }),
       cache: "no-store",
@@ -745,11 +777,12 @@ export default async function NewFrameworkPage({
   const currentStep = getWizardStep(params.step, hasCreateResult);
   const currentStepIndex = wizardStepOrder.indexOf(currentStep);
   const shouldPreview = params.preview === "true" || currentStep === "validate";
-  const [{ error, preview }, repositories] = await Promise.all([
+  const [{ error, preview }, repositories, frameworkBuilds] = await Promise.all([
     shouldPreview
       ? getFrameworkPreview(request)
       : Promise.resolve({ error: null, preview: null }),
     getRepositories(),
+    getFrameworkBuilds(),
   ]);
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
   const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
@@ -1288,7 +1321,10 @@ export default async function NewFrameworkPage({
               <section className="framework-results-panel framework-results-checklist-panel">
                 <div className="framework-results-heading">
                   <strong>{params.prUrl ? "Pull request is ready for review." : "Framework pipeline"}</strong>
-                  <span>Review what completed and choose the next action.</span>
+                  <span>
+                    Review what completed and choose the next action.
+                    {params.frameworkBuildId ? ` Saved build ${params.frameworkBuildId.slice(0, 8)}.` : ""}
+                  </span>
                 </div>
                 <ol className="framework-results-checklist">
                   {pipelineSteps.map((step) => (
@@ -1578,6 +1614,54 @@ export default async function NewFrameworkPage({
             </div>
           </section>
         ) : null}
+
+        <section className="panel framework-build-history">
+          <div className="panel-header">
+            <div>
+              <h2>Recent Framework Builds</h2>
+              <p>Reopen recent framework creation results without recreating files.</p>
+            </div>
+            <a className="secondary-button" href="/framework/builds">
+              View all
+            </a>
+          </div>
+          {frameworkBuilds.length > 0 ? (
+            <div className="framework-build-history-list">
+              {frameworkBuilds.map((build) => (
+                <article key={build.id} className="framework-build-history-card">
+                  <div>
+                    <a href={`/framework/builds/${build.id}`}>{build.projectName}</a>
+                    <span>
+                      {build.packageName} · {build.destinationType === "github" ? "GitHub" : "Local"} ·{" "}
+                      {formatFrameworkBuildDate(build.createdAt)}
+                    </span>
+                    <code>{build.targetDirectory}</code>
+                  </div>
+                  <dl>
+                    <div>
+                      <dt>Created</dt>
+                      <dd>{build.createdFileCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Overwritten</dt>
+                      <dd>{build.overwrittenFileCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Skipped</dt>
+                      <dd>{build.skippedFileCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Git</dt>
+                      <dd>{build.localGitStatus?.replace(/_/g, " ") ?? "not tracked"}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="framework-build-history-empty">No framework builds have been saved yet.</p>
+          )}
+        </section>
       </section>
     </AppShell>
   );

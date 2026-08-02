@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
+    "@fastify/swagger": "^9.8.1",
+    "@fastify/swagger-ui": "^6.1.1",
     "@flawferret2/db": "workspace:*",
     "@flawferret2/job-schemas": "workspace:*",
     "@flawferret2/shared": "workspace:*",
