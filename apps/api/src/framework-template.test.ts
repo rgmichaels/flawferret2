@@ -9,6 +9,7 @@ import {
   buildFrameworkBrowserTemplate,
   buildFrameworkTemplatePreview,
   buildFrameworkTemplatePreviewWithFileStatus,
+  createGithubRemoteForLocalFramework,
   createFrameworkFiles,
   createFrameworkPullRequest,
 } from "./framework-template.js";
@@ -153,6 +154,7 @@ describe("framework template preview", () => {
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
       ...localDestination,
+      createGithubRepository: false,
       features: ["sampleFeature"],
       initializeGitRepository: false,
       overwriteExisting: false,
@@ -178,6 +180,7 @@ describe("framework template preview", () => {
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
       ...localDestination,
+      createGithubRepository: false,
       features: [],
       initializeGitRepository: false,
       overwriteExisting: true,
@@ -197,6 +200,7 @@ describe("framework template preview", () => {
     const result = await createFrameworkFiles({
       baseUrl: "https://example.test",
       ...localDestination,
+      createGithubRepository: false,
       features: ["sampleFeature"],
       initializeGitRepository: true,
       overwriteExisting: false,
@@ -241,6 +245,7 @@ describe("framework template preview", () => {
       baseUrl: "https://example.test",
       ...localDestination,
       features: ["sampleFeature"],
+      createGithubRepository: false,
       initializeGitRepository: true,
       overwriteExisting: false,
       packageName: "existing-git-framework",
@@ -335,6 +340,7 @@ describe("framework template preview", () => {
         baseUrl: "https://example.test",
         destinationType: "github",
         features: ["sampleFeature"],
+        createGithubRepository: false,
         githubBranch: "main",
         githubOwner: "rgmichaels",
         githubRepository: "qa-framework",
@@ -383,6 +389,7 @@ describe("framework template preview", () => {
             baseUrl: "https://example.test",
             destinationType: "github",
             features: ["sampleFeature"],
+            createGithubRepository: false,
             githubBranch: "release/candidate",
             githubOwner: "rgmichaels",
             githubRepository: "qa-framework",
@@ -403,6 +410,100 @@ describe("framework template preview", () => {
         ),
       /Unable to read GitHub branch release\/candidate in rgmichaels\/qa-framework failed with 404/,
     );
+  });
+
+  it("creates a GitHub repo and pushes an initialized local framework", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "ff2-framework-github-remote-"));
+    await execFileAsync("git", ["init"], {
+      cwd: targetDirectory,
+    });
+    await writeFile(join(targetDirectory, "README.md"), "Generated framework", "utf8");
+    await execFileAsync("git", ["add", "-A"], {
+      cwd: targetDirectory,
+    });
+    await execFileAsync(
+      "git",
+      [
+        "-c",
+        "user.name=FlawFerret",
+        "-c",
+        "user.email=flawferret@example.invalid",
+        "commit",
+        "-m",
+        "Initial test framework",
+      ],
+      {
+        cwd: targetDirectory,
+      },
+    );
+    const fetchCalls: Array<{ body: unknown; method: string; url: string }> = [];
+    const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      fetchCalls.push({ body, method, url: requestUrl });
+
+      if (requestUrl.endsWith("/user")) {
+        return Response.json({
+          login: "rgmichaels",
+        });
+      }
+
+      if (requestUrl.endsWith("/user/repos")) {
+        return Response.json({
+          clone_url: "https://github.com/rgmichaels/qa-framework.git",
+          default_branch: "main",
+          full_name: "rgmichaels/qa-framework",
+          html_url: "https://github.com/rgmichaels/qa-framework",
+        });
+      }
+
+      return new Response("unexpected request", { status: 500 });
+    }) as typeof fetch;
+    const gitCalls: Array<{ args: string[]; command: string; cwd: string }> = [];
+    const runner = async (command: string, args: string[], options: { cwd: string }) => {
+      gitCalls.push({ args, command, cwd: options.cwd });
+
+      if (args.join(" ") === "remote get-url origin") {
+        throw new Error("No origin configured");
+      }
+
+      return {
+        stdout: "",
+      };
+    };
+
+    const result = await createGithubRemoteForLocalFramework(
+      {
+        baseUrl: "https://example.test",
+        ...localDestination,
+        createGithubRepository: true,
+        features: ["sampleFeature"],
+        githubOwner: "rgmichaels",
+        githubRepository: "qa-framework",
+        initializeGitRepository: true,
+        overwriteExisting: false,
+        packageName: "qa-framework",
+        projectName: "QA Framework",
+        registerLocalRepository: false,
+        targetDirectory,
+      },
+      targetDirectory,
+      {
+        env: {
+          GITHUB_TOKEN: "test-token",
+        },
+        fetcher,
+        runner,
+      },
+    );
+
+    assert.equal(result.status, "created");
+    assert.equal(result.repository, "rgmichaels/qa-framework");
+    assert.equal(result.webUrl, "https://github.com/rgmichaels/qa-framework");
+    assert.ok(fetchCalls.some((call) => call.method === "POST" && call.url.endsWith("/user/repos")));
+    assert.ok(gitCalls.some((call) => call.args.join(" ") === "remote add origin https://github.com/rgmichaels/qa-framework.git"));
+    assert.ok(gitCalls.some((call) => call.args.join(" ") === "push -u origin main"));
   });
 
 });
