@@ -1,7 +1,87 @@
 import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
-import { validateFrameworkSmokeTest } from "./framework-validation.js";
+import { installFrameworkDependencies, validateFrameworkSmokeTest } from "./framework-validation.js";
+
+describe("framework dependency install", () => {
+  it("skips installation when package.json is missing", async () => {
+    const result = await installFrameworkDependencies(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {
+          throw new Error("missing");
+        },
+      },
+    );
+
+    assert.equal(result.status, "skipped");
+    assert.equal(result.exitCode, null);
+    assert.match(result.message, /package\.json/);
+  });
+
+  it("runs pnpm install from the target directory", async () => {
+    const targetDirectory = "/tmp/generated-framework";
+    const calls: Array<{ args: string[]; command: string; cwd: string }> = [];
+    const result = await installFrameworkDependencies(
+      {
+        targetDirectory,
+      },
+      {
+        canAccess: async (path) => {
+          assert.equal(path, join(resolve(targetDirectory), "package.json"));
+        },
+        runner: async (command, args, options) => {
+          calls.push({ args, command, cwd: options.cwd });
+
+          return {
+            stderr: "",
+            stdout: "dependencies installed",
+          };
+        },
+      },
+    );
+
+    assert.equal(result.status, "installed");
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout, "dependencies installed");
+    assert.deepEqual(calls, [
+      {
+        args: ["install"],
+        command: "pnpm",
+        cwd: resolve(targetDirectory),
+      },
+    ]);
+  });
+
+  it("captures failing dependency installation output", async () => {
+    const error = new Error("failed") as Error & {
+      code: number;
+      stderr: string;
+      stdout: string;
+    };
+    error.code = 1;
+    error.stderr = "install failed";
+    error.stdout = "resolving packages";
+    const result = await installFrameworkDependencies(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        runner: async () => {
+          throw error;
+        },
+      },
+    );
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stderr, "install failed");
+    assert.equal(result.stdout, "resolving packages");
+  });
+});
 
 describe("framework smoke validation", () => {
   it("skips validation when dependencies are not installed", async () => {

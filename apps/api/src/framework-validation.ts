@@ -1,4 +1,6 @@
 import type {
+  FrameworkDependencyInstallRequest,
+  FrameworkDependencyInstallResponse,
   FrameworkSmokeValidationRequest,
   FrameworkSmokeValidationResponse,
 } from "@flawferret2/job-schemas";
@@ -10,6 +12,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const outputLimit = 20_000;
 const processBuffer = 1_000_000;
+const installCommand = "pnpm install" as const;
 const smokeCommand = "pnpm test:smoke" as const;
 
 type CommandError = Error & {
@@ -51,6 +54,61 @@ const getExitCode = (error: unknown) => {
   const code = (error as CommandError).code;
 
   return typeof code === "number" ? code : 1;
+};
+
+export const installFrameworkDependencies = async (
+  request: FrameworkDependencyInstallRequest,
+  { canAccess = access, runner = defaultRunner }: FrameworkSmokeValidationOptions = {},
+): Promise<FrameworkDependencyInstallResponse> => {
+  const startedAt = Date.now();
+  const targetDirectory = resolve(request.targetDirectory);
+
+  try {
+    await canAccess(join(targetDirectory, "package.json"));
+  } catch {
+    return {
+      command: installCommand,
+      durationMs: Date.now() - startedAt,
+      exitCode: null,
+      message: "No package.json was found in the target directory.",
+      status: "skipped",
+      stderr: "",
+      stdout: "",
+      targetDirectory,
+    };
+  }
+
+  try {
+    const result = await runner("pnpm", ["install"], {
+      cwd: targetDirectory,
+      maxBuffer: processBuffer,
+      timeout: 180_000,
+    });
+
+    return {
+      command: installCommand,
+      durationMs: Date.now() - startedAt,
+      exitCode: 0,
+      message: "Framework dependencies installed.",
+      status: "installed",
+      stderr: truncateOutput(result.stderr),
+      stdout: truncateOutput(result.stdout),
+      targetDirectory,
+    };
+  } catch (error) {
+    const commandError = error as CommandError;
+
+    return {
+      command: installCommand,
+      durationMs: Date.now() - startedAt,
+      exitCode: getExitCode(error),
+      message: "Framework dependency installation failed.",
+      status: "failed",
+      stderr: truncateOutput(commandError.stderr ?? commandError.message),
+      stdout: truncateOutput(commandError.stdout ?? ""),
+      targetDirectory,
+    };
+  }
 };
 
 export const validateFrameworkSmokeTest = async (

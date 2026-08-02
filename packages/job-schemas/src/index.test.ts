@@ -15,6 +15,8 @@ import {
   discoverTestRecommendationsResponseSchema,
   explainCucumberScenarioRequestSchema,
   explainCucumberScenarioResponseSchema,
+  frameworkDependencyInstallRequestSchema,
+  frameworkDependencyInstallResponseSchema,
   frameworkTemplatePreviewResponseSchema,
   frameworkTemplateRequestSchema,
   jobEventTypeSchema,
@@ -629,5 +631,27 @@ describe("job schemas", () => {
     assert.equal(response.createdFiles[0].status, "created");
     assert.equal(response.githubPullRequest?.prNumber, 12);
     assert.equal(response.registeredRepository?.name, "qa-framework");
+  });
+
+  it("parses framework dependency install requests and responses", () => {
+    const request = frameworkDependencyInstallRequestSchema.parse({
+      targetDirectory: " /tmp/qa-framework ",
+    });
+
+    assert.equal(request.targetDirectory, "/tmp/qa-framework");
+
+    const response = frameworkDependencyInstallResponseSchema.parse({
+      command: "pnpm install",
+      durationMs: 1200,
+      exitCode: 0,
+      message: "Framework dependencies installed.",
+      status: "installed",
+      stderr: "",
+      stdout: "Done",
+      targetDirectory: request.targetDirectory,
+    });
+
+    assert.equal(response.status, "installed");
+    assert.equal(response.command, "pnpm install");
   });
 });

@@ -1001,6 +1001,11 @@ button {
   border-color: #bbf7d0;
 }
 
+.framework-validation-panel.installed {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
 .framework-validation-panel.failed {
   background: #fff1f2;
   border-color: #fecdd3;
@@ -1030,6 +1035,11 @@ button {
 .framework-validation-panel.passed .framework-validation-summary > span {
   background: #dcfce7;
   color: #15803d;
+}
+
+.framework-validation-panel.installed .framework-validation-summary > span {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .framework-validation-panel.failed .framework-validation-summary > span {
