@@ -969,6 +969,113 @@ button {
   padding: 14px;
 }
 
+.framework-results-checklist-panel {
+  align-items: stretch;
+  background: #ffffff;
+  border-color: #dce3ee;
+  display: grid;
+}
+
+.framework-results-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.framework-results-checklist {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.framework-results-checklist li {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.framework-results-checklist li.complete {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.framework-results-checklist li.attention {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.framework-results-checklist li.skipped {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.framework-results-checkmark {
+  align-items: center;
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #475569;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.framework-results-checklist li.complete .framework-results-checkmark {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.framework-results-checklist li.attention .framework-results-checkmark {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.framework-results-checklist li div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.framework-results-checklist li strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.framework-results-checklist li small {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.framework-results-checklist mark {
+  background: #e2e8f0;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 6px 10px;
+  text-transform: uppercase;
+}
+
+.framework-results-checklist li.complete mark {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.framework-results-checklist li.attention mark {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
 .framework-results-panel div:first-child {
   display: grid;
   gap: 4px;
