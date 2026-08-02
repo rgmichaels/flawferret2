@@ -1,6 +1,7 @@
 import type {
   CreateFrameworkRequest,
   CreateFrameworkResponse,
+  FrameworkDependencyInstallResponse,
   FrameworkTemplateDestinationType,
   FrameworkTemplateFeature,
   FrameworkTemplatePreviewResponse,
@@ -71,6 +72,13 @@ type FrameworkNewSearchParams = {
   githubRemoteUrl?: string;
   githubRemoteWebUrl?: string;
   initializeGitRepository?: string | string[];
+  installCommand?: string;
+  installDurationMs?: string;
+  installExitCode?: string;
+  installMessage?: string;
+  installStatus?: string;
+  installStderr?: string;
+  installStdout?: string;
   localGitMessage?: string;
   localGitStatus?: string;
   prBranch?: string;
@@ -195,6 +203,13 @@ const buildFrameworkHref = (params: FrameworkNewSearchParams, step: FrameworkWiz
       "githubRemoteStatus",
       "githubRemoteUrl",
       "githubRemoteWebUrl",
+      "installCommand",
+      "installDurationMs",
+      "installExitCode",
+      "installMessage",
+      "installStatus",
+      "installStderr",
+      "installStdout",
       "overwritten",
       "prBranch",
       "prCommitSha",
@@ -414,6 +429,90 @@ async function createFramework(formData: FormData) {
   redirect(`/framework/new?${params.toString()}`);
 }
 
+async function installFrameworkDependencies(formData: FormData) {
+  "use server";
+
+  const params = new URLSearchParams();
+  const passthroughKeys = [
+    "baseUrl",
+    "createGithubRepository",
+    "created",
+    "destinationType",
+    "githubBranch",
+    "githubOwner",
+    "githubRemoteMessage",
+    "githubRemoteRepository",
+    "githubRemoteStatus",
+    "githubRemoteUrl",
+    "githubRemoteWebUrl",
+    "githubRepository",
+    "githubRepositoryId",
+    "initializeGitRepository",
+    "localGitMessage",
+    "localGitStatus",
+    "overwritten",
+    "packageName",
+    "preview",
+    "projectName",
+    "prBranch",
+    "prCommitSha",
+    "prNumber",
+    "prUrl",
+    "registeredRepositoryId",
+    "registeredRepositoryName",
+    "registerLocalRepository",
+    "skipped",
+    "targetDirectory",
+  ];
+
+  for (const key of passthroughKeys) {
+    const value = formData.get(key);
+    if (value) {
+      params.set(key, String(value));
+    }
+  }
+
+  for (const feature of formData.getAll("features")) {
+    params.append("features", String(feature));
+  }
+
+  params.set("preview", "true");
+  params.set("step", "validate");
+
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
+      body: JSON.stringify({
+        targetDirectory: String(formData.get("targetDirectory") ?? ""),
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error((await response.text()) || "Unable to install framework dependencies.");
+    }
+
+    const result = (await response.json()) as FrameworkDependencyInstallResponse;
+    params.set("installCommand", result.command);
+    params.set("installDurationMs", String(result.durationMs));
+    params.set("installMessage", result.message);
+    params.set("installStatus", result.status);
+    params.set("installStderr", trimQueryOutput(result.stderr));
+    params.set("installStdout", trimQueryOutput(result.stdout));
+    if (result.exitCode !== null) {
+      params.set("installExitCode", String(result.exitCode));
+    }
+  } catch (error) {
+    params.set("installMessage", error instanceof Error ? error.message : "Unable to install framework dependencies.");
+    params.set("installStatus", "failed");
+  }
+
+  redirect(`/framework/new?${params.toString()}`);
+}
+
 async function validateFramework(formData: FormData) {
   "use server";
 
@@ -433,6 +532,13 @@ async function validateFramework(formData: FormData) {
     "githubRepository",
     "githubRepositoryId",
     "initializeGitRepository",
+    "installCommand",
+    "installDurationMs",
+    "installExitCode",
+    "installMessage",
+    "installStatus",
+    "installStderr",
+    "installStdout",
     "localGitMessage",
     "localGitStatus",
     "overwritten",
@@ -983,48 +1089,105 @@ export default async function NewFrameworkPage({
                 </div>
                 <div className="framework-wizard-actions">
                   {request.destinationType === "local" ? (
-                    <form action={validateFramework} className="framework-inline-action-form">
-                      <input name="baseUrl" type="hidden" value={request.baseUrl} />
-                      <input name="createGithubRepository" type="hidden" value={String(shouldCreateGithubRepository)} />
-                      <input name="created" type="hidden" value={String(createdCount)} />
-                      <input name="destinationType" type="hidden" value={request.destinationType} />
-                      <input name="githubBranch" type="hidden" value={request.githubBranch} />
-                      <input name="githubOwner" type="hidden" value={request.githubOwner} />
-                      <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
-                      <input name="githubRepository" type="hidden" value={request.githubRepository} />
-                      <input name="initializeGitRepository" type="hidden" value={String(shouldInitializeGit)} />
-                      <input name="overwritten" type="hidden" value={String(overwrittenCount)} />
-                      <input name="packageName" type="hidden" value={request.packageName} />
-                      <input name="projectName" type="hidden" value={request.projectName} />
-                      <input name="registerLocalRepository" type="hidden" value={String(shouldRegisterLocalRepository)} />
-                      <input name="skipped" type="hidden" value={String(skippedCount)} />
-                      <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
-                      {params.githubRemoteMessage ? (
-                        <input name="githubRemoteMessage" type="hidden" value={params.githubRemoteMessage} />
-                      ) : null}
-                      {params.githubRemoteRepository ? (
-                        <input name="githubRemoteRepository" type="hidden" value={params.githubRemoteRepository} />
-                      ) : null}
-                      {params.githubRemoteStatus ? (
-                        <input name="githubRemoteStatus" type="hidden" value={params.githubRemoteStatus} />
-                      ) : null}
-                      {params.githubRemoteUrl ? <input name="githubRemoteUrl" type="hidden" value={params.githubRemoteUrl} /> : null}
-                      {params.githubRemoteWebUrl ? (
-                        <input name="githubRemoteWebUrl" type="hidden" value={params.githubRemoteWebUrl} />
-                      ) : null}
-                      {params.localGitMessage ? <input name="localGitMessage" type="hidden" value={params.localGitMessage} /> : null}
-                      {params.localGitStatus ? <input name="localGitStatus" type="hidden" value={params.localGitStatus} /> : null}
-                      {params.registeredRepositoryId ? (
-                        <input name="registeredRepositoryId" type="hidden" value={params.registeredRepositoryId} />
-                      ) : null}
-                      {params.registeredRepositoryName ? (
-                        <input name="registeredRepositoryName" type="hidden" value={params.registeredRepositoryName} />
-                      ) : null}
-                      {request.features.map((feature) => (
-                        <input key={feature} name="features" type="hidden" value={feature} />
-                      ))}
-                      <button type="submit">Run Smoke Validation</button>
-                    </form>
+                    <>
+                      <form action={installFrameworkDependencies} className="framework-inline-action-form">
+                        <input name="baseUrl" type="hidden" value={request.baseUrl} />
+                        <input name="createGithubRepository" type="hidden" value={String(shouldCreateGithubRepository)} />
+                        <input name="created" type="hidden" value={String(createdCount)} />
+                        <input name="destinationType" type="hidden" value={request.destinationType} />
+                        <input name="githubBranch" type="hidden" value={request.githubBranch} />
+                        <input name="githubOwner" type="hidden" value={request.githubOwner} />
+                        <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
+                        <input name="githubRepository" type="hidden" value={request.githubRepository} />
+                        <input name="initializeGitRepository" type="hidden" value={String(shouldInitializeGit)} />
+                        <input name="overwritten" type="hidden" value={String(overwrittenCount)} />
+                        <input name="packageName" type="hidden" value={request.packageName} />
+                        <input name="projectName" type="hidden" value={request.projectName} />
+                        <input name="registerLocalRepository" type="hidden" value={String(shouldRegisterLocalRepository)} />
+                        <input name="skipped" type="hidden" value={String(skippedCount)} />
+                        <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
+                        {params.githubRemoteMessage ? (
+                          <input name="githubRemoteMessage" type="hidden" value={params.githubRemoteMessage} />
+                        ) : null}
+                        {params.githubRemoteRepository ? (
+                          <input name="githubRemoteRepository" type="hidden" value={params.githubRemoteRepository} />
+                        ) : null}
+                        {params.githubRemoteStatus ? (
+                          <input name="githubRemoteStatus" type="hidden" value={params.githubRemoteStatus} />
+                        ) : null}
+                        {params.githubRemoteUrl ? (
+                          <input name="githubRemoteUrl" type="hidden" value={params.githubRemoteUrl} />
+                        ) : null}
+                        {params.githubRemoteWebUrl ? (
+                          <input name="githubRemoteWebUrl" type="hidden" value={params.githubRemoteWebUrl} />
+                        ) : null}
+                        {params.localGitMessage ? <input name="localGitMessage" type="hidden" value={params.localGitMessage} /> : null}
+                        {params.localGitStatus ? <input name="localGitStatus" type="hidden" value={params.localGitStatus} /> : null}
+                        {params.registeredRepositoryId ? (
+                          <input name="registeredRepositoryId" type="hidden" value={params.registeredRepositoryId} />
+                        ) : null}
+                        {params.registeredRepositoryName ? (
+                          <input name="registeredRepositoryName" type="hidden" value={params.registeredRepositoryName} />
+                        ) : null}
+                        {request.features.map((feature) => (
+                          <input key={feature} name="features" type="hidden" value={feature} />
+                        ))}
+                        <button type="submit">Install Dependencies</button>
+                      </form>
+                      <form action={validateFramework} className="framework-inline-action-form">
+                        <input name="baseUrl" type="hidden" value={request.baseUrl} />
+                        <input name="createGithubRepository" type="hidden" value={String(shouldCreateGithubRepository)} />
+                        <input name="created" type="hidden" value={String(createdCount)} />
+                        <input name="destinationType" type="hidden" value={request.destinationType} />
+                        <input name="githubBranch" type="hidden" value={request.githubBranch} />
+                        <input name="githubOwner" type="hidden" value={request.githubOwner} />
+                        <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
+                        <input name="githubRepository" type="hidden" value={request.githubRepository} />
+                        <input name="initializeGitRepository" type="hidden" value={String(shouldInitializeGit)} />
+                        <input name="overwritten" type="hidden" value={String(overwrittenCount)} />
+                        <input name="packageName" type="hidden" value={request.packageName} />
+                        <input name="projectName" type="hidden" value={request.projectName} />
+                        <input name="registerLocalRepository" type="hidden" value={String(shouldRegisterLocalRepository)} />
+                        <input name="skipped" type="hidden" value={String(skippedCount)} />
+                        <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
+                        {params.githubRemoteMessage ? (
+                          <input name="githubRemoteMessage" type="hidden" value={params.githubRemoteMessage} />
+                        ) : null}
+                        {params.githubRemoteRepository ? (
+                          <input name="githubRemoteRepository" type="hidden" value={params.githubRemoteRepository} />
+                        ) : null}
+                        {params.githubRemoteStatus ? (
+                          <input name="githubRemoteStatus" type="hidden" value={params.githubRemoteStatus} />
+                        ) : null}
+                        {params.githubRemoteUrl ? (
+                          <input name="githubRemoteUrl" type="hidden" value={params.githubRemoteUrl} />
+                        ) : null}
+                        {params.githubRemoteWebUrl ? (
+                          <input name="githubRemoteWebUrl" type="hidden" value={params.githubRemoteWebUrl} />
+                        ) : null}
+                        {params.installCommand ? <input name="installCommand" type="hidden" value={params.installCommand} /> : null}
+                        {params.installDurationMs ? (
+                          <input name="installDurationMs" type="hidden" value={params.installDurationMs} />
+                        ) : null}
+                        {params.installExitCode ? <input name="installExitCode" type="hidden" value={params.installExitCode} /> : null}
+                        {params.installMessage ? <input name="installMessage" type="hidden" value={params.installMessage} /> : null}
+                        {params.installStatus ? <input name="installStatus" type="hidden" value={params.installStatus} /> : null}
+                        {params.installStderr ? <input name="installStderr" type="hidden" value={params.installStderr} /> : null}
+                        {params.installStdout ? <input name="installStdout" type="hidden" value={params.installStdout} /> : null}
+                        {params.localGitMessage ? <input name="localGitMessage" type="hidden" value={params.localGitMessage} /> : null}
+                        {params.localGitStatus ? <input name="localGitStatus" type="hidden" value={params.localGitStatus} /> : null}
+                        {params.registeredRepositoryId ? (
+                          <input name="registeredRepositoryId" type="hidden" value={params.registeredRepositoryId} />
+                        ) : null}
+                        {params.registeredRepositoryName ? (
+                          <input name="registeredRepositoryName" type="hidden" value={params.registeredRepositoryName} />
+                        ) : null}
+                        {request.features.map((feature) => (
+                          <input key={feature} name="features" type="hidden" value={feature} />
+                        ))}
+                        <button type="submit">Run Smoke Validation</button>
+                      </form>
+                    </>
                   ) : null}
                   {params.githubRemoteWebUrl ? (
                     <a className="primary-link" href={params.githubRemoteWebUrl}>
@@ -1103,6 +1266,38 @@ export default async function NewFrameworkPage({
                 </div>
               </form>
             )}
+
+            {hasCreateResult && params.installStatus ? (
+              <section className={`framework-validation-panel ${params.installStatus}`}>
+                <div className="framework-validation-summary">
+                  <span>{params.installStatus}</span>
+                  <div>
+                    <strong>{params.installMessage ?? "Dependency install finished."}</strong>
+                    <small>
+                      {params.installCommand ?? "pnpm install"}
+                      {params.installExitCode ? ` · exit ${params.installExitCode}` : ""}
+                      {params.installDurationMs ? ` · ${params.installDurationMs}ms` : ""}
+                    </small>
+                  </div>
+                </div>
+                {params.installStdout || params.installStderr ? (
+                  <div className="framework-validation-output">
+                    {params.installStdout ? (
+                      <div>
+                        <strong>stdout</strong>
+                        <pre>{params.installStdout}</pre>
+                      </div>
+                    ) : null}
+                    {params.installStderr ? (
+                      <div>
+                        <strong>stderr</strong>
+                        <pre>{params.installStderr}</pre>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
 
             {hasCreateResult && params.validationStatus ? (
               <section className={`framework-validation-panel ${params.validationStatus}`}>
