@@ -1510,6 +1510,55 @@ export default async function NewFrameworkPage({
                     </small>
                   ) : null}
                 </div>
+                <div className={`framework-smoke-result-card ${validationStatus ?? "pending"}`}>
+                  <div className="framework-smoke-result-summary">
+                    <span>{validationStatus ?? "not run"}</span>
+                    <div>
+                      <strong>{validationMessage ?? "Smoke validation has not run yet."}</strong>
+                      <small>
+                        {validationCommand ?? "pnpm test:smoke"}
+                        {validationExitCode !== undefined ? ` · exit ${validationExitCode}` : ""}
+                        {validationDurationMs ? ` · ${validationDurationMs}ms` : ""}
+                      </small>
+                    </div>
+                  </div>
+                  <div className="framework-smoke-result-actions">
+                    {(validationStdout || validationStderr) && frameworkBuildId ? (
+                      <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
+                        View Output
+                      </a>
+                    ) : null}
+                    {request.destinationType === "local" ? (
+                      <form action={validateFramework} className="framework-inline-action-form">
+                        <FrameworkActionHiddenFields
+                          createdCount={createdCount}
+                          overwrittenCount={overwrittenCount}
+                          params={params}
+                          request={request}
+                          skippedCount={skippedCount}
+                        />
+                        <button type="submit">{validationStatus ? "Rerun Smoke" : "Run Smoke"}</button>
+                      </form>
+                    ) : null}
+                  </div>
+                  {validationStdout || validationStderr ? (
+                    <details className="framework-smoke-output-preview">
+                      <summary>Preview smoke output</summary>
+                      {validationStdout ? (
+                        <div>
+                          <strong>stdout</strong>
+                          <pre>{validationStdout}</pre>
+                        </div>
+                      ) : null}
+                      {validationStderr ? (
+                        <div>
+                          <strong>stderr</strong>
+                          <pre>{validationStderr}</pre>
+                        </div>
+                      ) : null}
+                    </details>
+                  ) : null}
+                </div>
                 {openFolderStatus ? (
                   <div className={`framework-folder-open-status ${openFolderStatus}`}>
                     <strong>{openFolderStatus}</strong>
@@ -1557,7 +1606,11 @@ export default async function NewFrameworkPage({
                       <article className="framework-action-card">
                         <div>
                           <strong>Smoke Validation</strong>
-                          <span>Run the generated sample Cucumber smoke test.</span>
+                          <span>
+                            {validationStatus
+                              ? "Smoke result is summarized above. Rerun it after local edits."
+                              : "Run the generated sample Cucumber smoke test."}
+                          </span>
                         </div>
                         <form action={validateFramework} className="framework-inline-action-form">
                           <FrameworkActionHiddenFields
@@ -1567,7 +1620,7 @@ export default async function NewFrameworkPage({
                             request={request}
                             skippedCount={skippedCount}
                           />
-                          <button type="submit">Run Smoke</button>
+                          <button type="submit">{validationStatus ? "Rerun Smoke" : "Run Smoke"}</button>
                         </form>
                       </article>
                     </>
