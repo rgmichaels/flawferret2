@@ -16,6 +16,7 @@ import {
   type RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { AppShell } from "../../app-shell";
 import { FrameworkFolderPicker } from "./framework-folder-picker";
 
@@ -414,6 +415,65 @@ function FrameworkActionHiddenFields({
         <input key={feature} name="features" type="hidden" value={feature} />
       ))}
     </>
+  );
+}
+
+function FrameworkActionResultCard({
+  actions,
+  command,
+  durationMs,
+  exitCode,
+  message,
+  outputLabel = "Preview output",
+  status,
+  stderr,
+  stdout,
+}: {
+  actions?: ReactNode;
+  command: string;
+  durationMs?: string;
+  exitCode?: string;
+  message: string;
+  outputLabel?: string;
+  status?: string;
+  stderr?: string;
+  stdout?: string;
+}) {
+  const displayStatus = status ?? "not run";
+  const hasOutput = Boolean(stdout || stderr);
+
+  return (
+    <div className={`framework-action-result-card ${status ?? "pending"}`}>
+      <div className="framework-action-result-summary">
+        <span>{displayStatus}</span>
+        <div>
+          <strong>{message}</strong>
+          <small>
+            {command}
+            {exitCode !== undefined ? ` · exit ${exitCode}` : ""}
+            {durationMs ? ` · ${durationMs}ms` : ""}
+          </small>
+        </div>
+      </div>
+      {actions ? <div className="framework-action-result-actions">{actions}</div> : null}
+      {hasOutput ? (
+        <details className="framework-action-output-preview">
+          <summary>{outputLabel}</summary>
+          {stdout ? (
+            <div>
+              <strong>stdout</strong>
+              <pre>{stdout}</pre>
+            </div>
+          ) : null}
+          {stderr ? (
+            <div>
+              <strong>stderr</strong>
+              <pre>{stderr}</pre>
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+    </div>
   );
 }
 
@@ -1051,7 +1111,7 @@ export default async function NewFrameworkPage({
 
   return (
     <AppShell active="framework">
-      <section className="workspace">
+      <section className={`workspace ${currentStep === "validate" ? "framework-validate-workspace" : ""}`}>
         <header className="topbar">
           <div>
             <p className="eyebrow">Create</p>
@@ -1510,55 +1570,37 @@ export default async function NewFrameworkPage({
                     </small>
                   ) : null}
                 </div>
-                <div className={`framework-smoke-result-card ${validationStatus ?? "pending"}`}>
-                  <div className="framework-smoke-result-summary">
-                    <span>{validationStatus ?? "not run"}</span>
-                    <div>
-                      <strong>{validationMessage ?? "Smoke validation has not run yet."}</strong>
-                      <small>
-                        {validationCommand ?? "pnpm test:smoke"}
-                        {validationExitCode !== undefined ? ` · exit ${validationExitCode}` : ""}
-                        {validationDurationMs ? ` · ${validationDurationMs}ms` : ""}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="framework-smoke-result-actions">
-                    {(validationStdout || validationStderr) && frameworkBuildId ? (
-                      <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
-                        View Output
-                      </a>
-                    ) : null}
-                    {request.destinationType === "local" ? (
-                      <form action={validateFramework} className="framework-inline-action-form">
-                        <FrameworkActionHiddenFields
-                          createdCount={createdCount}
-                          overwrittenCount={overwrittenCount}
-                          params={params}
-                          request={request}
-                          skippedCount={skippedCount}
-                        />
-                        <button type="submit">{validationStatus ? "Rerun Smoke" : "Run Smoke"}</button>
-                      </form>
-                    ) : null}
-                  </div>
-                  {validationStdout || validationStderr ? (
-                    <details className="framework-smoke-output-preview">
-                      <summary>Preview smoke output</summary>
-                      {validationStdout ? (
-                        <div>
-                          <strong>stdout</strong>
-                          <pre>{validationStdout}</pre>
-                        </div>
+                <FrameworkActionResultCard
+                  actions={
+                    <>
+                      {(validationStdout || validationStderr) && frameworkBuildId ? (
+                        <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
+                          View Output
+                        </a>
                       ) : null}
-                      {validationStderr ? (
-                        <div>
-                          <strong>stderr</strong>
-                          <pre>{validationStderr}</pre>
-                        </div>
+                      {request.destinationType === "local" ? (
+                        <form action={validateFramework} className="framework-inline-action-form">
+                          <FrameworkActionHiddenFields
+                            createdCount={createdCount}
+                            overwrittenCount={overwrittenCount}
+                            params={params}
+                            request={request}
+                            skippedCount={skippedCount}
+                          />
+                          <button type="submit">{validationStatus ? "Rerun Smoke" : "Run Smoke"}</button>
+                        </form>
                       ) : null}
-                    </details>
-                  ) : null}
-                </div>
+                    </>
+                  }
+                  command={validationCommand ?? "pnpm test:smoke"}
+                  durationMs={validationDurationMs}
+                  exitCode={validationExitCode}
+                  message={validationMessage ?? "Smoke validation has not run yet."}
+                  outputLabel="Preview smoke output"
+                  status={validationStatus}
+                  stderr={validationStderr}
+                  stdout={validationStdout}
+                />
                 {openFolderStatus ? (
                   <div className={`framework-folder-open-status ${openFolderStatus}`}>
                     <strong>{openFolderStatus}</strong>
@@ -1753,67 +1795,16 @@ export default async function NewFrameworkPage({
             )}
 
             {hasCreateResult && installStatus ? (
-              <section className={`framework-validation-panel ${installStatus}`}>
-                <div className="framework-validation-summary">
-                  <span>{installStatus}</span>
-                  <div>
-                    <strong>{installMessage ?? "Dependency install finished."}</strong>
-                    <small>
-                      {installCommand ?? "pnpm install"}
-                      {installExitCode !== undefined ? ` · exit ${installExitCode}` : ""}
-                      {installDurationMs ? ` · ${installDurationMs}ms` : ""}
-                    </small>
-                  </div>
-                </div>
-                {installStdout || installStderr ? (
-                  <div className="framework-validation-output">
-                    {installStdout ? (
-                      <div>
-                        <strong>stdout</strong>
-                        <pre>{installStdout}</pre>
-                      </div>
-                    ) : null}
-                    {installStderr ? (
-                      <div>
-                        <strong>stderr</strong>
-                        <pre>{installStderr}</pre>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-
-            {hasCreateResult && validationStatus ? (
-              <section className={`framework-validation-panel ${validationStatus}`}>
-                <div className="framework-validation-summary">
-                  <span>{validationStatus}</span>
-                  <div>
-                    <strong>{validationMessage ?? "Validation finished."}</strong>
-                    <small>
-                      {validationCommand ?? "pnpm test:smoke"}
-                      {validationExitCode !== undefined ? ` · exit ${validationExitCode}` : ""}
-                      {validationDurationMs ? ` · ${validationDurationMs}ms` : ""}
-                    </small>
-                  </div>
-                </div>
-                {validationStdout || validationStderr ? (
-                  <div className="framework-validation-output">
-                    {validationStdout ? (
-                      <div>
-                        <strong>stdout</strong>
-                        <pre>{validationStdout}</pre>
-                      </div>
-                    ) : null}
-                    {validationStderr ? (
-                      <div>
-                        <strong>stderr</strong>
-                        <pre>{validationStderr}</pre>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </section>
+              <FrameworkActionResultCard
+                command={installCommand ?? "pnpm install"}
+                durationMs={installDurationMs}
+                exitCode={installExitCode}
+                message={installMessage ?? "Dependency install finished."}
+                outputLabel="Preview install output"
+                status={installStatus}
+                stderr={installStderr}
+                stdout={installStdout}
+              />
             ) : null}
 
             <section className="framework-next-steps">
