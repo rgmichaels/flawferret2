@@ -268,6 +268,14 @@ textarea {
   padding: 0;
 }
 
+.framework-validate-workspace .framework-preview {
+  order: 1;
+}
+
+.framework-validate-workspace .framework-builder-grid {
+  order: 2;
+}
+
 .app-content {
   display: grid;
   gap: 20px;
@@ -923,6 +931,11 @@ button {
   gap: 18px;
 }
 
+.framework-validate-workspace .framework-preview {
+  border-color: #fb923c;
+  box-shadow: 0 8px 24px rgb(251 146 60 / 10%);
+}
+
 .framework-create-form {
   align-items: center;
   background: #f8fafc;
@@ -1025,7 +1038,7 @@ button {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto auto;
   padding: 12px;
 }
 
@@ -1095,6 +1108,27 @@ button {
   text-transform: uppercase;
 }
 
+.framework-results-checklist form {
+  justify-self: end;
+}
+
+.framework-results-checklist button {
+  min-height: 40px;
+  padding: 9px 14px;
+  white-space: nowrap;
+}
+
+.framework-results-checklist .framework-row-primary-action {
+  min-width: 160px;
+}
+
+.framework-results-checklist button:disabled {
+  background: #e2e8f0;
+  border-color: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .framework-results-checklist li.complete mark {
   background: #dcfce7;
   color: #15803d;
@@ -1103,6 +1137,56 @@ button {
 .framework-results-checklist li.attention mark {
   background: #ffedd5;
   color: #9a3412;
+}
+
+.framework-row-action-output {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-column: 2 / -1;
+  padding: 10px;
+}
+
+.framework-row-action-output > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.framework-row-action-output strong {
+  color: #334155;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.framework-row-action-output small {
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.framework-row-action-output-actions {
+  justify-self: start;
+}
+
+.framework-row-suggested-fix {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+}
+
+.framework-row-suggested-fix strong {
+  color: #9a3412;
+}
+
+.framework-row-suggested-fix small {
+  color: #7c2d12;
+  font-family: inherit;
 }
 
 .framework-generated-repo-card {
@@ -1183,7 +1267,7 @@ button {
   grid-column: 1 / -1;
 }
 
-.framework-smoke-result-card {
+.framework-action-result-card {
   align-items: start;
   background: #f8fafc;
   border: 1px solid #dce3ee;
@@ -1194,29 +1278,34 @@ button {
   padding: 12px;
 }
 
-.framework-smoke-result-card.passed {
+.framework-action-result-card.passed {
   background: #f0fdf4;
   border-color: #bbf7d0;
 }
 
-.framework-smoke-result-card.failed {
+.framework-action-result-card.installed {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.framework-action-result-card.failed {
   background: #fff1f2;
   border-color: #fecdd3;
 }
 
-.framework-smoke-result-card.skipped {
+.framework-action-result-card.skipped {
   background: #fff7ed;
   border-color: #fed7aa;
 }
 
-.framework-smoke-result-summary {
+.framework-action-result-summary {
   align-items: center;
   display: flex;
   gap: 12px;
   min-width: 0;
 }
 
-.framework-smoke-result-summary > span {
+.framework-action-result-summary > span {
   background: #e2e8f0;
   border-radius: 999px;
   color: #475569;
@@ -1227,41 +1316,71 @@ button {
   text-transform: uppercase;
 }
 
-.framework-smoke-result-card.passed .framework-smoke-result-summary > span {
+.framework-action-result-card.passed .framework-action-result-summary > span {
   background: #dcfce7;
   color: #15803d;
 }
 
-.framework-smoke-result-card.failed .framework-smoke-result-summary > span {
+.framework-action-result-card.installed .framework-action-result-summary > span {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.framework-action-result-card.failed .framework-action-result-summary > span {
   background: #fee2e2;
   color: #b91c1c;
 }
 
-.framework-smoke-result-card.skipped .framework-smoke-result-summary > span {
+.framework-action-result-card.skipped .framework-action-result-summary > span {
   background: #ffedd5;
   color: #9a3412;
 }
 
-.framework-smoke-result-summary div {
+.framework-action-result-summary div {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.framework-smoke-result-summary strong {
+.framework-action-result-summary strong {
   color: #172033;
   font-size: 14px;
   overflow-wrap: anywhere;
 }
 
-.framework-smoke-result-summary small {
+.framework-action-result-summary small {
   color: #667085;
   font-size: 13px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
-.framework-smoke-result-actions {
+.framework-command-copy {
+  margin-top: 6px;
+}
+
+.framework-command-copy summary {
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.framework-command-copy code {
+  background: #f8fafc;
+  border: 1px solid #dbe4f0;
+  border-radius: 6px;
+  color: #334155;
+  display: block;
+  font-size: 12px;
+  margin-top: 6px;
+  overflow-x: auto;
+  padding: 8px;
+  white-space: pre;
+}
+
+.framework-action-result-actions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -1269,7 +1388,7 @@ button {
   justify-content: flex-end;
 }
 
-.framework-smoke-output-preview {
+.framework-action-output-preview {
   background: #0f172a;
   border-radius: 8px;
   color: #e2e8f0;
@@ -1277,26 +1396,26 @@ button {
   overflow: hidden;
 }
 
-.framework-smoke-output-preview summary {
+.framework-action-output-preview summary {
   cursor: pointer;
   font-size: 13px;
   font-weight: 900;
   padding: 10px 12px;
 }
 
-.framework-smoke-output-preview div {
+.framework-action-output-preview div {
   display: grid;
   gap: 6px;
   padding: 0 12px 12px;
 }
 
-.framework-smoke-output-preview strong {
+.framework-action-output-preview strong {
   color: #cbd5e1;
   font-size: 11px;
   text-transform: uppercase;
 }
 
-.framework-smoke-output-preview pre {
+.framework-action-output-preview pre {
   background: #020617;
   border-radius: 6px;
   color: #e2e8f0;
@@ -1425,94 +1544,6 @@ button {
 .framework-action-card .primary-link,
 .framework-action-card .secondary-button {
   justify-self: start;
-}
-
-.framework-build-history {
-  display: grid;
-  gap: 0;
-}
-
-.framework-build-history-list {
-  display: grid;
-  gap: 0;
-}
-
-.framework-build-history-card {
-  align-items: center;
-  border-top: 1px solid #e2e8f0;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, auto);
-  padding: 16px 18px;
-}
-
-.framework-build-history-card > div:first-child {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.framework-build-history-card a {
-  color: #2563eb;
-  font-size: 18px;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.framework-build-history-card a:hover {
-  text-decoration: underline;
-}
-
-.framework-build-history-card span {
-  color: #667085;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.framework-build-history-card code {
-  color: #475569;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-.framework-build-history-card dl {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 0;
-}
-
-.framework-build-history-card dl div {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px;
-}
-
-.framework-build-history-card dt {
-  color: #667085;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.framework-build-history-card dd {
-  color: #172033;
-  font-size: 13px;
-  font-weight: 900;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.framework-build-history-empty {
-  border-top: 1px solid #e2e8f0;
-  color: #667085;
-  margin: 0;
-  padding: 18px;
 }
 
 .framework-builds-panel {
@@ -6092,6 +6123,23 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .framework-results-checklist li {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .framework-results-checklist mark,
+  .framework-results-checklist form {
+    justify-self: start;
+  }
+
+  .framework-row-action-output {
+    grid-column: 1 / -1;
+  }
+
+  .framework-results-checklist .framework-row-primary-action {
+    min-width: 0;
+  }
+
   .framework-build-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6105,11 +6153,11 @@ textarea {
     justify-content: flex-start;
   }
 
-  .framework-smoke-result-card {
+  .framework-action-result-card {
     grid-template-columns: 1fr;
   }
 
-  .framework-smoke-result-actions {
+  .framework-action-result-actions {
     justify-content: flex-start;
   }
 

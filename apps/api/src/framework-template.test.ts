@@ -37,7 +37,7 @@ describe("framework template preview", () => {
 
     assert.equal(preview.projectName, "Example QA Framework");
     assert.equal(preview.packageName, "@example/qa-framework");
-    assert.equal(preview.runCommand, "pnpm test");
+    assert.equal(preview.runCommand, "npx pnpm@11.7.0 test");
     assert.ok(preview.totalFiles >= 15);
     assert.ok(preview.directories.includes("qa/e2e/src/pages"));
     assert.ok(preview.directories.includes("qa/e2e/features/smoke"));
@@ -97,18 +97,26 @@ describe("framework template preview", () => {
       targetDirectory: "qa/e2e",
     });
     const envExample = template.files.find((file) => file.path === ".env.example")?.content ?? "";
+    const envSupport = template.files.find((file) => file.path === "src/support/env.ts")?.content ?? "";
+    const cucumberConfig = template.files.find((file) => file.path === "cucumber.js")?.content ?? "";
+    const packageJson = template.files.find((file) => file.path === "package.json")?.content ?? "";
     const readme = template.files.find((file) => file.path === "README.md")?.content ?? "";
     const feature = template.files.find((file) => file.path === "features/smoke/configured-base-url.feature")?.content ?? "";
     const applicationPage = template.files.find((file) => file.path === "src/pages/ApplicationPage.ts")?.content ?? "";
     const steps = template.files.find((file) => file.path === "src/steps/navigation.steps.ts")?.content ?? "";
 
     assert.match(envExample, /BASE_URL=https:\/\/app\.example\.test/);
+    assert.match(envSupport, /default\("https:\/\/app\.example\.test"\)/);
+    assert.match(cucumberConfig, /import: \["src\/support\/\*\*\/\*\.ts", "src\/steps\/\*\*\/\*\.ts"\]/);
+    assert.doesNotMatch(cucumberConfig, /default: \{/);
+    assert.match(packageJson, /NODE_OPTIONS='--import tsx' cucumber-js --tags @smoke/);
     assert.match(readme, /The framework targets `https:\/\/app\.example\.test` by default/);
     assert.match(feature, /Given I open the configured base URL/);
     assert.match(feature, /Then the configured page should load successfully/);
     assert.match(feature, /And the page should be served from the configured base URL/);
     assert.match(applicationPage, /Configured base URL should return a successful document response/);
-    assert.match(steps, /new URL\(env\.BASE_URL\)\.origin/);
+    assert.match(steps, /configuredUrl\.hostname\.replace/);
+    assert.match(steps, /expect\(currentHost\)\.toBe\(configuredHost\)/);
   });
 
   it("marks existing files in preview before writing", async () => {

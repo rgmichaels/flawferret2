@@ -14,7 +14,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const outputLimit = 20_000;
 const processBuffer = 1_000_000;
-const installCommand = "pnpm install" as const;
+const installCommand = "pnpm install && pnpm exec playwright install chromium" as const;
 const openFolderCommand = "open" as const;
 const smokeCommand = "pnpm test:smoke" as const;
 
@@ -59,6 +59,22 @@ const getExitCode = (error: unknown) => {
   return typeof code === "number" ? code : 1;
 };
 
+const getInstallFailureMessage = (stdout = "", stderr = "") => {
+  const output = `${stdout}\n${stderr}`;
+
+  if (output.includes("ERR_PNPM_IGNORED_BUILDS") || output.includes("pnpm approve-builds")) {
+    return "Dependency install needs pnpm build approval. Retry Install to approve pending build scripts and continue.";
+  }
+
+  return "Framework dependency installation failed.";
+};
+
+const needsBuildApproval = (stdout = "", stderr = "") => {
+  const output = `${stdout}\n${stderr}`;
+
+  return output.includes("ERR_PNPM_IGNORED_BUILDS") || output.includes("pnpm approve-builds");
+};
+
 export const installFrameworkDependencies = async (
   request: FrameworkDependencyInstallRequest,
   { canAccess = access, runner = defaultRunner }: FrameworkSmokeValidationOptions = {},
@@ -82,20 +98,59 @@ export const installFrameworkDependencies = async (
   }
 
   try {
-    const result = await runner("pnpm", ["install"], {
-      cwd: targetDirectory,
-      maxBuffer: processBuffer,
-      timeout: 180_000,
-    });
+    const outputs: Array<{ stderr: string; stdout: string }> = [];
+
+    try {
+      outputs.push(
+        await runner("pnpm", ["install"], {
+          cwd: targetDirectory,
+          maxBuffer: processBuffer,
+          timeout: 180_000,
+        }),
+      );
+    } catch (error) {
+      const commandError = error as CommandError;
+
+      if (!needsBuildApproval(commandError.stdout, commandError.stderr)) {
+        throw error;
+      }
+
+      outputs.push({
+        stderr: commandError.stderr ?? commandError.message,
+        stdout: commandError.stdout ?? "",
+      });
+      outputs.push(
+        await runner("pnpm", ["approve-builds", "--all"], {
+          cwd: targetDirectory,
+          maxBuffer: processBuffer,
+          timeout: 60_000,
+        }),
+      );
+      outputs.push(
+        await runner("pnpm", ["install"], {
+          cwd: targetDirectory,
+          maxBuffer: processBuffer,
+          timeout: 180_000,
+        }),
+      );
+    }
+
+    outputs.push(
+      await runner("pnpm", ["exec", "playwright", "install", "chromium"], {
+        cwd: targetDirectory,
+        maxBuffer: processBuffer,
+        timeout: 180_000,
+      }),
+    );
 
     return {
       command: installCommand,
       durationMs: Date.now() - startedAt,
       exitCode: 0,
-      message: "Framework dependencies installed.",
+      message: "Framework dependencies and Chromium browser installed.",
       status: "installed",
-      stderr: truncateOutput(result.stderr),
-      stdout: truncateOutput(result.stdout),
+      stderr: truncateOutput(outputs.map((output) => output.stderr).filter(Boolean).join("\n")),
+      stdout: truncateOutput(outputs.map((output) => output.stdout).filter(Boolean).join("\n")),
       targetDirectory,
     };
   } catch (error) {
@@ -105,7 +160,7 @@ export const installFrameworkDependencies = async (
       command: installCommand,
       durationMs: Date.now() - startedAt,
       exitCode: getExitCode(error),
-      message: "Framework dependency installation failed.",
+      message: getInstallFailureMessage(commandError.stdout, commandError.stderr),
       status: "failed",
       stderr: truncateOutput(commandError.stderr ?? commandError.message),
       stdout: truncateOutput(commandError.stdout ?? ""),

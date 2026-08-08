@@ -607,7 +607,7 @@ export const frameworkOpenFolderRequestSchema = z.object({
 });
 
 export const frameworkDependencyInstallResponseSchema = z.object({
-  command: z.literal("pnpm install"),
+  command: z.literal("pnpm install && pnpm exec playwright install chromium"),
   durationMs: z.number().int().nonnegative(),
   exitCode: z.number().int().nullable(),
   message: z.string(),
