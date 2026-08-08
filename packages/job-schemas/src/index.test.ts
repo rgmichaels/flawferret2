@@ -533,10 +533,10 @@ describe("job schemas", () => {
           status: "create",
         },
       ],
-      installCommand: "pnpm install",
+      installCommand: "npx pnpm@11.7.0 install && npx pnpm@11.7.0 exec playwright install chromium",
       packageName: request.packageName,
       projectName: request.projectName,
-      runCommand: "pnpm test",
+      runCommand: "npx pnpm@11.7.0 test",
       targetDirectory: request.targetDirectory,
       totalFiles: 1,
     });
@@ -600,7 +600,7 @@ describe("job schemas", () => {
         githubRemoteStatus: null,
         githubRepository: null,
         installResult: {
-          command: "pnpm install",
+          command: "pnpm install && pnpm exec playwright install chromium",
           status: "installed",
         },
         installStatus: "installed",
@@ -633,7 +633,7 @@ describe("job schemas", () => {
           status: "create",
         },
       ],
-      installCommand: "pnpm install",
+      installCommand: "npx pnpm@11.7.0 install && npx pnpm@11.7.0 exec playwright install chromium",
       githubPullRequest: {
         branchName: "flawferret/create-framework-qa-framework-20260801T123456Z",
         commitSha: "commit-sha",
@@ -643,7 +643,7 @@ describe("job schemas", () => {
       overwrittenFiles: [],
       packageName: request.packageName,
       projectName: request.projectName,
-      runCommand: "pnpm test",
+      runCommand: "npx pnpm@11.7.0 test",
       registeredRepository: {
         id: "00000000-0000-4000-8000-000000000002",
         provider: "GITHUB",
@@ -689,7 +689,7 @@ describe("job schemas", () => {
     assert.equal(request.targetDirectory, "/tmp/qa-framework");
 
     const response = frameworkDependencyInstallResponseSchema.parse({
-      command: "pnpm install",
+      command: "pnpm install && pnpm exec playwright install chromium",
       durationMs: 1200,
       exitCode: 0,
       message: "Framework dependencies installed.",
@@ -700,7 +700,7 @@ describe("job schemas", () => {
     });
 
     assert.equal(response.status, "installed");
-    assert.equal(response.command, "pnpm install");
+    assert.equal(response.command, "pnpm install && pnpm exec playwright install chromium");
   });
 
   it("parses framework open folder requests and responses", () => {

@@ -37,7 +37,7 @@ describe("framework dependency install", () => {
 
           return {
             stderr: "",
-            stdout: "dependencies installed",
+            stdout: args.includes("chromium") ? "chromium installed" : "dependencies installed",
           };
         },
       },
@@ -45,10 +45,16 @@ describe("framework dependency install", () => {
 
     assert.equal(result.status, "installed");
     assert.equal(result.exitCode, 0);
-    assert.equal(result.stdout, "dependencies installed");
+    assert.equal(result.stdout, "dependencies installed\nchromium installed");
+    assert.match(result.message, /Chromium browser installed/);
     assert.deepEqual(calls, [
       {
         args: ["install"],
+        command: "pnpm",
+        cwd: resolve(targetDirectory),
+      },
+      {
+        args: ["exec", "playwright", "install", "chromium"],
         command: "pnpm",
         cwd: resolve(targetDirectory),
       },
@@ -80,6 +86,60 @@ describe("framework dependency install", () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.stderr, "install failed");
     assert.equal(result.stdout, "resolving packages");
+  });
+
+  it("approves pnpm build scripts and retries installation", async () => {
+    const error = new Error("failed") as Error & {
+      code: number;
+      stderr: string;
+      stdout: string;
+    };
+    error.code = 1;
+    error.stderr = "";
+    error.stdout = '[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: esbuild@0.28.1\nRun "pnpm approve-builds"';
+    const calls: Array<{ args: string[]; command: string }> = [];
+    const result = await installFrameworkDependencies(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        runner: async (command, args) => {
+          calls.push({ args, command });
+
+          if (calls.length === 1) {
+            throw error;
+          }
+
+          return {
+            stderr: "",
+            stdout: args.join(" "),
+          };
+        },
+      },
+    );
+
+    assert.equal(result.status, "installed");
+    assert.equal(result.exitCode, 0);
+    assert.match(result.message, /Chromium browser installed/);
+    assert.deepEqual(calls, [
+      {
+        args: ["install"],
+        command: "pnpm",
+      },
+      {
+        args: ["approve-builds", "--all"],
+        command: "pnpm",
+      },
+      {
+        args: ["install"],
+        command: "pnpm",
+      },
+      {
+        args: ["exec", "playwright", "install", "chromium"],
+        command: "pnpm",
+      },
+    ]);
   });
 });
 

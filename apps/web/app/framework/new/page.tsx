@@ -453,6 +453,10 @@ function FrameworkActionResultCard({
             {exitCode !== undefined ? ` · exit ${exitCode}` : ""}
             {durationMs ? ` · ${durationMs}ms` : ""}
           </small>
+          <details className="framework-command-copy">
+            <summary>Copy command</summary>
+            <code>{command}</code>
+          </details>
         </div>
       </div>
       {actions ? <div className="framework-action-result-actions">{actions}</div> : null}
@@ -473,6 +477,69 @@ function FrameworkActionResultCard({
           ) : null}
         </details>
       ) : null}
+    </div>
+  );
+}
+
+function FrameworkInlineActionOutput({
+  actions,
+  command,
+  durationMs,
+  exitCode,
+  outputLabel,
+  stderr,
+  stdout,
+  suggestedFix,
+}: {
+  actions?: ReactNode;
+  command: string;
+  durationMs?: string;
+  exitCode?: string;
+  outputLabel: string;
+  stderr?: string;
+  stdout?: string;
+  suggestedFix?: string | null;
+}) {
+  const hasOutput = Boolean(stdout || stderr);
+
+  return (
+    <div className="framework-row-action-output">
+      <div>
+        <strong>Command</strong>
+        <small>
+          {command}
+          {exitCode !== undefined ? ` · exit ${exitCode}` : ""}
+          {durationMs ? ` · ${durationMs}ms` : ""}
+        </small>
+      </div>
+      {suggestedFix ? (
+        <div className="framework-row-suggested-fix">
+          <strong>Try this</strong>
+          <small>{suggestedFix}</small>
+        </div>
+      ) : null}
+      <details className="framework-command-copy">
+        <summary>Copy command</summary>
+        <code>{command}</code>
+      </details>
+      {hasOutput ? (
+        <details className="framework-action-output-preview">
+          <summary>{outputLabel}</summary>
+          {stdout ? (
+            <div>
+              <strong>stdout</strong>
+              <pre>{stdout}</pre>
+            </div>
+          ) : null}
+          {stderr ? (
+            <div>
+              <strong>stderr</strong>
+              <pre>{stderr}</pre>
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+      {actions ? <div className="framework-row-action-output-actions">{actions}</div> : null}
     </div>
   );
 }
@@ -545,6 +612,141 @@ const parseFrameworkSmokeResult = (value: unknown): FrameworkSmokeValidationResp
   const result = frameworkSmokeValidationResponseSchema.safeParse(value);
 
   return result.success ? result.data : null;
+};
+
+const outputContains = (pattern: RegExp, ...values: Array<string | undefined>) =>
+  values.some((value) => Boolean(value && pattern.test(value)));
+
+const getInstallDisplayStatus = (status: string | undefined, message: string | undefined, stdout: string | undefined, stderr: string | undefined) => {
+  if (!status) {
+    return "Pending";
+  }
+
+  if (status === "installed") {
+    return "Installed";
+  }
+
+  if (outputContains(/ERR_PNPM_IGNORED_BUILDS|pnpm approve-builds/i, message, stdout, stderr)) {
+    return "Needs approval";
+  }
+
+  if (status === "skipped") {
+    return "Skipped";
+  }
+
+  return "Failed";
+};
+
+const getInstallDiagnosis = ({
+  message,
+  status,
+  stderr,
+  stdout,
+}: {
+  message?: string;
+  status?: string;
+  stderr?: string;
+  stdout?: string;
+}) => {
+  if (!status || status === "installed") {
+    return null;
+  }
+
+  if (outputContains(/pnpm: command not found|spawn pnpm ENOENT|env: pnpm/i, message, stdout, stderr)) {
+    return "pnpm is not available to the process running this command. Install dependencies from FF2's action button, or install pnpm locally before running the generated framework by hand.";
+  }
+
+  if (outputContains(/Cannot find matching keyid|corepack/i, message, stdout, stderr)) {
+    return "Corepack could not activate pnpm on this machine. Use the FF2 install action, or install pnpm with a user-writable npm prefix instead of the system Node location.";
+  }
+
+  if (outputContains(/EACCES|permission denied|\/usr\/local/i, message, stdout, stderr)) {
+    return "The install tried to write somewhere your user cannot modify. Avoid global installs under /usr/local, or use a user-writable npm/pnpm location.";
+  }
+
+  if (outputContains(/ERR_PNPM_IGNORED_BUILDS|pnpm approve-builds/i, message, stdout, stderr)) {
+    return "pnpm blocked a dependency build script. Retry Install; FF2 will approve required builds and rerun dependency installation.";
+  }
+
+  if (outputContains(/Executable doesn't exist|playwright install|browserType\.launch|chromium/i, message, stdout, stderr)) {
+    return "Playwright browsers are missing. Retry Install so FF2 can run the Chromium browser install step.";
+  }
+
+  if (outputContains(/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|registry\.npmjs/i, message, stdout, stderr)) {
+    return "The package install could not reach the registry or network target. Check network access, then retry Install.";
+  }
+
+  return "Review the install output below, fix the local environment issue, then retry Install.";
+};
+
+const getSmokeDisplayStatus = (status: string | undefined) => {
+  if (!status) {
+    return "Pending";
+  }
+
+  if (status === "passed") {
+    return "Passed";
+  }
+
+  if (status === "skipped") {
+    return "Blocked";
+  }
+
+  return "Failed";
+};
+
+const toManualFrameworkCommand = (command: string) =>
+  command
+    .replace(/^pnpm install && pnpm exec playwright install chromium$/, "npx pnpm@11.7.0 install && npx pnpm@11.7.0 exec playwright install chromium")
+    .replace(/^pnpm test:smoke$/, "npx pnpm@11.7.0 test:smoke")
+    .replace(/^pnpm test$/, "npx pnpm@11.7.0 test");
+
+const getSmokeDiagnosis = ({
+  installStatus,
+  message,
+  status,
+  stderr,
+  stdout,
+}: {
+  installStatus?: string;
+  message?: string;
+  status?: string;
+  stderr?: string;
+  stdout?: string;
+}) => {
+  if (!status && installStatus !== "installed") {
+    return "Install dependencies and Chromium before running smoke validation.";
+  }
+
+  if (!status) {
+    return "Run the generated sample smoke test.";
+  }
+
+  if (status === "passed") {
+    return message || "Generated smoke test passed.";
+  }
+
+  if (status === "skipped") {
+    return message || "Smoke validation is blocked until dependencies are installed.";
+  }
+
+  if (outputContains(/Executable doesn't exist|playwright install|browserType\.launch/i, message, stdout, stderr)) {
+    return "Smoke failed because the Playwright browser is missing. Retry Install to install Chromium.";
+  }
+
+  if (outputContains(/Undefined\. Implement|undefined step|\\bUUU\\b/i, message, stdout, stderr)) {
+    return "Smoke failed because Cucumber could not match one or more generated step definitions.";
+  }
+
+  if (outputContains(/expect\\(received\\)|assertion|AssertionError|toBe|toHave/i, message, stdout, stderr)) {
+    return "Smoke failed on an assertion. Review the output to see which expectation failed.";
+  }
+
+  if (outputContains(/net::|ERR_|Timeout|navigation|goto|BASE_URL|ENOTFOUND|ECONNREFUSED/i, message, stdout, stderr)) {
+    return "Smoke failed while opening the configured base URL. Check the URL and network accessibility.";
+  }
+
+  return message || "Generated smoke test failed. Review the output for details.";
 };
 
 const buildPreviewRequest = (
@@ -926,6 +1128,22 @@ export default async function NewFrameworkPage({
   const validationMessage = params.validationMessage ?? savedValidationResult?.message;
   const validationStderr = params.validationStderr ?? savedValidationResult?.stderr;
   const validationStdout = params.validationStdout ?? savedValidationResult?.stdout;
+  const installDisplayStatus = getInstallDisplayStatus(installStatus, installMessage, installStdout, installStderr);
+  const installDiagnosis = getInstallDiagnosis({
+    message: installMessage,
+    status: installStatus,
+    stderr: installStderr,
+    stdout: installStdout,
+  });
+  const smokeDisplayStatus = getSmokeDisplayStatus(validationStatus);
+  const smokeDiagnosis = getSmokeDiagnosis({
+    installStatus,
+    message: validationMessage,
+    status: validationStatus,
+    stderr: validationStderr,
+    stdout: validationStdout,
+  });
+  const canRunSmoke = request.destinationType === "local" && installStatus === "installed";
   const latestFrameworkBuild = frameworkBuilds.at(0);
   const latestFrameworkBuildIsCurrent = Boolean(frameworkBuildId && latestFrameworkBuild?.id === frameworkBuildId);
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
@@ -958,7 +1176,13 @@ export default async function NewFrameworkPage({
                 : shouldRegisterLocalRepository && !registeredRepositoryId
                   ? "Register this framework in FF2 so Features, Discover, and Jobs can use it."
                   : "Framework is ready for the next setup slice.";
-  const pipelineSteps = [
+  const pipelineSteps: Array<{
+    action?: "install" | "smoke";
+    detail: string;
+    label: string;
+    state: "attention" | "complete" | "pending" | "skipped";
+    status: string;
+  }> = [
     {
       detail: hasCreateResult
         ? `${createdCount} created, ${overwrittenCount} overwritten, ${skippedCount} skipped.`
@@ -1023,7 +1247,8 @@ export default async function NewFrameworkPage({
         : "Skipped",
     },
     {
-      detail: installMessage || "Run pnpm install from the generated framework folder.",
+      action: request.destinationType === "local" ? "install" : undefined,
+      detail: installMessage || "Install package dependencies, approve pnpm build scripts when needed, and install Chromium.",
       label: "Dependencies",
       state:
         installStatus === "installed"
@@ -1031,10 +1256,11 @@ export default async function NewFrameworkPage({
           : installStatus === "failed" || installStatus === "skipped"
             ? "attention"
             : "pending",
-      status: installStatus ?? "Pending",
+      status: installDisplayStatus,
     },
     {
-      detail: validationMessage || "Run the generated sample smoke test.",
+      action: request.destinationType === "local" ? "smoke" : undefined,
+      detail: smokeDiagnosis,
       label: "Smoke validation",
       state:
         validationStatus === "passed"
@@ -1042,7 +1268,7 @@ export default async function NewFrameworkPage({
           : validationStatus === "failed" || validationStatus === "skipped"
             ? "attention"
             : "pending",
-      status: validationStatus ?? "Pending",
+      status: smokeDisplayStatus,
     },
   ];
   const nextStep: FrameworkWizardStep =
@@ -1518,6 +1744,74 @@ export default async function NewFrameworkPage({
                         <small>{step.detail}</small>
                       </div>
                       <mark>{step.status}</mark>
+                      {step.action === "install" ? (
+                        <form action={installFrameworkDependencies} className="framework-inline-action-form">
+                          <FrameworkActionHiddenFields
+                            createdCount={createdCount}
+                            overwrittenCount={overwrittenCount}
+                            params={params}
+                            request={request}
+                            skippedCount={skippedCount}
+                          />
+                          <button className="framework-row-primary-action" type="submit">
+                            {installStatus === "installed" ? "Reinstall" : installStatus ? "Retry Install" : "Install Dependencies"}
+                          </button>
+                        </form>
+                      ) : null}
+                      {step.action === "smoke" ? (
+                        <form action={validateFramework} className="framework-inline-action-form">
+                          <FrameworkActionHiddenFields
+                            createdCount={createdCount}
+                            overwrittenCount={overwrittenCount}
+                            params={params}
+                            request={request}
+                            skippedCount={skippedCount}
+                          />
+                          <button
+                            className="framework-row-primary-action"
+                            disabled={!canRunSmoke}
+                            title={canRunSmoke ? undefined : "Install dependencies before running smoke."}
+                            type="submit"
+                          >
+                            {validationStatus ? "Rerun Smoke" : "Run Smoke"}
+                          </button>
+                        </form>
+                      ) : null}
+                      {step.action === "install" && installStatus ? (
+                        <FrameworkInlineActionOutput
+                          actions={
+                            frameworkBuildId ? (
+                              <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
+                                View Full Output
+                              </a>
+                            ) : null
+                          }
+                          command={toManualFrameworkCommand(installCommand ?? "pnpm install && pnpm exec playwright install chromium")}
+                          durationMs={installDurationMs}
+                          exitCode={installExitCode}
+                          outputLabel="Preview install output"
+                          stderr={installStderr}
+                          suggestedFix={installDiagnosis}
+                          stdout={installStdout}
+                        />
+                      ) : null}
+                      {step.action === "smoke" && validationStatus ? (
+                        <FrameworkInlineActionOutput
+                          actions={
+                            (validationStdout || validationStderr) && frameworkBuildId ? (
+                              <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
+                                View Full Output
+                              </a>
+                            ) : null
+                          }
+                          command={toManualFrameworkCommand(validationCommand ?? "pnpm test:smoke")}
+                          durationMs={validationDurationMs}
+                          exitCode={validationExitCode}
+                          outputLabel="Preview smoke output"
+                          stderr={validationStderr}
+                          stdout={validationStdout}
+                        />
+                      ) : null}
                     </li>
                   ))}
                 </ol>
@@ -1570,37 +1864,6 @@ export default async function NewFrameworkPage({
                     </small>
                   ) : null}
                 </div>
-                <FrameworkActionResultCard
-                  actions={
-                    <>
-                      {(validationStdout || validationStderr) && frameworkBuildId ? (
-                        <a className="secondary-button" href={`/framework/builds/${frameworkBuildId}`}>
-                          View Output
-                        </a>
-                      ) : null}
-                      {request.destinationType === "local" ? (
-                        <form action={validateFramework} className="framework-inline-action-form">
-                          <FrameworkActionHiddenFields
-                            createdCount={createdCount}
-                            overwrittenCount={overwrittenCount}
-                            params={params}
-                            request={request}
-                            skippedCount={skippedCount}
-                          />
-                          <button type="submit">{validationStatus ? "Rerun Smoke" : "Run Smoke"}</button>
-                        </form>
-                      ) : null}
-                    </>
-                  }
-                  command={validationCommand ?? "pnpm test:smoke"}
-                  durationMs={validationDurationMs}
-                  exitCode={validationExitCode}
-                  message={validationMessage ?? "Smoke validation has not run yet."}
-                  outputLabel="Preview smoke output"
-                  status={validationStatus}
-                  stderr={validationStderr}
-                  stdout={validationStdout}
-                />
                 {openFolderStatus ? (
                   <div className={`framework-folder-open-status ${openFolderStatus}`}>
                     <strong>{openFolderStatus}</strong>
@@ -1627,42 +1890,6 @@ export default async function NewFrameworkPage({
                             skippedCount={skippedCount}
                           />
                           <button type="submit">Open Folder</button>
-                        </form>
-                      </article>
-                      <article className="framework-action-card">
-                        <div>
-                          <strong>Install Dependencies</strong>
-                          <span>Run <code>pnpm install</code> in the framework folder.</span>
-                        </div>
-                        <form action={installFrameworkDependencies} className="framework-inline-action-form">
-                          <FrameworkActionHiddenFields
-                            createdCount={createdCount}
-                            overwrittenCount={overwrittenCount}
-                            params={params}
-                            request={request}
-                            skippedCount={skippedCount}
-                          />
-                          <button type="submit">Install</button>
-                        </form>
-                      </article>
-                      <article className="framework-action-card">
-                        <div>
-                          <strong>Smoke Validation</strong>
-                          <span>
-                            {validationStatus
-                              ? "Smoke result is summarized above. Rerun it after local edits."
-                              : "Run the generated sample Cucumber smoke test."}
-                          </span>
-                        </div>
-                        <form action={validateFramework} className="framework-inline-action-form">
-                          <FrameworkActionHiddenFields
-                            createdCount={createdCount}
-                            overwrittenCount={overwrittenCount}
-                            params={params}
-                            request={request}
-                            skippedCount={skippedCount}
-                          />
-                          <button type="submit">{validationStatus ? "Rerun Smoke" : "Run Smoke"}</button>
                         </form>
                       </article>
                     </>
@@ -1794,19 +2021,6 @@ export default async function NewFrameworkPage({
               </form>
             )}
 
-            {hasCreateResult && installStatus ? (
-              <FrameworkActionResultCard
-                command={installCommand ?? "pnpm install"}
-                durationMs={installDurationMs}
-                exitCode={installExitCode}
-                message={installMessage ?? "Dependency install finished."}
-                outputLabel="Preview install output"
-                status={installStatus}
-                stderr={installStderr}
-                stdout={installStdout}
-              />
-            ) : null}
-
             <section className="framework-next-steps">
               <div>
                 <h3>Next Steps</h3>
@@ -1819,7 +2033,7 @@ export default async function NewFrameworkPage({
                 </li>
                 <li>
                   <span>Install dependencies</span>
-                  <code>pnpm install</code>
+                  <code>npx pnpm@11.7.0 install && npx pnpm@11.7.0 exec playwright install chromium</code>
                 </li>
                 <li>
                   <span>Create local env</span>
@@ -1827,7 +2041,7 @@ export default async function NewFrameworkPage({
                 </li>
                 <li>
                   <span>Run smoke test</span>
-                  <code>pnpm test:smoke</code>
+                  <code>npx pnpm@11.7.0 test:smoke</code>
                 </li>
               </ol>
             </section>
@@ -1863,53 +2077,6 @@ export default async function NewFrameworkPage({
           </section>
         ) : null}
 
-        <section className="panel framework-build-history">
-          <div className="panel-header">
-            <div>
-              <h2>Recent Framework Builds</h2>
-              <p>Reopen recent framework creation results without recreating files.</p>
-            </div>
-            <a className="secondary-button" href="/framework/builds">
-              View all
-            </a>
-          </div>
-          {frameworkBuilds.length > 0 ? (
-            <div className="framework-build-history-list">
-              {frameworkBuilds.map((build) => (
-                <article key={build.id} className="framework-build-history-card">
-                  <div>
-                    <a href={`/framework/builds/${build.id}`}>{build.projectName}</a>
-                    <span>
-                      {build.packageName} · {build.destinationType === "github" ? "GitHub" : "Local"} ·{" "}
-                      {formatFrameworkBuildDate(build.createdAt)}
-                    </span>
-                    <code>{build.targetDirectory}</code>
-                  </div>
-                  <dl>
-                    <div>
-                      <dt>Created</dt>
-                      <dd>{build.createdFileCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Overwritten</dt>
-                      <dd>{build.overwrittenFileCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Skipped</dt>
-                      <dd>{build.skippedFileCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Git</dt>
-                      <dd>{build.localGitStatus?.replace(/_/g, " ") ?? "not tracked"}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="framework-build-history-empty">No framework builds have been saved yet.</p>
-          )}
-        </section>
       </section>
     </AppShell>
   );

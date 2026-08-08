@@ -8,6 +8,11 @@ coverage/
 .env.*
 !.env.example
 
+tokens.txt
+*.token
+secrets.txt
+.secrets/
+
 *.log
 *.tsbuildinfo
 .DS_Store
