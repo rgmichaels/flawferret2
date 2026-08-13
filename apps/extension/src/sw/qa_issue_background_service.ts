@@ -1,3 +1,5 @@
+import { installPageCaptureRecorder } from "../capture/page_capture_recorder.js";
+
 const MENU_ID = "create-jira-qa-issue";
 
 type JiraConfig = {
@@ -72,9 +74,29 @@ async function injectContentScript(tabId: number): Promise<OperationResult> {
       target: { tabId },
       files: ["content/content_script.js"],
     });
-    return { ok: true };
   } catch (error) {
     return { ok: false, errorMessage: error instanceof Error ? error.message : String(error) };
+  }
+
+  await injectPageCaptureRecorder(tabId);
+  return { ok: true };
+}
+
+// Console/network capture lives in the page's MAIN world (see page_capture_recorder.ts for why).
+// Best-effort: a failure here shouldn't block the core capture-and-copy flow above, so it's
+// logged rather than surfaced as an injection failure.
+async function injectPageCaptureRecorder(tabId: number): Promise<void> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: installPageCaptureRecorder,
+    });
+  } catch (error) {
+    console.warn(
+      "Page capture recorder injection failed:",
+      error instanceof Error ? error.message : String(error)
+    );
   }
 }
 

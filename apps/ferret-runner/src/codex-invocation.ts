@@ -73,6 +73,26 @@ const getPayloadBoolean = (payload: unknown, key: string, fallback: boolean) => 
   return typeof value === "boolean" ? value : fallback;
 };
 
+const getCaptureContextStringArray = (payload: unknown, key: "consoleErrors" | "networkEvents"): string[] => {
+  if (!payload || typeof payload !== "object" || !("captureContext" in payload)) {
+    return [];
+  }
+
+  const captureContext = (payload as Record<string, unknown>).captureContext;
+
+  if (!captureContext || typeof captureContext !== "object" || !(key in captureContext)) {
+    return [];
+  }
+
+  const value = (captureContext as Record<string, unknown>)[key];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
+};
+
 const sanitizePathPart = (value: string) => value.replace(/[^A-Za-z0-9_.-]/g, "-");
 
 const textFromUnknown = (value: unknown): string | null => {
@@ -146,6 +166,8 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     getPayloadValue(job.payload, "branch") ||
     "main";
   const runAffectedTests = getPayloadBoolean(job.payload, "runAffectedTests", true);
+  const consoleErrors = getCaptureContextStringArray(job.payload, "consoleErrors");
+  const networkEvents = getCaptureContextStringArray(job.payload, "networkEvents");
 
   return [
     getConfiguredModelPromptPreface(),
@@ -166,6 +188,18 @@ export const buildCodexPrompt = (job: ClaimedCodexJob) => {
     "",
     "Acceptance criteria:",
     getPayloadValue(job.payload, "acceptanceCriteria"),
+    ...(consoleErrors.length > 0 || networkEvents.length > 0
+      ? [
+          "",
+          "Captured console/network signal from the reporter's browser session:",
+          ...(consoleErrors.length > 0
+            ? ["Console errors:", ...consoleErrors.map((entry) => `- ${entry}`)]
+            : []),
+          ...(networkEvents.length > 0
+            ? ["Network events:", ...networkEvents.map((entry) => `- ${entry}`)]
+            : []),
+        ]
+      : []),
     ...(retryFeedback
       ? [
           "",
