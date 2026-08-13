@@ -1,0 +1,37 @@
+{
+  "eval_name": "checkout-form-field-values",
+  "variant": "with_skill",
+  "expectations": [
+    {
+      "text": "Report identifies the street address in the shipping-address input field",
+      "passed": true,
+      "evidence": "street_address row, high confidence, correct value"
+    },
+    {
+      "text": "Report identifies the credit card number in the card-number input field, shown masked",
+      "passed": true,
+      "evidence": "Value column shows `************1881`"
+    },
+    {
+      "text": "Report does NOT flag the promo code (SAVE10) as PII",
+      "passed": true,
+      "evidence": "Explicitly called out as not PII"
+    },
+    {
+      "text": "Evidence that input field VALUES were extracted, not just visible page text",
+      "passed": true,
+      "evidence": "Report explicitly states both rendered text and form field values were extracted"
+    },
+    {
+      "text": "No unmasked full credit card number appears anywhere in the report text",
+      "passed": false,
+      "evidence": "Same context-column bug: full raw card '4012888888881881' appears in the Line/Context snippets for both rows"
+    }
+  ],
+  "summary": {
+    "pass_rate": 0.8,
+    "passed": 4,
+    "failed": 1,
+    "total": 5
+  }
+}

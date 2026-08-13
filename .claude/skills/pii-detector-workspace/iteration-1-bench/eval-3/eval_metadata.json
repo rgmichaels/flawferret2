@@ -1,0 +1,11 @@
+{
+  "eval_id": 3,
+  "eval_name": "checkout-form-field-values",
+  "prompt": "Our QA staging environment has http://localhost:8743/checkout-form.html open with a pre-filled test order. Before I screenshot this for a design review, make sure none of the form fields are showing real-looking customer data.",
+  "assertions": [
+    "Report identifies the street address sitting in the shipping-address input field (221 Baker Street, Boston MA 02108)",
+    "Report identifies the credit card number sitting in the card-number input field, shown masked",
+    "Report does NOT flag the promo code (SAVE10) as PII",
+    "Evidence in the transcript/output that input field VALUES were extracted, not just visible page text (this is the key differentiator this eval is testing)"
+  ]
+}

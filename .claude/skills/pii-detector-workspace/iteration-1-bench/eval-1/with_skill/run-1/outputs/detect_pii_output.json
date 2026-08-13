@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "type": "email",
+      "confidence": "medium",
+      "matched_masked": "jane.doe@example.com",
+      "context": "Patient Profile  Name: Jane Doe  Email: jane.doe@example.com  Phone: (415) 555-0132  SSN on file: 07...",
+      "line": 5
+    },
+    {
+      "type": "phone",
+      "confidence": "medium",
+      "matched_masked": "(415) 555-0132",
+      "context": "...oe  Email: jane.doe@example.com  Phone: (415) 555-0132  SSN on file: 078-05-1120  Date of Birt...",
+      "line": 7
+    },
+    {
+      "type": "ssn",
+      "confidence": "high",
+      "matched_masked": "***-**-1120",
+      "context": "...om  Phone: (415) 555-0132  SSN on file: 078-05-1120  Date of Birth: March 3, 1985  Home Add...",
+      "line": 9
+    },
+    {
+      "type": "date_of_birth",
+      "confidence": "medium",
+      "matched_masked": "Date of Birth: March 3, 1985",
+      "context": "...15) 555-0132  SSN on file: 078-05-1120  Date of Birth: March 3, 1985  Home Address: 742 Evergreen Terrace, S...",
+      "line": 11
+    },
+    {
+      "type": "street_address",
+      "confidence": "high",
+      "matched_masked": "742 Evergreen Terrace, Springfield, IL 62704",
+      "context": "... of Birth: March 3, 1985  Home Address: 742 Evergreen Terrace, Springfield, IL 62704  Card on file: 4111 1111 1111 1111  Ord...",
+      "line": 13
+    },
+    {
+      "type": "credit_card",
+      "confidence": "high",
+      "matched_masked": "************1111",
+      "context": "...e, Springfield, IL 62704  Card on file: 4111 1111 1111 1111  Order reference: 1234567890123 (not se...",
+      "line": 15
+    }
+  ],
+  "counts": {
+    "email": 1,
+    "phone": 1,
+    "ssn": 1,
+    "date_of_birth": 1,
+    "street_address": 1,
+    "credit_card": 1
+  }
+}

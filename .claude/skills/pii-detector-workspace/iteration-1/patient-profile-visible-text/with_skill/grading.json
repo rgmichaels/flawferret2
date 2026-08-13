@@ -1,0 +1,15 @@
+{
+  "eval_name": "patient-profile-visible-text",
+  "variant": "with_skill",
+  "expectations": [
+    {"text": "Report identifies the SSN finding (078-05-1120), shown masked in the Value column", "passed": true, "evidence": "Value column shows `***-**-1120`"},
+    {"text": "Report identifies the email (jane.doe@example.com)", "passed": true, "evidence": "email row present, medium confidence"},
+    {"text": "Report identifies the phone number ((415) 555-0132)", "passed": true, "evidence": "phone row present"},
+    {"text": "Report identifies the date of birth (March 3, 1985)", "passed": true, "evidence": "date_of_birth row present"},
+    {"text": "Report identifies the street address (742 Evergreen Terrace...)", "passed": true, "evidence": "street_address row present, high confidence"},
+    {"text": "Report identifies the credit card number, shown masked in the Value column", "passed": true, "evidence": "Value column shows `************1111`"},
+    {"text": "Report does NOT flag the order reference number as PII", "passed": true, "evidence": "Explicitly noted as not flagged, with reasoning"},
+    {"text": "Report does NOT flag the session ID as PII", "passed": true, "evidence": "Explicitly noted as not flagged"},
+    {"text": "No unmasked SSN or full credit card number appears anywhere in the report text", "passed": false, "evidence": "BUG: the 'Line/Context' column shows the full raw SSN '078-05-1120' and full raw card '4111 1111 1111 1111' even though the Value column is masked - the context snippet isn't masked, defeating the purpose"}
+  ]
+}
