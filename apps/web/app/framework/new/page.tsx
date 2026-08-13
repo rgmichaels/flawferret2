@@ -1213,10 +1213,10 @@ export default async function NewFrameworkPage({
             ? "complete"
             : "pending"
           : shouldCreateGithubRepository
-            ? params.githubRemoteStatus === "failed"
-              ? "attention"
+            ? params.githubRemoteStatus === "created" || params.githubRemoteStatus === "already_remote"
+              ? "complete"
               : params.githubRemoteStatus
-                ? "complete"
+                ? "attention"
                 : "pending"
             : "skipped",
       status:
