@@ -138,6 +138,7 @@ model Repository {
   defaultBranch        String              @default("main") @map("default_branch")
   cloneUrl             String              @map("clone_url")
   webUrl               String              @map("web_url")
+  baseUrl              String?             @map("base_url")
   localPath            String?             @map("local_path")
   validationCommand    String?             @map("validation_command")
   trackerIntegrationId String?             @map("tracker_integration_id") @db.Uuid

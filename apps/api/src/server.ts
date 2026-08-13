@@ -455,6 +455,7 @@ const toRepositoryResponse = (repository: {
   defaultBranch: string;
   cloneUrl: string;
   webUrl: string;
+  baseUrl: string | null;
   localPath: string | null;
   validationCommand: string | null;
   trackerIntegration:
@@ -476,6 +477,7 @@ const toRepositoryResponse = (repository: {
   defaultBranch: repository.defaultBranch,
   cloneUrl: repository.cloneUrl,
   webUrl: repository.webUrl,
+  baseUrl: repository.baseUrl,
   localPath: repository.localPath,
   validationCommand: repository.validationCommand,
   trackerIntegration: repository.trackerIntegration
@@ -740,6 +742,7 @@ const toJobResponseWithRepository = (job: {
         defaultBranch: string;
         cloneUrl: string;
         webUrl: string;
+        baseUrl: string | null;
         localPath: string | null;
         validationCommand: string | null;
         trackerIntegration:
@@ -2160,6 +2163,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         defaultBranch: body.defaultBranch,
         cloneUrl,
         webUrl,
+        baseUrl: optionalText(body.baseUrl),
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
         trackerIntegrationId: body.trackerIntegrationId ?? null,
@@ -2168,6 +2172,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         defaultBranch: body.defaultBranch,
         cloneUrl,
         webUrl,
+        baseUrl: optionalText(body.baseUrl),
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
         trackerIntegrationId: body.trackerIntegrationId ?? null,
@@ -2248,6 +2253,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         defaultBranch: body.defaultBranch,
         cloneUrl,
         webUrl,
+        baseUrl: optionalText(body.baseUrl),
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
         trackerIntegrationId: body.trackerIntegrationId ?? null,

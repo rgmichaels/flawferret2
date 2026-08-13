@@ -179,6 +179,7 @@ describe("job schemas", () => {
       updatedAt: new Date().toISOString(),
       validationCommand: "pnpm test",
       webUrl: "https://github.com/rgmichaels/example",
+      baseUrl: null,
     };
     const feature = {
       description: "Users sign in.",
@@ -250,6 +251,7 @@ describe("job schemas", () => {
       updatedAt: now,
       validationCommand: "pnpm test",
       webUrl: "https://github.com/rgmichaels/example",
+      baseUrl: null,
     };
 
     const run = localTestRunResponseSchema.parse({
@@ -426,6 +428,7 @@ describe("job schemas", () => {
         updatedAt: new Date().toISOString(),
         validationCommand: "pnpm test",
         webUrl: "https://github.com/rgmichaels/example",
+        baseUrl: null,
       },
       updatedAt: new Date().toISOString(),
     });
@@ -652,6 +655,7 @@ describe("job schemas", () => {
         defaultBranch: "main",
         cloneUrl: "file:///tmp/qa-framework",
         webUrl: "file:///tmp/qa-framework",
+        baseUrl: null,
         localPath: "/tmp/qa-framework",
         validationCommand: "pnpm test",
         trackerIntegration: null,

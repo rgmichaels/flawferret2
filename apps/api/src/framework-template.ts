@@ -96,6 +96,7 @@ const toRepositoryResponse = (repository: {
   defaultBranch: string;
   cloneUrl: string;
   webUrl: string;
+  baseUrl: string | null;
   localPath: string | null;
   validationCommand: string | null;
   trackerIntegration:
@@ -117,6 +118,7 @@ const toRepositoryResponse = (repository: {
   defaultBranch: repository.defaultBranch,
   cloneUrl: repository.cloneUrl,
   webUrl: repository.webUrl,
+  baseUrl: repository.baseUrl,
   localPath: repository.localPath,
   validationCommand: repository.validationCommand,
   trackerIntegration: repository.trackerIntegration

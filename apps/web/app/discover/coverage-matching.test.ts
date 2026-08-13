@@ -118,6 +118,7 @@ describe("discover coverage matching", () => {
         ],
         localPath: "/tmp/repo",
         repository: {
+          baseUrl: null,
           cloneUrl: "https://github.com/rgmichaels/example.git",
           createdAt: new Date().toISOString(),
           defaultBranch: "main",
