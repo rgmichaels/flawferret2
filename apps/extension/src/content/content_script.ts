@@ -1,3 +1,5 @@
+import { requestPageCaptureBuffer, type PageCaptureBuffer } from "../capture/page_capture_recorder.js";
+
 type SelectorCandidate = {
   kind: "byRole" | "byLabel" | "byPlaceholder" | "byTestId" | "byText" | "css";
   selector: string;
@@ -1164,8 +1166,10 @@ function showOverlay(text: string, meta: OverlayMeta): void {
 
 async function buildFlawFerret2NewJobUrl(meta: OverlayMeta, notes: string): Promise<string> {
   const baseUrl = await getFlawFerret2BaseUrl();
+  const pageCapture = await requestPageCaptureBuffer();
   const url = new URL("/jobs/new", baseUrl);
-  url.searchParams.set("captureContext", JSON.stringify(buildFlawFerret2CaptureContext(meta, notes)));
+  const captureContext = buildFlawFerret2CaptureContext(meta, notes, pageCapture);
+  url.searchParams.set("captureContext", JSON.stringify(captureContext));
 
   return url.toString();
 }
@@ -1191,7 +1195,8 @@ async function getFlawFerret2BaseUrl(): Promise<string> {
 
 function buildFlawFerret2CaptureContext(
   meta: OverlayMeta,
-  notes: string
+  notes: string,
+  pageCapture: PageCaptureBuffer = { consoleErrors: [], networkEvents: [] }
 ): Record<string, unknown> {
   const captureContext: Record<string, unknown> = {
     url: meta.url,
@@ -1210,6 +1215,14 @@ function buildFlawFerret2CaptureContext(
     viewport: meta.viewport,
     devicePixelRatio: meta.devicePixelRatio,
   };
+
+  if (pageCapture.consoleErrors.length > 0) {
+    captureContext.consoleErrors = pageCapture.consoleErrors;
+  }
+
+  if (pageCapture.networkEvents.length > 0) {
+    captureContext.networkEvents = pageCapture.networkEvents;
+  }
 
   if (meta.role) {
     captureContext.role = meta.role;
