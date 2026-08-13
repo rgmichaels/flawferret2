@@ -25,6 +25,7 @@ import {
   markRunSucceeded,
   markRunValidating,
   prisma,
+  queueAutomaticCodexRetry,
   resetJobToReadyForCodex,
   updateRunMetadata,
 } from "@flawferret2/db";
@@ -40,7 +41,10 @@ import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation
 import { config } from "./config.js";
 import { cleanupMergedPullRequestCheckout } from "./local-checkout-cleanup.js";
 import {
+  buildAutoRetryRunMetadata,
   createDraftPullRequest,
+  decideAutoRetryOutcome,
+  fetchFailingCheckLogs,
   inspectPullRequestLifecycle,
   type PullRequestLifecycleState,
 } from "./pull-request.js";
@@ -1374,7 +1378,7 @@ while (!shouldStop) {
       continue;
     }
 
-    if (lifecycleState === "CHECKS_FAILED" || lifecycleState === "CLOSED") {
+    if (lifecycleState === "CLOSED") {
       await markRunFailed({
         runId: latestRun.id,
         metadata: lifecycleRunMetadata,
@@ -1399,10 +1403,7 @@ while (!shouldStop) {
       await appendJobEvent({
         jobId: blockedJob.id,
         eventType: "JOB_BLOCKED",
-        message:
-          lifecycleState === "CHECKS_FAILED"
-            ? "Pull request checks need attention."
-            : "Pull request closed before merge.",
+        message: "Pull request closed before merge.",
         metadata: {
           lifecycleState,
           prUrl: lifecycleResult.metadata.prUrl,
@@ -1412,7 +1413,171 @@ while (!shouldStop) {
       });
 
       await sendRunnerSlackMilestone({
-        headline: lifecycleState === "CHECKS_FAILED" ? "checks failed" : "PR closed",
+        headline: "PR closed",
+        jobId: blockedJob.id,
+        lines: [`<${lifecycleResult.metadata.prUrl}|Open pull request>`],
+        payload: blockedJob.payload,
+      });
+
+      log("Blocked job after PR lifecycle terminal state", {
+        jobId: blockedJob.id,
+        lifecycleState,
+        prUrl: lifecycleResult.metadata.prUrl,
+        runId: latestRun.id,
+      });
+
+      await setWorkerState({
+        status: "IDLE",
+      });
+      continue;
+    }
+
+    if (lifecycleState === "CHECKS_FAILED") {
+      const autoRetryBudgetRemaining = prJob.autoRetryCount < config.FERRET_RUNNER_MAX_AUTO_RETRIES;
+      const failingCheckLogsResult = autoRetryBudgetRemaining
+        ? await fetchFailingCheckLogs({
+            localPath,
+            prUrl,
+          })
+        : null;
+      const autoRetryDecision = decideAutoRetryOutcome({
+        autoRetryCount: prJob.autoRetryCount,
+        fetchResult: failingCheckLogsResult,
+        maxAutoRetries: config.FERRET_RUNNER_MAX_AUTO_RETRIES,
+      });
+
+      if (autoRetryDecision.outcome === "retry" && failingCheckLogsResult?.ok) {
+        const retryRunMetadata = buildAutoRetryRunMetadata({
+          feedback:
+            failingCheckLogsResult.metadata.feedback ||
+            "Pull request checks failed, but no failing-check output was fetched.",
+          previousRunStatus: latestRun.status,
+          previousStatus: prJob.status,
+          runMetadata: lifecycleRunMetadata,
+        });
+
+        const retryResult = await queueAutomaticCodexRetry({
+          jobId: prJob.id,
+          runId: latestRun.id,
+          runMetadata: retryRunMetadata,
+        });
+
+        if (!retryResult.job) {
+          log("Skipped auto-retry queue because the job left PR_CREATED before the retry could be applied", {
+            jobId: prJob.id,
+            runId: latestRun.id,
+          });
+
+          await setWorkerState({
+            status: "IDLE",
+          });
+          continue;
+        }
+
+        const retriedJob = retryResult.job;
+
+        await appendJobEvent({
+          jobId: retriedJob.id,
+          eventType: "PR_CHECKS_FAILED",
+          message: prLifecycleMessageByState.CHECKS_FAILED,
+          metadata: {
+            ...lifecycleResult.metadata,
+            runId: latestRun.id,
+            workerId,
+          },
+        });
+
+        await appendJobEvent({
+          jobId: retriedJob.id,
+          eventType: "PR_CHECKS_AUTO_RETRY_QUEUED",
+          message: "ferret-runner auto-queued a Codex retry using the failing check output.",
+          metadata: {
+            autoRetryCount: retriedJob.autoRetryCount,
+            checkNames: failingCheckLogsResult.metadata.checkNames,
+            maxAutoRetries: config.FERRET_RUNNER_MAX_AUTO_RETRIES,
+            prUrl: lifecycleResult.metadata.prUrl,
+            runId: latestRun.id,
+            workerId,
+          },
+        });
+
+        await sendRunnerSlackMilestone({
+          headline: "checks failed, auto-healing",
+          jobId: retriedJob.id,
+          lines: [
+            `<${lifecycleResult.metadata.prUrl}|Open pull request>`,
+            `Auto-retry ${retriedJob.autoRetryCount}/${config.FERRET_RUNNER_MAX_AUTO_RETRIES} queued with the failing check output.`,
+          ],
+          payload: retriedJob.payload,
+        });
+
+        log("Auto-queued Codex retry after PR checks failed", {
+          autoRetryCount: retriedJob.autoRetryCount,
+          checkNames: failingCheckLogsResult.metadata.checkNames,
+          jobId: retriedJob.id,
+          runId: latestRun.id,
+        });
+
+        await setWorkerState({
+          status: "IDLE",
+        });
+        continue;
+      }
+
+      if (autoRetryDecision.outcome === "fetch-failed") {
+        log("Failed to fetch failing check logs for auto-heal; falling back to BLOCKED", {
+          jobId: prJob.id,
+          reason: autoRetryDecision.reason,
+          runId: latestRun.id,
+        });
+      } else {
+        log("Auto-retry budget exhausted for PR checks failure; falling back to BLOCKED", {
+          autoRetryCount: prJob.autoRetryCount,
+          jobId: prJob.id,
+          maxAutoRetries: config.FERRET_RUNNER_MAX_AUTO_RETRIES,
+          runId: latestRun.id,
+        });
+      }
+
+      await markRunFailed({
+        runId: latestRun.id,
+        metadata: lifecycleRunMetadata,
+      });
+
+      const blockedJob = await markJobBlocked({
+        jobId: prJob.id,
+        workerId,
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "PR_CHECKS_FAILED",
+        message: prLifecycleMessageByState.CHECKS_FAILED,
+        metadata: {
+          ...lifecycleResult.metadata,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "JOB_BLOCKED",
+        message: "Pull request checks need attention.",
+        metadata: {
+          autoRetryBudgetExhausted: autoRetryDecision.outcome === "budget-exhausted",
+          autoRetryCount: prJob.autoRetryCount,
+          autoRetryFetchError: autoRetryDecision.outcome === "fetch-failed" ? autoRetryDecision.reason : null,
+          lifecycleState,
+          maxAutoRetries: config.FERRET_RUNNER_MAX_AUTO_RETRIES,
+          prUrl: lifecycleResult.metadata.prUrl,
+          runId: latestRun.id,
+          workerId,
+        },
+      });
+
+      await sendRunnerSlackMilestone({
+        headline: "checks failed",
         jobId: blockedJob.id,
         lines: [`<${lifecycleResult.metadata.prUrl}|Open pull request>`],
         payload: blockedJob.payload,

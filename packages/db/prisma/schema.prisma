@@ -118,6 +118,7 @@ enum JobEventType {
   JIRA_TICKET_CREATED
   JIRA_TICKET_CREATION_FAILED
   JIRA_TICKET_CREATION_SKIPPED
+  PR_CHECKS_AUTO_RETRY_QUEUED
 }
 
 model QueueControl {
@@ -251,20 +252,21 @@ model TrackerIntegration {
 }
 
 model Job {
-  id           String      @id @default(uuid()) @db.Uuid
-  jobType      JobType     @map("job_type")
-  status       JobStatus   @default(QUEUED)
-  priority     JobPriority @default(NORMAL)
-  payload      Json
-  repositoryId String?     @map("repository_id") @db.Uuid
-  claimedBy    String?     @map("claimed_by")
-  claimedAt    DateTime?   @map("claimed_at")
-  completedAt  DateTime?   @map("completed_at")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
-  events       JobEvent[]
-  repository   Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
-  runs         Run[]
+  id             String      @id @default(uuid()) @db.Uuid
+  jobType        JobType     @map("job_type")
+  status         JobStatus   @default(QUEUED)
+  priority       JobPriority @default(NORMAL)
+  payload        Json
+  repositoryId   String?     @map("repository_id") @db.Uuid
+  claimedBy      String?     @map("claimed_by")
+  claimedAt      DateTime?   @map("claimed_at")
+  completedAt    DateTime?   @map("completed_at")
+  autoRetryCount Int         @default(0) @map("auto_retry_count")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  events         JobEvent[]
+  repository     Repository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
+  runs           Run[]
 
   @@index([status, priority, createdAt])
   @@index([repositoryId])

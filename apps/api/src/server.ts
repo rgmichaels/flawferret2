@@ -396,6 +396,7 @@ const toJobResponse = (job: {
   claimedBy: string | null;
   claimedAt: Date | null;
   completedAt: Date | null;
+  autoRetryCount: number;
   createdAt: Date;
   updatedAt: Date;
 }): JobResponse => ({
@@ -409,6 +410,7 @@ const toJobResponse = (job: {
   claimedBy: job.claimedBy,
   claimedAt: job.claimedAt?.toISOString() ?? null,
   completedAt: job.completedAt?.toISOString() ?? null,
+  autoRetryCount: job.autoRetryCount,
   createdAt: job.createdAt.toISOString(),
   updatedAt: job.updatedAt.toISOString(),
 });
@@ -769,6 +771,7 @@ const toJobResponseWithRepository = (job: {
   claimedBy: string | null;
   claimedAt: Date | null;
   completedAt: Date | null;
+  autoRetryCount: number;
   createdAt: Date;
   updatedAt: Date;
 }): JobResponse =>
