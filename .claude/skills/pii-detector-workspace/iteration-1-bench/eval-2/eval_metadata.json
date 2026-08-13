@@ -1,0 +1,10 @@
+{
+  "eval_id": 2,
+  "eval_name": "dashboard-no-pii",
+  "prompt": "Can you check http://localhost:8743/dashboard-clean.html for any exposed customer data before I record a demo video walking through it?",
+  "assertions": [
+    "Report clearly states no PII was found / page is clean",
+    "Report does not invent or flag false positives (PR numbers, build hash, server region should not be treated as PII)",
+    "Response is concise and doesn't pad a clean result with unnecessary caveats"
+  ]
+}

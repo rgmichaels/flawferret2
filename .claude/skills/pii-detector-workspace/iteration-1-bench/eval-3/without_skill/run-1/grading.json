@@ -1,0 +1,32 @@
+{
+  "eval_name": "checkout-form-field-values",
+  "variant": "without_skill",
+  "expectations": [
+    {
+      "text": "Report identifies the street address in the shipping-address input field",
+      "passed": true,
+      "evidence": "Correctly flagged"
+    },
+    {
+      "text": "Report identifies the credit card number in the card-number input field",
+      "passed": false,
+      "evidence": "FALSE NEGATIVE: dismissed the card as 'a widely-used test card... safe to leave as-is' because it recognized the pattern - a real card would never announce itself this way, so this reasoning defeats the purpose of checking at all"
+    },
+    {
+      "text": "Report does NOT flag the promo code (SAVE10) as PII",
+      "passed": true,
+      "evidence": "Correctly excluded"
+    },
+    {
+      "text": "Evidence that input field VALUES were extracted, not just visible page text",
+      "passed": true,
+      "evidence": "Explicitly read actual field values, not truncated display"
+    }
+  ],
+  "summary": {
+    "pass_rate": 0.75,
+    "passed": 3,
+    "failed": 1,
+    "total": 4
+  }
+}

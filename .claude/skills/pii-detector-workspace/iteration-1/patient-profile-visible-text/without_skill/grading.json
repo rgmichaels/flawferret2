@@ -1,0 +1,15 @@
+{
+  "eval_name": "patient-profile-visible-text",
+  "variant": "without_skill",
+  "expectations": [
+    {"text": "Report identifies the SSN finding (078-05-1120), shown masked in the Value column", "passed": false, "evidence": "SSN shown in full plain text, no masking at all"},
+    {"text": "Report identifies the email (jane.doe@example.com)", "passed": true, "evidence": "listed"},
+    {"text": "Report identifies the phone number ((415) 555-0132)", "passed": true, "evidence": "listed"},
+    {"text": "Report identifies the date of birth (March 3, 1985)", "passed": true, "evidence": "listed"},
+    {"text": "Report identifies the street address (742 Evergreen Terrace...)", "passed": true, "evidence": "listed"},
+    {"text": "Report identifies the credit card number, shown masked in the Value column", "passed": false, "evidence": "Card number shown in full plain text, no masking"},
+    {"text": "Report does NOT flag the order reference number as PII", "passed": true, "evidence": "Mentioned as low concern, not treated as a finding"},
+    {"text": "Report does NOT flag the session ID as PII", "passed": true, "evidence": "Called 'low risk'"},
+    {"text": "No unmasked SSN or full credit card number appears anywhere in the report text", "passed": false, "evidence": "Both shown in full plain text throughout"}
+  ]
+}

@@ -1,0 +1,338 @@
+{
+  "metadata": {
+    "skill_name": "pii-detector",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-08-13T17:37:26Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.8889,
+        "passed": 8,
+        "failed": 1,
+        "total": 9,
+        "time_seconds": 53.951,
+        "tokens": 46532,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report identifies the SSN finding (078-05-1120), shown masked in the Value column",
+          "passed": true,
+          "evidence": "Value column shows `***-**-1120`"
+        },
+        {
+          "text": "Report identifies the email (jane.doe@example.com)",
+          "passed": true,
+          "evidence": "email row present, medium confidence"
+        },
+        {
+          "text": "Report identifies the phone number ((415) 555-0132)",
+          "passed": true,
+          "evidence": "phone row present"
+        },
+        {
+          "text": "Report identifies the date of birth (March 3, 1985)",
+          "passed": true,
+          "evidence": "date_of_birth row present"
+        },
+        {
+          "text": "Report identifies the street address (742 Evergreen Terrace...)",
+          "passed": true,
+          "evidence": "street_address row present, high confidence"
+        },
+        {
+          "text": "Report identifies the credit card number, shown masked in the Value column",
+          "passed": true,
+          "evidence": "Value column shows `************1111`"
+        },
+        {
+          "text": "Report does NOT flag the order reference number as PII",
+          "passed": true,
+          "evidence": "Explicitly noted as not flagged, with reasoning"
+        },
+        {
+          "text": "Report does NOT flag the session ID as PII",
+          "passed": true,
+          "evidence": "Explicitly noted as not flagged"
+        },
+        {
+          "text": "No unmasked SSN or full credit card number appears anywhere in the report text",
+          "passed": false,
+          "evidence": "BUG: the 'Line/Context' column shows the full raw SSN '078-05-1120' and full raw card '4111 1111 1111 1111' even though the Value column is masked - the context snippet isn't masked, defeating the purpose"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 42.822,
+        "tokens": 49486,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report clearly states no PII was found / page is clean",
+          "passed": true,
+          "evidence": "'No PII detected on this page' + 'Safe to record'"
+        },
+        {
+          "text": "Report does not invent or flag false positives",
+          "passed": true,
+          "evidence": "PR numbers, build hash, region correctly excluded"
+        },
+        {
+          "text": "Response is concise and doesn't pad a clean result with unnecessary caveats",
+          "passed": true,
+          "evidence": "Short, direct conclusion"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.8,
+        "passed": 4,
+        "failed": 1,
+        "total": 5,
+        "time_seconds": 45.905,
+        "tokens": 49439,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report identifies the street address in the shipping-address input field",
+          "passed": true,
+          "evidence": "street_address row, high confidence, correct value"
+        },
+        {
+          "text": "Report identifies the credit card number in the card-number input field, shown masked",
+          "passed": true,
+          "evidence": "Value column shows `************1881`"
+        },
+        {
+          "text": "Report does NOT flag the promo code (SAVE10) as PII",
+          "passed": true,
+          "evidence": "Explicitly called out as not PII"
+        },
+        {
+          "text": "Evidence that input field VALUES were extracted, not just visible page text",
+          "passed": true,
+          "evidence": "Report explicitly states both rendered text and form field values were extracted"
+        },
+        {
+          "text": "No unmasked full credit card number appears anywhere in the report text",
+          "passed": false,
+          "evidence": "Same context-column bug: full raw card '4012888888881881' appears in the Line/Context snippets for both rows"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6667,
+        "passed": 6,
+        "failed": 3,
+        "total": 9,
+        "time_seconds": 40.29,
+        "tokens": 42129,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report identifies the SSN finding (078-05-1120), shown masked in the Value column",
+          "passed": false,
+          "evidence": "SSN shown in full plain text, no masking at all"
+        },
+        {
+          "text": "Report identifies the email (jane.doe@example.com)",
+          "passed": true,
+          "evidence": "listed"
+        },
+        {
+          "text": "Report identifies the phone number ((415) 555-0132)",
+          "passed": true,
+          "evidence": "listed"
+        },
+        {
+          "text": "Report identifies the date of birth (March 3, 1985)",
+          "passed": true,
+          "evidence": "listed"
+        },
+        {
+          "text": "Report identifies the street address (742 Evergreen Terrace...)",
+          "passed": true,
+          "evidence": "listed"
+        },
+        {
+          "text": "Report identifies the credit card number, shown masked in the Value column",
+          "passed": false,
+          "evidence": "Card number shown in full plain text, no masking"
+        },
+        {
+          "text": "Report does NOT flag the order reference number as PII",
+          "passed": true,
+          "evidence": "Mentioned as low concern, not treated as a finding"
+        },
+        {
+          "text": "Report does NOT flag the session ID as PII",
+          "passed": true,
+          "evidence": "Called 'low risk'"
+        },
+        {
+          "text": "No unmasked SSN or full credit card number appears anywhere in the report text",
+          "passed": false,
+          "evidence": "Both shown in full plain text throughout"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 22.392,
+        "tokens": 40798,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report clearly states no PII was found / page is clean",
+          "passed": true,
+          "evidence": "'Clear to record' stated plainly"
+        },
+        {
+          "text": "Report does not invent or flag false positives",
+          "passed": true,
+          "evidence": "Correctly excluded PR/build/region info"
+        },
+        {
+          "text": "Response is concise and doesn't pad a clean result with unnecessary caveats",
+          "passed": true,
+          "evidence": "Reasonably concise, includes a short methodology note which is fine"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.75,
+        "passed": 3,
+        "failed": 1,
+        "total": 4,
+        "time_seconds": 46.572,
+        "tokens": 43017,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report identifies the street address in the shipping-address input field",
+          "passed": true,
+          "evidence": "Correctly flagged"
+        },
+        {
+          "text": "Report identifies the credit card number in the card-number input field",
+          "passed": false,
+          "evidence": "FALSE NEGATIVE: dismissed the card as 'a widely-used test card... safe to leave as-is' because it recognized the pattern - a real card would never announce itself this way, so this reasoning defeats the purpose of checking at all"
+        },
+        {
+          "text": "Report does NOT flag the promo code (SAVE10) as PII",
+          "passed": true,
+          "evidence": "Correctly excluded"
+        },
+        {
+          "text": "Evidence that input field VALUES were extracted, not just visible page text",
+          "passed": true,
+          "evidence": "Explicitly read actual field values, not truncated display"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.8963,
+        "stddev": 0.1002,
+        "min": 0.8,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 47.5593,
+        "stddev": 5.746,
+        "min": 42.822,
+        "max": 53.951
+      },
+      "tokens": {
+        "mean": 48485.6667,
+        "stddev": 1692.0882,
+        "min": 46532,
+        "max": 49486
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.8056,
+        "stddev": 0.1735,
+        "min": 0.6667,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 36.418,
+        "stddev": 12.5464,
+        "min": 22.392,
+        "max": 46.572
+      },
+      "tokens": {
+        "mean": 41981.3333,
+        "stddev": 1116.8457,
+        "min": 40798,
+        "max": 43017
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.09",
+      "time_seconds": "+11.1",
+      "tokens": "+6504"
+    }
+  },
+  "notes": []
+}

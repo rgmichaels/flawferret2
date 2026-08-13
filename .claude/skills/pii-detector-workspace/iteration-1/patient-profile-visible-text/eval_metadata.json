@@ -1,0 +1,16 @@
+{
+  "eval_id": 1,
+  "eval_name": "patient-profile-visible-text",
+  "prompt": "I need to file a bug report for a rendering issue on our patient profile demo page. Before I take a screenshot and attach it to the Jira ticket, can you check http://localhost:8743/patient-profile.html and make sure there's nothing sensitive in it?",
+  "assertions": [
+    "Report identifies the SSN finding (078-05-1120), shown masked rather than in full",
+    "Report identifies the email (jane.doe@example.com)",
+    "Report identifies the phone number ((415) 555-0132)",
+    "Report identifies the date of birth (March 3, 1985)",
+    "Report identifies the street address (742 Evergreen Terrace, Springfield, IL 62704)",
+    "Report identifies the credit card number, shown masked rather than in full",
+    "Report does NOT flag the order reference number (1234567890123) as PII",
+    "Report does NOT flag the session ID as PII",
+    "No unmasked SSN or full credit card number appears anywhere in the report text"
+  ]
+}

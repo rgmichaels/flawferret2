@@ -1,0 +1,23 @@
+{
+  "skill_name": "pii-detector",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I need to file a bug report for a rendering issue on our patient profile demo page. Before I take a screenshot and attach it to the Jira ticket, can you check http://localhost:8743/patient-profile.html and make sure there's nothing sensitive in it?",
+      "expected_output": "A findings table listing the SSN, email, phone, DOB, street address, and credit card number found on the page, each with confidence and a masked value. The order/reference number and session ID should NOT be flagged as PII.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Can you check http://localhost:8743/dashboard-clean.html for any exposed customer data before I record a demo video walking through it?",
+      "expected_output": "A clear 'no PII detected' result — the page has no PII, only PR titles, build info, and a server region. Should not manufacture false positives.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Our QA staging environment has http://localhost:8743/checkout-form.html open with a pre-filled test order. Before I screenshot this for a design review, make sure none of the form fields are showing real-looking customer data.",
+      "expected_output": "Findings should include the street address and credit card number that are sitting inside the form's input field *values* (not in the visible page text) — this tests that the skill pulls form field values, not just rendered text. The promo code should not be flagged.",
+      "files": []
+    }
+  ]
+}

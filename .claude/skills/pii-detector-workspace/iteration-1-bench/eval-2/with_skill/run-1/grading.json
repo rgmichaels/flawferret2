@@ -1,0 +1,27 @@
+{
+  "eval_name": "dashboard-no-pii",
+  "variant": "with_skill",
+  "expectations": [
+    {
+      "text": "Report clearly states no PII was found / page is clean",
+      "passed": true,
+      "evidence": "'No PII detected on this page' + 'Safe to record'"
+    },
+    {
+      "text": "Report does not invent or flag false positives",
+      "passed": true,
+      "evidence": "PR numbers, build hash, region correctly excluded"
+    },
+    {
+      "text": "Response is concise and doesn't pad a clean result with unnecessary caveats",
+      "passed": true,
+      "evidence": "Short, direct conclusion"
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 3,
+    "failed": 0,
+    "total": 3
+  }
+}

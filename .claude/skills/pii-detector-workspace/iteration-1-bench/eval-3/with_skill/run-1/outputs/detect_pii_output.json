@@ -1,0 +1,22 @@
+{
+  "findings": [
+    {
+      "type": "street_address",
+      "confidence": "high",
+      "matched_masked": "221 Baker Street, Boston MA 02108",
+      "context": "...name: Robert Michaels Shipping address: 221 Baker Street, Boston MA 02108 Card number: 4012888888881881 Promo cod...",
+      "line": 6
+    },
+    {
+      "type": "credit_card",
+      "confidence": "high",
+      "matched_masked": "************1881",
+      "context": "...er Street, Boston MA 02108 Card number: 4012888888881881 Promo code: SAVE10 ",
+      "line": 7
+    }
+  ],
+  "counts": {
+    "street_address": 1,
+    "credit_card": 1
+  }
+}
