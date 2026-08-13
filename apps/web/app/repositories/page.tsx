@@ -24,6 +24,7 @@ const repositoryPayloadFromForm = (formData: FormData) => {
   }
 
   return {
+    baseUrl: String(formData.get("baseUrl") ?? "").trim() || undefined,
     defaultBranch: formData.get("defaultBranch"),
     localPath: formData.get("localPath"),
     name,
@@ -219,6 +220,13 @@ export default async function RepositoriesPage() {
                           <input name="validationCommand" defaultValue={repository.validationCommand ?? ""} />
                         </label>
                         <label>
+                          Base URL
+                          <input name="baseUrl" defaultValue={repository.baseUrl ?? ""} placeholder="https://example.com" type="url" />
+                          <span className="field-hint">
+                            Suggested starting URL for Discover Tests on this repository&apos;s scope.
+                          </span>
+                        </label>
+                        <label>
                           Work Tracker
                           <select name="trackerIntegrationId" defaultValue={repository.trackerIntegrationId ?? ""}>
                             <option value="">None</option>
@@ -286,6 +294,13 @@ export default async function RepositoriesPage() {
                 />
                 <span className="field-hint">
                   Defaults to Playwright. Edit or clear it if this repo needs a different check.
+                </span>
+              </label>
+              <label>
+                Base URL
+                <input name="baseUrl" placeholder="https://example.com" type="url" />
+                <span className="field-hint">
+                  Suggested starting URL for Discover Tests on this repository&apos;s scope.
                 </span>
               </label>
               <label>

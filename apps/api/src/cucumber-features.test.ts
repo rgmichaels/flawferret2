@@ -16,6 +16,7 @@ const createTempRepository = async () => {
   });
 
   const repository: RepositoryResponse = {
+    baseUrl: null,
     cloneUrl: "https://github.com/rgmichaels/example.git",
     createdAt: new Date().toISOString(),
     defaultBranch: "main",

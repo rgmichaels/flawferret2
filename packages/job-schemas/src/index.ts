@@ -101,6 +101,7 @@ export const createRepositoryRequestSchema = z.object({
   defaultBranch: z.string().trim().min(1, "Default branch is required").default("main"),
   localPath: z.string().trim().min(1, "Local checkout path is required"),
   validationCommand: z.string().trim().optional(),
+  baseUrl: z.string().trim().url("Base URL must be a valid URL").optional(),
   trackerIntegrationId: z.string().uuid("Tracker integration must be valid").nullable().optional(),
 });
 
@@ -112,6 +113,7 @@ export const repositoryResponseSchema = z.object({
   defaultBranch: z.string(),
   cloneUrl: z.string(),
   webUrl: z.string(),
+  baseUrl: z.string().nullable(),
   localPath: z.string().nullable(),
   validationCommand: z.string().nullable(),
   trackerIntegration: z

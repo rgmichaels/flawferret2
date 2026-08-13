@@ -296,6 +296,7 @@ export default async function DiscoverPage({
   const selectedRepository = repositories.find((repository) => repository.id === repositoryId) ?? null;
   const selectedRepositoryId = selectedRepository?.id || "";
   const selectedBranch = targetBranch || selectedRepository?.defaultBranch || "main";
+  const analyzePageUrl = pageUrl || selectedRepository?.baseUrl || "";
   const recentRuns = selectedRepositoryId
     ? allRecentRuns.filter((run) => run.repository.id === selectedRepositoryId)
     : [];
@@ -370,7 +371,7 @@ export default async function DiscoverPage({
             </label>
             <label className="wide-field">
               Page URL
-              <input name="pageUrl" defaultValue={pageUrl} placeholder="https://example.com/login" required type="url" />
+              <input name="pageUrl" defaultValue={analyzePageUrl} placeholder="https://example.com/login" required type="url" />
             </label>
             <label className="wide-field">
               Notes
