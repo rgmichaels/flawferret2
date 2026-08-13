@@ -1,6 +1,28 @@
 import "./styles.css";
 import type { Metadata } from "next";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+
+const spaceGrotesk = Space_Grotesk({
+  display: "swap",
+  subsets: ["latin"],
+  variable: "--font-display",
+  weight: ["500", "700"],
+});
+
+const ibmPlexSans = IBM_Plex_Sans({
+  display: "swap",
+  subsets: ["latin"],
+  variable: "--font-body",
+  weight: ["400", "600"],
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  display: "swap",
+  subsets: ["latin"],
+  variable: "--font-mono",
+  weight: ["400", "600"],
+});
 
 export const metadata: Metadata = {
   title: "FlawFerret2",
@@ -18,7 +40,7 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${spaceGrotesk.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
       <body>{children}</body>
     </html>
   );

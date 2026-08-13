@@ -8,6 +8,7 @@ import type {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "./app-shell";
+import { Beacon, jobStatusTone } from "./beacon";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -536,9 +537,7 @@ export default async function Home({
                           <span>{getJobTargetBranch(job)}</span>
                         </td>
                         <td>
-                          <span className={`status-pill ${job.status.toLowerCase()}`}>
-                            {statusLabels[job.status]}
-                          </span>
+                          <Beacon tone={jobStatusTone[job.status]}>{statusLabels[job.status]}</Beacon>
                           <span className="stage-note">{getStageLabel(job)}</span>
                         </td>
                         <td>
