@@ -43,6 +43,7 @@ const envSchema = z.object({
   FERRET_RUNNER_ENABLE_PR_CREATION: envBoolean.default(false),
   FERRET_RUNNER_LOG_DIR: z.string().trim().min(1).default(".flawferret-runs"),
   FERRET_RUNNER_LOCAL_TEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
+  FERRET_RUNNER_MAX_AUTO_RETRIES: z.coerce.number().int().nonnegative().default(2),
   FERRET_RUNNER_VALIDATION_COMMAND: z.string().trim().optional(),
   SLACK_WEBHOOK_URL: optionalUrl,
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),

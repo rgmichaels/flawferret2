@@ -75,7 +75,8 @@ export const appendJobEvent = async ({
     | "JOB_BLOCKED"
     | "JIRA_TICKET_CREATED"
     | "JIRA_TICKET_CREATION_FAILED"
-    | "JIRA_TICKET_CREATION_SKIPPED";
+    | "JIRA_TICKET_CREATION_SKIPPED"
+    | "PR_CHECKS_AUTO_RETRY_QUEUED";
   message: string;
   metadata?: Prisma.InputJsonValue;
 }) =>
@@ -904,6 +905,84 @@ export const approveJobForCodex = async ({ jobId }: { jobId: string }) =>
     data: {
       status: "CODEX_APPROVED",
     },
+  });
+
+/**
+ * Auto-heal path for `CHECKS_FAILED`: requeues the job straight into
+ * `CODEX_APPROVED`, bypassing the manual `approve-codex` gate, and bumps the
+ * durable `autoRetryCount` counter. Mirrors the metadata-clearing shape the
+ * manual `/jobs/:id/retry-stage` route writes (see apps/api/src/server.ts),
+ * but reuses the existing run instead of creating a new one.
+ *
+ * The job is only claimed for auto-retry out of `PR_CREATED` — the status
+ * `claimNextPrCreatedJob` leaves jobs in while ferret-runner polls PR
+ * lifecycle. Guards the write with `updateMany` (mirroring
+ * `approveJobForCodex`) so that if another writer already moved the job off
+ * `PR_CREATED` (e.g. a manual cancel/requeue) this becomes a no-op instead of
+ * clobbering that write, and returns `{ job: null }` for the caller to handle
+ * the same way `approveJobForCodex`'s HTTP caller handles a 0-row update.
+ */
+export const queueAutomaticCodexRetry = async ({
+  jobId,
+  runId,
+  runMetadata,
+}: {
+  jobId: string;
+  runId: string;
+  runMetadata: Prisma.InputJsonValue;
+}) =>
+  prisma.$transaction(async (tx) => {
+    const updateResult = await tx.job.updateMany({
+      where: {
+        id: jobId,
+        status: "PR_CREATED",
+      },
+      data: {
+        autoRetryCount: {
+          increment: 1,
+        },
+        claimedAt: null,
+        claimedBy: null,
+        completedAt: null,
+        status: "CODEX_APPROVED",
+      },
+    });
+
+    if (updateResult.count === 0) {
+      return {
+        job: null,
+      };
+    }
+
+    await tx.run.update({
+      where: {
+        id: runId,
+      },
+      data: {
+        completedAt: null,
+        metadata: runMetadata,
+        status: "READY_FOR_CODEX",
+      },
+    });
+
+    const job = await tx.job.findUniqueOrThrow({
+      where: {
+        id: jobId,
+      },
+      include: {
+        repository: true,
+        runs: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
+
+    return {
+      job,
+    };
   });
 
 export const resetJobToReadyForCodex = async ({

@@ -440,6 +440,7 @@ describe("job schemas", () => {
 
   it("parses paginated job responses", () => {
     const job = {
+      autoRetryCount: 0,
       claimedAt: null,
       claimedBy: null,
       completedAt: null,

@@ -894,6 +894,17 @@ export default async function JobDetailPage({
           ? "Created"
           : "Not created",
     },
+    {
+      detail:
+        job.autoRetryCount > 0
+          ? `ferret-runner auto-queued ${job.autoRetryCount} Codex retr${
+              job.autoRetryCount === 1 ? "y" : "ies"
+            } after PR checks failed, using fetched failing-check output as feedback.`
+          : "No automatic retries have run for this job yet.",
+      label: "Auto-Heal",
+      tone: job.autoRetryCount > 0 ? "ok" : "muted",
+      value: `${job.autoRetryCount} retr${job.autoRetryCount === 1 ? "y" : "ies"}`,
+    },
   ];
 
   return (

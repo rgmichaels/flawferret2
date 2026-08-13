@@ -84,6 +84,7 @@ export const jobEventTypeSchema = z.enum([
   "JIRA_TICKET_CREATED",
   "JIRA_TICKET_CREATION_FAILED",
   "JIRA_TICKET_CREATION_SKIPPED",
+  "PR_CHECKS_AUTO_RETRY_QUEUED",
 ]);
 
 export const createRepositoryRequestSchema = z.object({
@@ -649,6 +650,7 @@ export const jobResponseSchema = z.object({
   claimedBy: z.string().nullable(),
   claimedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
+  autoRetryCount: z.number().int().nonnegative(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

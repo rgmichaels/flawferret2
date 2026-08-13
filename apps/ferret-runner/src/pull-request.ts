@@ -76,6 +76,35 @@ const runCommand = async (command: string, args: string[], cwd: string) => {
   return stdout.trim();
 };
 
+export type CommandRunner = (command: string, args: string[], cwd: string) => Promise<string>;
+
+export type FailingCheckLog = {
+  /** Fetched Actions log output, the surfaced details URL, or an error message, depending on `source`. */
+  detail: string;
+  name: string;
+  runId: string | null;
+  source: "actions-log" | "details-url-fallback";
+  url: string | null;
+};
+
+export type FetchFailingCheckLogsResult =
+  | {
+      ok: true;
+      metadata: {
+        checkNames: string[];
+        checks: FailingCheckLog[];
+        feedback: string;
+      };
+    }
+  | {
+      ok: false;
+      message: string;
+      metadata: {
+        error?: string;
+        prUrl: string;
+      };
+    };
+
 const getCheckState = (check: unknown) => {
   if (!check || typeof check !== "object") {
     return {
@@ -419,4 +448,296 @@ export const inspectPullRequestLifecycle = async ({
       },
     };
   }
+};
+
+const FAILING_CHECK_BUCKETS = new Set(["fail", "cancel"]);
+const FAILING_CHECK_STATES = new Set([
+  "ACTION_REQUIRED",
+  "CANCELLED",
+  "CANCELED",
+  "FAILURE",
+  "TIMED_OUT",
+]);
+
+const isFailingCheck = (check: unknown) => {
+  if (!check || typeof check !== "object") {
+    return false;
+  }
+
+  const record = check as Record<string, unknown>;
+  const bucket = typeof record.bucket === "string" ? record.bucket.toLowerCase() : null;
+  const state = typeof record.state === "string" ? record.state.toUpperCase() : null;
+
+  return (bucket && FAILING_CHECK_BUCKETS.has(bucket)) || (state !== null && FAILING_CHECK_STATES.has(state));
+};
+
+// GitHub Actions check `link` URLs look like
+// https://github.com/<owner>/<repo>/actions/runs/<runId>/job/<jobId>. Third-party
+// checks (e.g. external CI providers) link elsewhere and have no extractable run id -
+// those fall back to surfacing the details URL instead of a fetched log.
+const extractActionsRunId = (url: string | null) => {
+  if (!url) {
+    return null;
+  }
+
+  const match = url.match(/\/actions\/runs\/(\d+)/);
+
+  return match ? match[1] : null;
+};
+
+// Total character budget for the concatenated `feedback` string handed to Codex as
+// retry context. Split evenly across failing checks (rather than truncating the
+// final concatenation from the front) so that with 3+ failing checks every check
+// still contributes some signal instead of the first check's log alone consuming
+// the whole budget and silently dropping the rest.
+const FEEDBACK_BUDGET_CHARACTERS = 4000;
+
+const truncateCheckDetail = (detail: string, maxLength: number) => {
+  if (detail.length <= maxLength) {
+    return detail;
+  }
+
+  return `${detail.slice(0, maxLength)}...`;
+};
+
+// Splits `budget` across `checks` in two passes so unused headroom from short checks
+// (e.g. a details-url fallback message) is redistributed to checks that actually need
+// more room (e.g. a large Actions log), rather than every check getting a fixed even
+// share regardless of how much of it goes unused.
+const allocateCheckBudgets = (checks: FailingCheckLog[], budget: number): number[] => {
+  const evenShare = Math.max(1, Math.floor(budget / checks.length));
+  const allocations = checks.map((check) => Math.min(check.detail.length, evenShare));
+  const leftover = budget - allocations.reduce((sum, allocation) => sum + allocation, 0);
+
+  if (leftover <= 0) {
+    return allocations;
+  }
+
+  const needsMoreIndexes = checks
+    .map((check, index) => index)
+    .filter((index) => checks[index].detail.length > allocations[index]);
+
+  if (needsMoreIndexes.length === 0) {
+    return allocations;
+  }
+
+  const extraShare = Math.max(1, Math.floor(leftover / needsMoreIndexes.length));
+
+  for (const index of needsMoreIndexes) {
+    const remainingNeed = checks[index].detail.length - allocations[index];
+
+    allocations[index] += Math.min(remainingNeed, extraShare);
+  }
+
+  return allocations;
+};
+
+const buildFeedback = (checks: FailingCheckLog[], budget = FEEDBACK_BUDGET_CHARACTERS) => {
+  const allocations = allocateCheckBudgets(checks, budget);
+
+  return checks
+    .map(
+      (check, index) =>
+        `## ${check.name}${check.url ? ` (${check.url})` : ""}\n${truncateCheckDetail(check.detail, allocations[index])}`,
+    )
+    .join("\n\n");
+};
+
+/**
+ * Fetches failing-check output for a pull request via `gh`, for use as auto-heal
+ * `retryFeedback`. Enumerates failing checks with `gh pr checks --json`, then pulls
+ * the failed-step log for each GitHub Actions check via `gh run view --log-failed`.
+ * Non-Actions checks (no extractable run id) fall back to surfacing the check's
+ * details URL instead of fetched log output, since there's no generic API for
+ * third-party CI output.
+ *
+ * Any `gh` invocation failure (rate limit, auth issue, deleted run, etc.) causes the
+ * whole fetch to fail (`ok: false`) rather than returning partial/empty feedback, so
+ * callers can fall back to today's `BLOCKED` behavior for that poll.
+ */
+export const fetchFailingCheckLogs = async ({
+  localPath,
+  prUrl,
+  run = runCommand,
+}: {
+  localPath: string;
+  prUrl: string;
+  run?: CommandRunner;
+}): Promise<FetchFailingCheckLogsResult> => {
+  let checksOutput: string;
+
+  try {
+    checksOutput = await run(
+      "gh",
+      ["pr", "checks", prUrl, "--json", "name,state,link,bucket"],
+      localPath,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message: "Failed to enumerate pull request checks via gh.",
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        prUrl,
+      },
+    };
+  }
+
+  let parsedChecks: unknown;
+
+  try {
+    parsedChecks = JSON.parse(checksOutput);
+  } catch (error) {
+    return {
+      ok: false,
+      message: "Failed to parse `gh pr checks` output.",
+      metadata: {
+        error: error instanceof Error ? error.message : String(error),
+        prUrl,
+      },
+    };
+  }
+
+  const failingChecks = (Array.isArray(parsedChecks) ? parsedChecks : []).filter(isFailingCheck) as Array<
+    Record<string, unknown>
+  >;
+
+  if (failingChecks.length === 0) {
+    return {
+      ok: false,
+      message: "`gh pr checks` reported no failing checks to fetch logs for.",
+      metadata: {
+        prUrl,
+      },
+    };
+  }
+
+  const checks: FailingCheckLog[] = [];
+
+  for (const check of failingChecks) {
+    const name = typeof check.name === "string" && check.name.length > 0 ? check.name : "Unnamed check";
+    const url = typeof check.link === "string" && check.link.length > 0 ? check.link : null;
+    const runId = extractActionsRunId(url);
+
+    if (!runId) {
+      checks.push({
+        detail: url
+          ? `No GitHub Actions log is available for this check. Details: ${url}`
+          : "No GitHub Actions log or details URL is available for this check.",
+        name,
+        runId: null,
+        source: "details-url-fallback",
+        url,
+      });
+      continue;
+    }
+
+    try {
+      const log = await run("gh", ["run", "view", runId, "--log-failed"], localPath);
+
+      checks.push({
+        detail: log,
+        name,
+        runId,
+        source: "actions-log",
+        url,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        message: `Failed to fetch failed-step log for check "${name}" via gh.`,
+        metadata: {
+          error: error instanceof Error ? error.message : String(error),
+          prUrl,
+        },
+      };
+    }
+  }
+
+  const feedback = buildFeedback(checks);
+
+  return {
+    ok: true,
+    metadata: {
+      checkNames: checks.map((check) => check.name),
+      checks,
+      feedback,
+    },
+  };
+};
+
+export type AutoRetryDecision =
+  | {
+      outcome: "budget-exhausted";
+    }
+  | {
+      outcome: "fetch-failed";
+      reason: string;
+    }
+  | {
+      outcome: "retry";
+    };
+
+/**
+ * Decides what `ferret-runner` should do about a `CHECKS_FAILED` pull request, given
+ * the job's durable auto-retry counter and (if the budget allows it) the result of
+ * fetching the failing check logs. Pure decision logic, kept separate from the
+ * `index.ts` orchestration (db writes, job events, Slack) so the budget/fallback
+ * branching is unit-testable on its own.
+ */
+export const decideAutoRetryOutcome = ({
+  autoRetryCount,
+  fetchResult,
+  maxAutoRetries,
+}: {
+  autoRetryCount: number;
+  fetchResult: FetchFailingCheckLogsResult | null;
+  maxAutoRetries: number;
+}): AutoRetryDecision => {
+  if (autoRetryCount >= maxAutoRetries) {
+    return {
+      outcome: "budget-exhausted",
+    };
+  }
+
+  if (!fetchResult || !fetchResult.ok) {
+    return {
+      outcome: "fetch-failed",
+      reason: fetchResult?.message ?? "Auto-retry budget is available, but no failing check logs were fetched.",
+    };
+  }
+
+  return {
+    outcome: "retry",
+  };
+};
+
+/**
+ * Builds the run metadata for an auto-heal retry, using the same `retryFeedback`
+ * shape the manual `/jobs/:id/retry-stage` route writes and clearing the run's
+ * `validation` / `pullRequest` metadata, so the next Codex pass starts clean
+ * regardless of whether the retry was triggered by a human or by auto-heal.
+ */
+export const buildAutoRetryRunMetadata = ({
+  feedback,
+  previousRunStatus,
+  previousStatus,
+  runMetadata,
+}: {
+  feedback: string;
+  previousRunStatus: string;
+  previousStatus: string;
+  runMetadata: Record<string, unknown>;
+}) => {
+  const { pullRequest: _pullRequest, validation: _validation, ...rest } = runMetadata;
+
+  return {
+    ...rest,
+    retryFeedback: {
+      createdAt: new Date().toISOString(),
+      feedback,
+      previousRunStatus,
+      previousStatus,
+    },
+  };
 };
