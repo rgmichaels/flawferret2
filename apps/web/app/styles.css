@@ -2191,6 +2191,7 @@ button {
   color: #475569;
   font-size: 14px;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .notice.success {
