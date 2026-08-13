@@ -1,8 +1,38 @@
 :root {
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #eef2f7;
-  color: #152033;
+
+  /* Structural tokens — chrome, actions, surfaces. Never used for status meaning. */
+  --ink: #12161f;
+  --paper: #e9ecf2;
+  --surface: #ffffff;
+  --border: #d7dce6;
+  --action: #2f4d8f;
+
+  /* Signal tokens — the six-tone status system. See docs/specs/design-status-signal-system.md.
+     --signal-decision is reserved exclusively for "a human must act now". */
+  --signal-waiting: #5b6472;
+  --signal-decision: #b8791c;
+  --signal-active: #1c7c86;
+  --signal-success: #2f7d4f;
+  --signal-attention: #b3402d;
+  --signal-inactive: #9aa2b1;
+
+  /* Type scale. Display = Space Grotesk, Body = IBM Plex Sans, Mono = IBM Plex Mono
+     (loaded via next/font/google in app/layout.tsx, which sets these custom properties). */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --text-display-l: 600 28px/34px var(--font-display);
+  --text-display-m: 600 19px/25px var(--font-display);
+  --text-display-s: 600 14px/20px var(--font-display);
+  --text-body: 400 14px/21px var(--font-body);
+  --text-body-s: 400 13px/19px var(--font-body);
+  --text-caption: 600 11px/16px var(--font-body);
+
+  font-family: var(--font-body);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 * {
@@ -306,9 +336,9 @@ textarea {
 }
 
 .eyebrow {
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 800;
+  color: var(--action);
+  font: var(--text-caption);
+  letter-spacing: 0.04em;
   margin: 0 0 4px;
   text-transform: uppercase;
 }
@@ -320,19 +350,18 @@ p {
 }
 
 h1 {
-  font-size: 30px;
-  line-height: 1.1;
+  font: var(--text-display-l);
   margin-bottom: 0;
 }
 
 h2 {
-  font-size: 18px;
+  font: var(--text-display-m);
   margin-bottom: 6px;
 }
 
 .primary-link,
 button {
-  background: #2563eb;
+  background: var(--action);
   border: 0;
   border-radius: 8px;
   color: #ffffff;
@@ -358,8 +387,8 @@ button {
 }
 
 .secondary-button:hover {
-  border-color: #2563eb;
-  color: #1d4ed8;
+  border-color: var(--action);
+  color: var(--action);
 }
 
 .danger-button,
@@ -408,27 +437,27 @@ button {
 }
 
 .metric-card.queued {
-  border-top: 3px solid #3b82f6;
+  border-top: 3px solid var(--signal-waiting);
 }
 
 .metric-card.running {
-  border-top: 3px solid #22c55e;
+  border-top: 3px solid var(--signal-active);
 }
 
 .metric-card.review {
-  border-top: 3px solid #f59e0b;
+  border-top: 3px solid var(--signal-decision);
 }
 
 .metric-card.failed {
-  border-top: 3px solid #ef4444;
+  border-top: 3px solid var(--signal-attention);
 }
 
 .metric-card.completed {
-  border-top: 3px solid #8b5cf6;
+  border-top: 3px solid var(--signal-success);
 }
 
 .metric-card.canceled {
-  border-top: 3px solid #94a3b8;
+  border-top: 3px solid var(--signal-inactive);
 }
 
 .settings-grid {
@@ -2269,7 +2298,7 @@ button {
 }
 
 .collapsible-summary::after {
-  color: #2563eb;
+  color: var(--action);
   content: "+";
   flex: 0 0 auto;
   font-size: 20px;
@@ -2292,7 +2321,7 @@ button {
 }
 
 .panel-header > span {
-  color: #2563eb;
+  color: var(--action);
   font-size: 13px;
   font-weight: 800;
 }
@@ -2305,7 +2334,7 @@ button {
 }
 
 .panel-actions > span {
-  color: #2563eb;
+  color: var(--action);
   font-size: 13px;
   font-weight: 800;
 }
@@ -2353,7 +2382,7 @@ button {
 }
 
 .job-filter-form button {
-  background: #2563eb;
+  background: var(--action);
   color: #ffffff;
 }
 
@@ -2363,13 +2392,13 @@ button {
 }
 
 .filter-reset:hover {
-  border-color: #2563eb;
-  color: #2563eb;
+  border-color: var(--action);
+  color: var(--action);
 }
 
 .job-filter-form strong {
   align-self: center;
-  color: #2563eb;
+  color: var(--action);
   white-space: nowrap;
 }
 
@@ -2458,7 +2487,7 @@ td span {
 }
 
 td a {
-  color: #2563eb;
+  color: var(--action);
   font-weight: 800;
   margin-bottom: 4px;
 }
@@ -2474,12 +2503,96 @@ td span {
   margin-top: 3px;
 }
 
+/* Surfaces rows whose job needs the operator's attention right now, without
+   requiring a reviewer to read every status cell in the table. */
+tr:has(.beacon--decision) {
+  border-left: 3px solid var(--signal-decision);
+}
+
 .stage-note {
   color: #667085;
   font-size: 12px;
   line-height: 1.35;
   max-width: 180px;
   white-space: normal;
+}
+
+/* Beacon — the shared status-signal component. One tone, never a hardcoded color.
+   See docs/specs/design-status-signal-system.md and app/beacon.tsx for the
+   JobStatus/RunStatus/LocalTestRunStatus -> tone lookup. */
+.beacon {
+  align-items: center;
+  border-radius: 4px;
+  display: inline-flex;
+  font: 600 11px/1 var(--font-mono);
+  gap: 6px;
+  letter-spacing: 0.03em;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.beacon-dot {
+  border-radius: 50%;
+  display: block;
+  height: 7px;
+  margin-top: 0;
+  width: 7px;
+}
+
+.beacon--waiting {
+  background: color-mix(in srgb, var(--signal-waiting) 12%, white);
+  color: var(--signal-waiting);
+}
+
+.beacon--waiting .beacon-dot {
+  background: var(--signal-waiting);
+}
+
+.beacon--decision {
+  background: color-mix(in srgb, var(--signal-decision) 14%, white);
+  color: var(--signal-decision);
+}
+
+.beacon--decision .beacon-dot {
+  background: var(--signal-decision);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal-decision) 25%, transparent);
+}
+
+.beacon--active {
+  background: color-mix(in srgb, var(--signal-active) 12%, white);
+  color: var(--signal-active);
+}
+
+.beacon--active .beacon-dot {
+  background: var(--signal-active);
+}
+
+.beacon--success {
+  background: color-mix(in srgb, var(--signal-success) 12%, white);
+  color: var(--signal-success);
+}
+
+.beacon--success .beacon-dot {
+  background: var(--signal-success);
+}
+
+.beacon--attention {
+  background: color-mix(in srgb, var(--signal-attention) 12%, white);
+  color: var(--signal-attention);
+}
+
+.beacon--attention .beacon-dot {
+  background: var(--signal-attention);
+}
+
+.beacon--inactive {
+  background: color-mix(in srgb, var(--signal-inactive) 12%, white);
+  color: var(--signal-inactive);
+  opacity: 0.85;
+}
+
+.beacon--inactive .beacon-dot {
+  background: var(--signal-inactive);
 }
 
 .status-pill {
@@ -2594,8 +2707,8 @@ td span {
 }
 
 .inline-job-action button:hover {
-  border-color: #2563eb;
-  color: #1d4ed8;
+  border-color: var(--action);
+  color: var(--action);
 }
 
 .inline-job-action button.danger-inline-button,
@@ -2655,7 +2768,7 @@ td span {
 }
 
 .artifact-link:hover {
-  border-color: #2563eb;
+  border-color: var(--action);
 }
 
 .form-panel {
@@ -4857,9 +4970,9 @@ textarea {
 
 .stage-card > span {
   align-items: center;
-  background: #f1f5f9;
+  background: color-mix(in srgb, var(--signal-waiting) 12%, white);
   border-radius: 999px;
-  color: #475569;
+  color: var(--signal-waiting);
   display: inline-flex;
   font-size: 12px;
   font-weight: 900;
@@ -4890,40 +5003,40 @@ textarea {
 }
 
 .stage-card.complete {
-  border-color: #bbf7d0;
+  border-color: color-mix(in srgb, var(--signal-success) 35%, var(--border));
 }
 
 .stage-card.complete > span {
-  background: #dcfce7;
-  color: #15803d;
+  background: color-mix(in srgb, var(--signal-success) 15%, white);
+  color: var(--signal-success);
 }
 
 .stage-card.current {
-  border-color: #bfdbfe;
-  box-shadow: inset 0 0 0 1px #bfdbfe;
+  border-color: color-mix(in srgb, var(--signal-active) 35%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--signal-active) 35%, var(--border));
 }
 
 .stage-card.current > span {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--signal-active) 15%, white);
+  color: var(--signal-active);
 }
 
 .stage-card.blocked {
-  border-color: #fecaca;
+  border-color: color-mix(in srgb, var(--signal-attention) 35%, var(--border));
 }
 
 .stage-card.blocked > span {
-  background: #fee2e2;
-  color: #dc2626;
+  background: color-mix(in srgb, var(--signal-attention) 15%, white);
+  color: var(--signal-attention);
 }
 
 .stage-card.skipped {
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
 }
 
 .stage-card.skipped > span {
-  background: #e2e8f0;
-  color: #64748b;
+  background: color-mix(in srgb, var(--signal-inactive) 15%, white);
+  color: var(--signal-inactive);
 }
 
 .validation-trust-card {
@@ -4970,35 +5083,35 @@ textarea {
 }
 
 .validation-trust-card.ok {
-  border-color: #bbf7d0;
+  border-color: color-mix(in srgb, var(--signal-success) 35%, var(--border));
 }
 
 .validation-trust-card.ok span {
-  color: #15803d;
+  color: var(--signal-success);
 }
 
 .validation-trust-card.warn {
-  border-color: #fde68a;
+  border-color: color-mix(in srgb, var(--signal-attention) 35%, var(--border));
 }
 
 .validation-trust-card.warn span {
-  color: #b45309;
+  color: var(--signal-attention);
 }
 
 .validation-trust-card.danger {
-  border-color: #fecaca;
+  border-color: color-mix(in srgb, var(--signal-attention) 35%, var(--border));
 }
 
 .validation-trust-card.danger span {
-  color: #dc2626;
+  color: var(--signal-attention);
 }
 
 .validation-trust-card.muted {
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--signal-inactive) 8%, var(--surface));
 }
 
 .validation-trust-card.muted span {
-  color: #64748b;
+  color: var(--signal-inactive);
 }
 
 .retry-feedback-card {
@@ -5017,7 +5130,7 @@ textarea {
 
 .retry-feedback-card blockquote {
   background: #f8fafc;
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--action);
   color: #334155;
   font-size: 13px;
   line-height: 1.45;
@@ -5108,6 +5221,7 @@ textarea {
   background: #0f172a;
   border-radius: 8px;
   color: #dbeafe;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.45;
   margin: 0;
@@ -5201,23 +5315,23 @@ textarea {
 }
 
 .diagnostic-item.ok {
-  border-color: #bbf7d0;
+  border-color: color-mix(in srgb, var(--signal-success) 35%, var(--border));
 }
 
 .diagnostic-item.ok span {
-  color: #15803d;
+  color: var(--signal-success);
 }
 
 .diagnostic-item.danger {
-  border-color: #fecaca;
+  border-color: color-mix(in srgb, var(--signal-attention) 35%, var(--border));
 }
 
 .diagnostic-item.danger span {
-  color: #dc2626;
+  color: var(--signal-attention);
 }
 
 .diagnostic-item.muted {
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--signal-inactive) 8%, var(--surface));
 }
 
 .diagnostics-log-grid {
@@ -5227,6 +5341,7 @@ textarea {
 }
 
 .diagnostics-log-grid section {
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
   border: 1px solid #e1e7f0;
   border-radius: 8px;
   min-width: 0;
@@ -5345,9 +5460,68 @@ textarea {
   gap: 18px;
 }
 
+.job-detail-shell code {
+  font-family: var(--font-mono);
+}
+
+/* Trust Header — the single synthesized "is this safe" answer for the job,
+   directly below the goal text. Tone matches the job's Beacon tone. */
+.trust-header {
+  border-left: 4px solid var(--signal-inactive);
+  display: grid;
+  gap: 6px;
+  padding: 16px 20px;
+}
+
+.trust-header .beacon {
+  justify-self: start;
+}
+
+.trust-header strong {
+  color: var(--ink);
+  font: var(--text-display-s);
+}
+
+.trust-header p {
+  color: #4a5870;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.trust-header--waiting {
+  background: color-mix(in srgb, var(--signal-waiting) 8%, var(--surface));
+  border-left-color: var(--signal-waiting);
+}
+
+.trust-header--decision {
+  background: color-mix(in srgb, var(--signal-decision) 10%, var(--surface));
+  border-left-color: var(--signal-decision);
+}
+
+.trust-header--active {
+  background: color-mix(in srgb, var(--signal-active) 8%, var(--surface));
+  border-left-color: var(--signal-active);
+}
+
+.trust-header--success {
+  background: color-mix(in srgb, var(--signal-success) 8%, var(--surface));
+  border-left-color: var(--signal-success);
+}
+
+.trust-header--attention {
+  background: color-mix(in srgb, var(--signal-attention) 8%, var(--surface));
+  border-left-color: var(--signal-attention);
+}
+
+.trust-header--inactive {
+  background: color-mix(in srgb, var(--signal-inactive) 8%, var(--surface));
+  border-left-color: var(--signal-inactive);
+}
+
 .job-detail-topbar {
   align-items: start;
-  border-left: 4px solid #2563eb;
+  border-left: 4px solid var(--action);
   gap: 18px;
 }
 
@@ -5373,7 +5547,7 @@ textarea {
   max-width: 420px;
 }
 
-.job-detail-shell .detail-actions .status-pill {
+.job-detail-shell .detail-actions .beacon {
   order: -1;
 }
 
@@ -5402,11 +5576,11 @@ textarea {
 }
 
 .job-detail-shell .stage-card.blocked {
-  background: #fffafa;
+  background: color-mix(in srgb, var(--signal-attention) 4%, var(--surface));
 }
 
 .job-detail-shell .stage-card.waiting {
-  background: #fbfdff;
+  background: color-mix(in srgb, var(--signal-waiting) 4%, var(--surface));
 }
 
 .job-detail-shell .validation-trust-card {
@@ -5465,7 +5639,7 @@ textarea {
 }
 
 .job-detail-shell .pipeline-section {
-  background: #fbfdff;
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
 }
 
 .job-detail-shell .timeline {
@@ -5838,6 +6012,7 @@ textarea {
 }
 
 .pipeline-section {
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
   border: 1px solid #e1e7f0;
   border-radius: 8px;
   min-width: 0;
@@ -5856,7 +6031,7 @@ textarea {
 }
 
 .pipeline-section dd a {
-  color: #2563eb;
+  color: var(--action);
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -5986,7 +6161,7 @@ textarea {
 }
 
 .timeline li::before {
-  background: #2563eb;
+  background: var(--action);
   border: 3px solid #ffffff;
   border-radius: 999px;
   box-shadow: 0 0 0 1px #bfdbfe;
@@ -6057,7 +6232,7 @@ textarea {
 }
 
 .timeline-metadata a {
-  color: #2563eb;
+  color: var(--action);
 }
 
 .compact-empty {

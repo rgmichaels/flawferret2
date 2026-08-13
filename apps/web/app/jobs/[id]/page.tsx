@@ -9,6 +9,7 @@ import type {
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
 import { AppShell } from "../../app-shell";
+import { Beacon, jobStatusTone, runStatusTone } from "../../beacon";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -611,6 +612,93 @@ const buildPipelineStages = ({
   ];
 };
 
+type TrustHeaderCopy = {
+  detail: string;
+  headline: string;
+};
+
+/**
+ * Synthesizes the single "is this safe" answer for the Trust Header from data the
+ * page already computes (approval gate, current pipeline stage, validation trust,
+ * and the same attention text shown in Diagnostics) — no new data required.
+ */
+const getTrustHeaderCopy = ({
+  approvalAction,
+  attentionText,
+  job,
+  pipelineStages,
+  prUrl,
+  validationTrustDescription,
+}: {
+  approvalAction: ApprovalAction | null;
+  attentionText: string;
+  job: JobResponse;
+  pipelineStages: PipelineStage[];
+  prUrl: string | null;
+  validationTrustDescription: string;
+}): TrustHeaderCopy => {
+  const tone = jobStatusTone[job.status];
+
+  if (tone === "decision") {
+    if (approvalAction) {
+      return {
+        detail: validationTrustDescription,
+        headline:
+          job.status === "READY_FOR_CODEX"
+            ? "Waiting on your approval to spend model credits."
+            : "Waiting on your approval to push code and open a draft pull request.",
+      };
+    }
+
+    return {
+      detail: "Nothing has run yet. Review the request details, then approve or edit the job.",
+      headline: "Waiting on your review to configure this job.",
+    };
+  }
+
+  if (tone === "attention") {
+    return {
+      detail: attentionText,
+      headline: "This job needs investigation before it can continue.",
+    };
+  }
+
+  if (tone === "success") {
+    return {
+      detail: prUrl
+        ? "The generated change was validated and a pull request is available for merge."
+        : "The pipeline finished without producing a pull request.",
+      headline: "Pipeline completed successfully.",
+    };
+  }
+
+  if (tone === "inactive") {
+    return {
+      detail:
+        job.status === "CANCELED"
+          ? "This job was removed from the active queue."
+          : "This job has not been queued yet.",
+      headline: job.status === "CANCELED" ? "Canceled." : "Draft — not yet queued.",
+    };
+  }
+
+  if (tone === "waiting") {
+    return {
+      detail: "No worker has picked this job up yet.",
+      headline: "Waiting for runner pickup.",
+    };
+  }
+
+  const currentStage = pipelineStages.find((stage) => stage.state === "current");
+
+  return {
+    detail: currentStage?.description ?? "Automated work is in progress.",
+    headline: currentStage
+      ? `${currentStage.label}: automated work is in progress.`
+      : "Automated work is in progress.",
+  };
+};
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -745,6 +833,14 @@ export default async function JobDetailPage({
     pullRequestLifecycleError ??
     latestEvent?.message ??
     "No events have been recorded yet.";
+  const trustHeaderCopy = getTrustHeaderCopy({
+    approvalAction,
+    attentionText,
+    job,
+    pipelineStages,
+    prUrl,
+    validationTrustDescription: validationTrust.description,
+  });
   const diagnostics = [
     {
       detail: latestRun
@@ -850,11 +946,18 @@ export default async function JobDetailPage({
                 </button>
               </form>
             ) : null}
-            <span className={`status-pill ${job.status.toLowerCase()}`}>
-              {jobStatusLabels[job.status]}
-            </span>
+            <Beacon tone={jobStatusTone[job.status]}>{jobStatusLabels[job.status]}</Beacon>
           </div>
         </header>
+
+      <section
+        className={`panel trust-header trust-header--${jobStatusTone[job.status]}`}
+        aria-label="Trust summary"
+      >
+        <Beacon tone={jobStatusTone[job.status]}>{jobStatusLabels[job.status]}</Beacon>
+        <strong>{trustHeaderCopy.headline}</strong>
+        <p>{trustHeaderCopy.detail}</p>
+      </section>
 
       <section className="panel execution-mode-card" aria-label="Execution mode">
         <div>
@@ -1088,9 +1191,7 @@ export default async function JobDetailPage({
               {runs.map((run) => (
                 <li key={run.id}>
                   <div>
-                    <span className={`run-pill ${run.status.toLowerCase()}`}>
-                      {runStatusLabels[run.status]}
-                    </span>
+                    <Beacon tone={runStatusTone[run.status]}>{runStatusLabels[run.status]}</Beacon>
                     <code>#{run.id.slice(0, 8)}</code>
                   </div>
                   <time dateTime={run.startedAt}>Started {formatDateTime(run.startedAt)}</time>
