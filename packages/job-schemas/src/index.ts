@@ -633,6 +633,14 @@ export const frameworkSmokeValidationResponseSchema = z.object({
   durationMs: z.number().int().nonnegative(),
   exitCode: z.number().int().nullable(),
   message: z.string(),
+  scenarios: z
+    .array(
+      z.object({
+        name: z.string(),
+        status: z.enum(["passed", "failed"]),
+      }),
+    )
+    .optional(),
   status: z.enum(["passed", "failed", "skipped"]),
   stderr: z.string(),
   stdout: z.string(),
