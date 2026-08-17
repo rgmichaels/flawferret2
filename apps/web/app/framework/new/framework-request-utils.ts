@@ -8,6 +8,27 @@ import type { FrameworkTemplateDestinationType } from "@flawferret2/job-schemas"
 export const getDestinationType = (value: string | undefined): FrameworkTemplateDestinationType =>
   value === "github" ? "github" : "local";
 
+// The "Then" cell of the sticky build bar: the post-build steps the current toggle state will run,
+// in the order they happen. Shared so the server render and the live client refresh format it the
+// same way.
+export const formatAfterBuildSteps = ({
+  initializeGitRepository,
+  createGithubRepository,
+  registerLocalRepository,
+}: {
+  initializeGitRepository: boolean;
+  createGithubRepository: boolean;
+  registerLocalRepository: boolean;
+}): string => {
+  const steps = [
+    initializeGitRepository ? "git init" : null,
+    createGithubRepository ? "push to GitHub" : null,
+    registerLocalRepository ? "register" : null,
+  ].filter((step): step is string => Boolean(step));
+
+  return steps.length > 0 ? steps.join(" · ") : "nothing";
+};
+
 // Produces a value that always matches the npm package-name pattern enforced server-side by
 // `frameworkTemplateRequestSchema.packageName` in `packages/job-schemas`:
 // /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/

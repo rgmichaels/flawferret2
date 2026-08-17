@@ -52,7 +52,7 @@ export function FrameworkGithubPushToggle({
   return (
     <details className="framework-command-copy framework-github-push-toggle" open={createGithubRepository}>
       <summary>
-        <label className="framework-overwrite-option">
+        <label className="framework-overwrite-option framework-toggle-option">
           <input name="createGithubRepository" type="hidden" value="false" />
           <input
             checked={createGithubRepository}
@@ -62,14 +62,14 @@ export function FrameworkGithubPushToggle({
             value="true"
           />
           <span>
-            <strong>Create GitHub repository</strong>
+            <strong>Push to GitHub</strong>
             <small>Create a private remote, add origin, and push the initial branch.</small>
           </span>
         </label>
       </summary>
       <div className="framework-basics-grid">
         <label>
-          Owner
+          <span className="framework-field-label">Owner</span>
           <input
             name="githubOwner"
             onChange={(event) => setGithubOwnerValue(getInputValue(event))}
@@ -78,7 +78,7 @@ export function FrameworkGithubPushToggle({
           />
         </label>
         <label>
-          Repository
+          <span className="framework-field-label">Repository</span>
           <input
             name="githubRepository"
             onChange={(event) => setGithubRepositoryValue(getInputValue(event))}
@@ -87,7 +87,7 @@ export function FrameworkGithubPushToggle({
           />
         </label>
         <label>
-          Initial Branch
+          <span className="framework-field-label">Initial branch</span>
           <input
             name="githubBranch"
             onChange={(event) => setGithubBranchValue(getInputValue(event))}

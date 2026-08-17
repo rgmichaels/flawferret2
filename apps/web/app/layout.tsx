@@ -1,7 +1,18 @@
 import "./styles.css";
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
+
+// Only the Framework Builder uses the serif today (styles.css remaps --font-display to this
+// variable under .framework-builder-page), so it is declared with the other faces here but not
+// preloaded on every route.
+const sourceSerif = Source_Serif_4({
+  display: "swap",
+  preload: false,
+  subsets: ["latin"],
+  variable: "--font-framework-display",
+  weight: ["400", "500", "600"],
+});
 
 const spaceGrotesk = Space_Grotesk({
   display: "swap",
@@ -40,7 +51,10 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable}`}>
+    <html
+      lang="en"
+      className={`${spaceGrotesk.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable} ${sourceSerif.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

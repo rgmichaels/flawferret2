@@ -6,6 +6,7 @@ import { buildClientPreviewRequest } from "./build-client-preview-request";
 import { fetchFrameworkPreview } from "./fetch-framework-preview";
 import { useFrameworkDestination } from "./framework-destination-context";
 import { FrameworkFilePreviewDetails } from "./framework-file-preview-details";
+import { formatAfterBuildSteps } from "./framework-request-utils";
 import { createRequestSequencer } from "./preview-request-sequencer";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -17,6 +18,21 @@ const previewDebounceMs = 400;
 type FormDataConstructorWithForm = new (form: unknown) => FormData;
 const readFormData = (form: unknown): FormData => new (FormData as unknown as FormDataConstructorWithForm)(form);
 
+// Each "After building" toggle submits a hidden "false" ahead of its checkbox, so the last value
+// for a name is the live one — same convention page.tsx's getCheckedFormValue reads on submit.
+const isCheckedInFormData = (formData: FormData, name: string) => {
+  const lastValue = formData.getAll(name).map(String).at(-1);
+
+  return lastValue === "true" || lastValue === "on";
+};
+
+const readAfterBuildSteps = (formData: FormData) =>
+  formatAfterBuildSteps({
+    createGithubRepository: isCheckedInFormData(formData, "createGithubRepository"),
+    initializeGitRepository: isCheckedInFormData(formData, "initializeGitRepository"),
+    registerLocalRepository: isCheckedInFormData(formData, "registerLocalRepository"),
+  });
+
 // The "Files" preview + the build-summary/submit row that follows it. Both were previously
 // rendered from the request derived once per server render from searchParams/defaults, so editing
 // Naming/Include/Where fields without submitting left this section showing a stale preview (wrong
@@ -26,10 +42,12 @@ const readFormData = (form: unknown): FormData => new (FormData as unknown as Fo
 // destinationType, or "Choose Folder" setting targetDirectory from an async fetch response) that
 // never dispatch a native "input"/"change" event for the form listener below to catch.
 export function FrameworkFilesPreview({
+  initialAfterBuildSteps,
   initialError,
   initialPreview,
   initialRequest,
 }: {
+  initialAfterBuildSteps: string;
   initialError: string | null;
   initialPreview: FrameworkTemplatePreviewResponse | null;
   initialRequest: FrameworkTemplateRequest;
@@ -38,6 +56,9 @@ export function FrameworkFilesPreview({
   const [preview, setPreview] = useState(initialPreview);
   const [error, setError] = useState(initialError);
   const [request, setRequest] = useState(initialRequest);
+  // The build bar's "Then" cell, kept in sync with the "After building" toggles by the same form
+  // listeners that drive the preview refresh below.
+  const [afterBuildSteps, setAfterBuildSteps] = useState(initialAfterBuildSteps);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRefreshSignalRender = useRef(true);
@@ -56,8 +77,10 @@ export function FrameworkFilesPreview({
       return;
     }
 
-    const liveRequest = buildClientPreviewRequest(readFormData(form));
+    const formData = readFormData(form);
+    const liveRequest = buildClientPreviewRequest(formData);
     setRequest(liveRequest);
+    setAfterBuildSteps(readAfterBuildSteps(formData));
     setIsRefreshing(true);
 
     abortControllerRef.current?.abort();
@@ -130,54 +153,61 @@ export function FrameworkFilesPreview({
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
   const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
 
+  const target =
+    destinationType === "github"
+      ? `${request.githubOwner || "authenticated user"}/${request.githubRepository || request.packageName.replace(/^@[^/]+\//, "")}`
+      : request.targetDirectory;
+
   return (
     <>
-      <section className="framework-wizard-section">
-        <div className="framework-wizard-section-header">
-          <span>5</span>
-          <div>
-            <h3>Files</h3>
-            <p>
-              Preview what will be generated, and how to handle files that already exist.
-              {isRefreshing ? " Refreshing preview…" : ""}
-            </p>
-          </div>
+      <section className="framework-section">
+        <div className="framework-section-label">
+          <h5>Files</h5>
+          <p>
+            {preview
+              ? `${createCount} to create, ${existingCount} conflict${existingCount === 1 ? "" : "s"}.`
+              : "Preview unavailable."}
+            {isRefreshing ? " Refreshing…" : ""}
+          </p>
         </div>
-        {preview ? (
-          <>
-            {error ? <p className="framework-preview-stale-error">Refresh failed: {error}</p> : null}
-            <p className="framework-file-summary">
-              {preview.totalFiles} files under <code>{preview.targetDirectory}</code>. {createCount} will be
-              created{existingCount > 0 ? `, ${existingCount} already exist` : ""}.
-            </p>
-            <label className="framework-overwrite-option">
-              <input name="overwriteExisting" type="checkbox" />
-              <span>
-                <strong>Overwrite existing files</strong>
-                <small>
-                  {destinationType === "github"
-                    ? "Leave unchecked to skip files that already exist in the target branch."
-                    : "Leave unchecked to create missing files and skip conflicts."}
-                </small>
-              </span>
-            </label>
-            <FrameworkFilePreviewDetails existingCount={existingCount} preview={preview} />
-          </>
-        ) : (
-          <p>{error ?? "Preview unavailable."}</p>
-        )}
+        <div className="framework-section-body">
+          {preview ? (
+            <>
+              {error ? <p className="framework-preview-stale-error">Refresh failed: {error}</p> : null}
+              <FrameworkFilePreviewDetails existingCount={existingCount} preview={preview} />
+              <label className="framework-overwrite-option">
+                <input name="overwriteExisting" type="checkbox" />
+                <span>
+                  <strong>Overwrite existing files</strong>
+                  <small>
+                    {destinationType === "github"
+                      ? "Leave unchecked to skip files that already exist in the target branch."
+                      : "Leave unchecked to create missing files and skip conflicts."}
+                  </small>
+                </span>
+              </label>
+            </>
+          ) : (
+            <p>{error ?? "Preview unavailable."}</p>
+          )}
+        </div>
       </section>
 
-      <div className="framework-wizard-actions framework-build-actions">
-        <div className="framework-build-summary">
-          <span>Target</span>
-          <strong>
-            {destinationType === "github"
-              ? `${request.githubOwner || "authenticated user"}/${request.githubRepository || request.packageName.replace(/^@[^/]+\//, "")}`
-              : request.targetDirectory}
-          </strong>
-          {preview ? <span>{preview.totalFiles} files</span> : null}
-        </div>
+      <div className="framework-build-bar">
+        <dl>
+          <div>
+            <dt>Target</dt>
+            <dd className="framework-build-bar-path">{target}</dd>
+          </div>
+          <div>
+            <dt>Files</dt>
+            <dd>{preview ? `${createCount} new, ${existingCount} existing` : "Unknown"}</dd>
+          </div>
+          <div>
+            <dt>Then</dt>
+            <dd>{afterBuildSteps}</dd>
+          </div>
+        </dl>
         <button type="submit">Build framework</button>
       </div>
     </>

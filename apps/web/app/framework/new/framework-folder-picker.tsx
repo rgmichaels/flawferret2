@@ -89,23 +89,42 @@ export function FrameworkFolderPicker({
     <fieldset className="framework-destination">
       <legend>Destination</legend>
 
-      <label className={`framework-destination-option ${destinationType === "local" ? "selected" : ""}`}>
-        <input
-          checked={destinationType === "local"}
-          name="destinationType"
-          onChange={selectDestination}
-          type="radio"
-          value="local"
-        />
-        <span>
-          <strong>Local folder</strong>
-          <small>Create files on this machine, then commit or register the repo when ready.</small>
-        </span>
-      </label>
+      {/* Segmented toggle: the two destination radios sit side by side so the choice reads as one
+          control, with the selected option's explanation below it instead of inside each option. */}
+      <div className="framework-segmented">
+        <label className={`framework-segment ${destinationType === "local" ? "selected" : ""}`}>
+          <input
+            checked={destinationType === "local"}
+            name="destinationType"
+            onChange={selectDestination}
+            type="radio"
+            value="local"
+          />
+          Local folder
+        </label>
+        <label className={`framework-segment ${destinationType === "github" ? "selected" : ""}`}>
+          <input
+            checked={destinationType === "github"}
+            name="destinationType"
+            onChange={selectDestination}
+            type="radio"
+            value="github"
+          />
+          GitHub repository
+        </label>
+      </div>
+
+      <p className="framework-destination-hint">
+        {destinationType === "local"
+          ? "Create files on this machine, then commit or register the repo when ready."
+          : "Preview the target repository and branch now. Writing to GitHub comes in the next slice."}
+      </p>
 
       {destinationType === "local" ? (
         <div className="framework-folder-picker">
-          <label htmlFor="targetDirectory">Target Directory</label>
+          <label className="framework-field-label" htmlFor="targetDirectory">
+            Destination folder
+          </label>
           <div className="framework-folder-input-row">
             <input
               id="targetDirectory"
@@ -124,24 +143,10 @@ export function FrameworkFolderPicker({
 
       {error ? <p className="framework-folder-error">{error}</p> : null}
 
-      <label className={`framework-destination-option ${destinationType === "github" ? "selected" : ""}`}>
-        <input
-          checked={destinationType === "github"}
-          name="destinationType"
-          onChange={selectDestination}
-          type="radio"
-          value="github"
-        />
-        <span>
-          <strong>GitHub repository</strong>
-          <small>Preview the target repository and branch now. Writing to GitHub comes in the next slice.</small>
-        </span>
-      </label>
-
       {destinationType === "github" ? (
         <div className="framework-github-destination">
           <label className="framework-github-repository-picker">
-            Choose Registered Repository
+            <span className="framework-field-label">Registered repository</span>
             <select name="githubRepositoryId" onChange={selectRepository} value={githubRepositoryId}>
               <option value="">Manual repository</option>
               {repositories.map((repository) => (
@@ -153,7 +158,7 @@ export function FrameworkFolderPicker({
             <small>Registered repos prefill the GitHub target. New GitHub repo creation comes later.</small>
           </label>
           <label>
-            Owner
+            <span className="framework-field-label">Owner</span>
             <input
               name="githubOwner"
               onChange={(event) => setGithubOwner(getInputValue(event))}
@@ -163,7 +168,7 @@ export function FrameworkFolderPicker({
             />
           </label>
           <label>
-            Repository
+            <span className="framework-field-label">Repository</span>
             <input
               name="githubRepository"
               onChange={(event) => setGithubRepository(getInputValue(event))}
@@ -173,7 +178,7 @@ export function FrameworkFolderPicker({
             />
           </label>
           <label>
-            Branch
+            <span className="framework-field-label">Branch</span>
             <input
               name="githubBranch"
               onChange={(event) => setGithubBranch(getInputValue(event))}
@@ -183,7 +188,7 @@ export function FrameworkFolderPicker({
             />
           </label>
           <label>
-            Repository Path
+            <span className="framework-field-label">Repository path</span>
             <input
               name="targetDirectory"
               onChange={updateTargetDirectory}
