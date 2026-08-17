@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { installFrameworkDependencies, openFrameworkFolder, validateFrameworkSmokeTest } from "./framework-validation.js";
@@ -287,5 +289,255 @@ describe("framework smoke validation", () => {
     assert.equal(result.exitCode, 1);
     assert.equal(result.stderr, "assertion failed");
     assert.equal(result.stdout, "running smoke");
+  });
+
+  it("names the scenario in the message when a single scenario passes", async () => {
+    const report = JSON.stringify([
+      {
+        elements: [
+          {
+            keyword: "Scenario",
+            name: "Configured base URL loads successfully",
+            steps: [{ result: { status: "passed" } }, { result: { status: "passed" } }],
+          },
+        ],
+      },
+    ]);
+    const result = await validateFrameworkSmokeTest(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        readReportFile: async () => report,
+        runner: async () => ({ stderr: "", stdout: "smoke passed" }),
+      },
+    );
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.message, '"Configured base URL loads successfully" passed.');
+    assert.deepEqual(result.scenarios, [{ name: "Configured base URL loads successfully", status: "passed" }]);
+  });
+
+  it("names all scenarios when multiple scenarios all pass", async () => {
+    const report = JSON.stringify([
+      {
+        elements: [
+          { keyword: "Scenario", name: "A", steps: [{ result: { status: "passed" } }] },
+          { keyword: "Scenario", name: "B", steps: [{ result: { status: "passed" } }] },
+          { keyword: "Scenario", name: "C", steps: [{ result: { status: "passed" } }] },
+        ],
+      },
+    ]);
+    const result = await validateFrameworkSmokeTest(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        readReportFile: async () => report,
+        runner: async () => ({ stderr: "", stdout: "smoke passed" }),
+      },
+    );
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.message, 'All 3 scenarios passed: "A", "B", "C".');
+    assert.equal(result.scenarios?.length, 3);
+  });
+
+  it("identifies the failing scenario(s) by name when some scenarios fail", async () => {
+    const report = JSON.stringify([
+      {
+        elements: [
+          { keyword: "Scenario", name: "A", steps: [{ result: { status: "passed" } }] },
+          { keyword: "Scenario", name: "B", steps: [{ result: { status: "failed" } }] },
+          { keyword: "Scenario", name: "C", steps: [{ result: { status: "passed" } }] },
+        ],
+      },
+    ]);
+    const error = new Error("failed") as Error & {
+      code: number;
+      stderr: string;
+      stdout: string;
+    };
+    error.code = 1;
+    error.stderr = "assertion failed";
+    error.stdout = "running smoke";
+    const result = await validateFrameworkSmokeTest(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        readReportFile: async () => report,
+        runner: async () => {
+          throw error;
+        },
+      },
+    );
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.message, '1 of 3 scenarios failed: "B".');
+    assert.deepEqual(result.scenarios, [
+      { name: "A", status: "passed" },
+      { name: "B", status: "failed" },
+      { name: "C", status: "passed" },
+    ]);
+  });
+
+  it("falls back to the generic message when the report is missing or unparsable", async () => {
+    const result = await validateFrameworkSmokeTest(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        readReportFile: async () => {
+          throw new Error("ENOENT");
+        },
+        runner: async () => ({ stderr: "", stdout: "smoke passed" }),
+      },
+    );
+
+    assert.equal(result.status, "passed");
+    assert.equal(result.message, "Generated smoke test passed.");
+    assert.deepEqual(result.scenarios, []);
+  });
+
+  it("deletes any report on disk before invoking the smoke runner, so it is called before the runner regardless of outcome", async () => {
+    const targetDirectory = "/tmp/generated-framework";
+    const reportPath = join(resolve(targetDirectory), "reports", "cucumber-report.json");
+    const calls: string[] = [];
+    let runnerCalled = false;
+    await validateFrameworkSmokeTest(
+      {
+        targetDirectory,
+      },
+      {
+        canAccess: async () => {},
+        deleteReportFile: async (path) => {
+          calls.push(path);
+          assert.equal(runnerCalled, false, "report must be deleted before the runner executes");
+        },
+        runner: async () => {
+          runnerCalled = true;
+
+          return { stderr: "", stdout: "smoke passed" };
+        },
+      },
+    );
+
+    assert.deepEqual(calls, [reportPath]);
+  });
+
+  it("falls back to the generic message when a stale report from a prior run is actually on disk and the current run fails before Cucumber runs", async () => {
+    const targetDirectory = await mkdtemp(join(tmpdir(), "framework-smoke-stale-report-"));
+
+    try {
+      const reportDirectory = join(targetDirectory, "reports");
+      await mkdir(reportDirectory, { recursive: true });
+      await writeFile(
+        join(reportDirectory, "cucumber-report.json"),
+        JSON.stringify([
+          {
+            elements: [
+              {
+                keyword: "Scenario",
+                name: "Configured base URL loads successfully",
+                steps: [{ result: { status: "passed" } }],
+              },
+            ],
+          },
+        ]),
+        "utf8",
+      );
+
+      const error = new Error("failed") as Error & {
+        code: number;
+        stderr: string;
+        stdout: string;
+      };
+      error.code = 1;
+      error.stderr = "SyntaxError: Unexpected token in generated step file";
+      error.stdout = "";
+
+      const result = await validateFrameworkSmokeTest(
+        {
+          targetDirectory,
+        },
+        {
+          canAccess: async () => {},
+          runner: async () => {
+            throw error;
+          },
+        },
+      );
+
+      assert.equal(result.status, "failed");
+      assert.equal(result.exitCode, 1);
+      assert.equal(result.message, "Generated smoke test failed.");
+      assert.deepEqual(result.scenarios, []);
+    } finally {
+      await rm(targetDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it("returns a structured failure instead of throwing when deleting the stale report fails for a non-missing-file reason", async () => {
+    let runnerCalled = false;
+    const result = await validateFrameworkSmokeTest(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        deleteReportFile: async () => {
+          const error = new Error("EACCES: permission denied") as Error & { code: string };
+          error.code = "EACCES";
+          throw error;
+        },
+        runner: async () => {
+          runnerCalled = true;
+
+          return { stderr: "", stdout: "smoke passed" };
+        },
+      },
+    );
+
+    assert.equal(runnerCalled, false, "the smoke runner must not execute when the prior report cannot be cleared");
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, null);
+    assert.match(result.message, /Unable to clear the previous smoke test report/);
+    assert.match(result.message, /EACCES/);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "");
+    assert.equal(result.scenarios, undefined);
+  });
+
+  it("falls back to the generic message when the report is malformed JSON without affecting pass/fail", async () => {
+    const error = new Error("failed") as Error & {
+      code: number;
+      stderr: string;
+      stdout: string;
+    };
+    error.code = 1;
+    error.stderr = "assertion failed";
+    error.stdout = "running smoke";
+    const result = await validateFrameworkSmokeTest(
+      {
+        targetDirectory: "/tmp/generated-framework",
+      },
+      {
+        canAccess: async () => {},
+        readReportFile: async () => "not json",
+        runner: async () => {
+          throw error;
+        },
+      },
+    );
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.message, "Generated smoke test failed.");
+    assert.deepEqual(result.scenarios, []);
   });
 });
