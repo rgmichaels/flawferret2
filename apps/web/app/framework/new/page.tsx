@@ -9,7 +9,6 @@ import {
   type FrameworkDependencyInstallResponse,
   type FrameworkOpenFolderResponse,
   type FrameworkSmokeValidationResponse,
-  type FrameworkTemplateDestinationType,
   type FrameworkTemplateFeature,
   type FrameworkTemplatePreviewResponse,
   type FrameworkTemplateRequest,
@@ -18,7 +17,14 @@ import {
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "../../app-shell";
+import { FrameworkBuilderForm } from "./framework-builder-form";
+import { FrameworkFilePreviewDetails } from "./framework-file-preview-details";
+import { FrameworkFilesPreview } from "./framework-files-preview";
 import { FrameworkFolderPicker } from "./framework-folder-picker";
+import { FrameworkGithubPushToggle } from "./framework-github-push-toggle";
+import { getDestinationType, toNpmPackageName } from "./framework-request-utils";
+
+export { toNpmPackageName } from "./framework-request-utils";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -106,7 +112,6 @@ type FrameworkNewSearchParams = {
   preview?: string;
   projectName?: string;
   skipped?: string;
-  step?: string;
   targetDirectory?: string;
   validationCommand?: string;
   validationDurationMs?: string;
@@ -116,42 +121,6 @@ type FrameworkNewSearchParams = {
   validationStderr?: string;
   validationStdout?: string;
 };
-
-type FrameworkWizardStep = "framework" | "local-git" | "github" | "register" | "validate";
-
-const wizardSteps: Array<{
-  description: string;
-  label: string;
-  value: FrameworkWizardStep;
-}> = [
-  {
-    description: "Create files",
-    label: "Framework",
-    value: "framework",
-  },
-  {
-    description: "Initialize repo",
-    label: "Local Git",
-    value: "local-git",
-  },
-  {
-    description: "Remote project",
-    label: "GitHub",
-    value: "github",
-  },
-  {
-    description: "Track in FF2",
-    label: "Register",
-    value: "register",
-  },
-  {
-    description: "Run smoke test",
-    label: "Validate",
-    value: "validate",
-  },
-];
-
-const wizardStepOrder = wizardSteps.map((step) => step.value);
 
 const frameworkActionPassthroughKeys: Array<keyof FrameworkNewSearchParams> = [
   "baseUrl",
@@ -205,70 +174,6 @@ const frameworkActionPassthroughKeys: Array<keyof FrameworkNewSearchParams> = [
   "validationStdout",
 ];
 
-const getWizardStep = (value: string | undefined, hasCreateResult: boolean): FrameworkWizardStep => {
-  if (hasCreateResult) {
-    return "validate";
-  }
-
-  return wizardStepOrder.includes(value as FrameworkWizardStep) ? (value as FrameworkWizardStep) : "framework";
-};
-
-const appendParam = (params: URLSearchParams, name: string, value: string | string[] | undefined) => {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      if (item) {
-        params.append(name, item);
-      }
-    }
-
-    return;
-  }
-
-  if (value) {
-    params.set(name, value);
-  }
-};
-
-const buildFrameworkHref = (params: FrameworkNewSearchParams, step: FrameworkWizardStep) => {
-  const next = new URLSearchParams();
-  const keys: Array<keyof FrameworkNewSearchParams> = [
-    "baseUrl",
-    "createGithubRepository",
-    "destinationType",
-    "features",
-    "githubBranch",
-    "githubOwner",
-    "githubRepositoryId",
-    "githubRepository",
-    "initializeGitRepository",
-    "packageName",
-    "preview",
-    "projectName",
-    "registerLocalRepository",
-    "targetDirectory",
-  ];
-
-  for (const key of keys) {
-    appendParam(next, key, params[key]);
-  }
-
-  next.set("step", step);
-
-  if (step === "validate") {
-    next.set("preview", "true");
-  } else {
-    next.delete("preview");
-  }
-
-  if (step === "validate") {
-    for (const key of frameworkActionPassthroughKeys) {
-      appendParam(next, key, params[key]);
-    }
-  }
-
-  return `/framework/new?${next.toString()}`;
-};
-
 const getFeatureValues = (value: string | string[] | undefined): FrameworkTemplateFeature[] => {
   const values = Array.isArray(value) ? value : value ? [value] : defaultFeatures;
   const allowed = new Set(featureOptions.map((option) => option.value));
@@ -288,9 +193,6 @@ const getCheckedParam = (value: string | string[] | undefined, defaultValue: boo
   return lastValue === "true" || lastValue === "on";
 };
 
-const getDestinationType = (value: string | undefined): FrameworkTemplateDestinationType =>
-  value === "github" ? "github" : "local";
-
 const queryOutputLimit = 4_000;
 
 const trimQueryOutput = (value: string) =>
@@ -308,50 +210,6 @@ const slugValue = (value: string, fallback: string) => {
   return slug || fallback;
 };
 
-// Produces a value that always matches the npm package-name pattern enforced server-side by
-// `frameworkTemplateRequestSchema.packageName` in `packages/job-schemas`:
-// /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/
-const npmPackageNameMaxLength = 80;
-
-export const toNpmPackageName = (value: string, fallback: string): string => {
-  const lower = value.trim().toLowerCase();
-
-  const sanitizeSegment = (segment: string) =>
-    segment.replace(/[^a-z0-9._-]/g, "-").replace(/^[^a-z0-9]+/, "");
-
-  // Truncating a segment can leave a trailing separator (e.g. "foo-"), which is invalid as the
-  // last character of a segment, so trim it off after slicing.
-  const clampSegment = (segment: string, maxLen: number) =>
-    segment.slice(0, Math.max(maxLen, 0)).replace(/[._-]+$/, "");
-
-  let normalized: string;
-
-  if (lower.startsWith("@") && lower.includes("/")) {
-    const slashIndex = lower.indexOf("/");
-    const scope = sanitizeSegment(lower.slice(1, slashIndex));
-    const name = sanitizeSegment(lower.slice(slashIndex + 1));
-
-    if (scope && name) {
-      // Truncate the scope and name segments independently (rather than truncating the joined
-      // "@scope/name" string) so a long scope can't crowd the name segment out entirely. Split
-      // the budget roughly in half, biased toward whichever segment is actually shorter.
-      const budget = npmPackageNameMaxLength - 2; // reserve "@" and "/"
-      const scopeMax = Math.min(scope.length, Math.floor(budget / 2));
-      const nameMax = budget - scopeMax;
-      const clampedScope = clampSegment(scope, scopeMax);
-      const clampedName = clampSegment(name, nameMax);
-      normalized =
-        clampedScope && clampedName ? `@${clampedScope}/${clampedName}` : clampedName || clampedScope;
-    } else {
-      normalized = clampSegment(name || scope, npmPackageNameMaxLength);
-    }
-  } else {
-    normalized = clampSegment(sanitizeSegment(lower), npmPackageNameMaxLength);
-  }
-
-  return normalized || fallback;
-};
-
 const getCheckedFormValue = (formData: FormData, name: string) => {
   const values = formData.getAll(name).map(String);
   const lastValue = values.at(-1);
@@ -365,7 +223,7 @@ const formatFrameworkBuildDate = (value: string) =>
     timeStyle: "short",
   }).format(new Date(value));
 
-const buildFrameworkResultHref = (buildId: string) => `/framework/new?frameworkBuildId=${buildId}&preview=true&step=validate`;
+const buildFrameworkResultHref = (buildId: string) => `/framework/new?frameworkBuildId=${buildId}&preview=true`;
 
 const appendFrameworkActionState = (params: URLSearchParams, formData: FormData) => {
   for (const key of frameworkActionPassthroughKeys) {
@@ -932,7 +790,6 @@ async function createFramework(formData: FormData) {
     preview: "true",
     projectName: request.projectName,
     registerLocalRepository: String(request.registerLocalRepository),
-    step: "validate",
     targetDirectory: request.targetDirectory,
   });
 
@@ -990,7 +847,6 @@ async function createFramework(formData: FormData) {
     }
   } catch (error) {
     params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
-    params.set("step", "validate");
   }
 
   redirect(`/framework/new?${params.toString()}`);
@@ -1003,7 +859,6 @@ async function installFrameworkDependencies(formData: FormData) {
   appendFrameworkActionState(params, formData);
 
   params.set("preview", "true");
-  params.set("step", "validate");
 
   try {
     const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
@@ -1047,7 +902,6 @@ async function openGeneratedFrameworkFolder(formData: FormData) {
   appendFrameworkActionState(params, formData);
 
   params.set("preview", "true");
-  params.set("step", "validate");
 
   try {
     const response = await fetch(`${apiUrl}/frameworks/open-folder`, {
@@ -1085,7 +939,6 @@ async function registerGeneratedFramework(formData: FormData) {
   appendFrameworkActionState(params, formData);
 
   params.set("preview", "true");
-  params.set("step", "validate");
 
   const packageName = String(formData.get("packageName") ?? "").trim();
   const targetDirectory = String(formData.get("targetDirectory") ?? "").trim();
@@ -1132,7 +985,6 @@ async function validateFramework(formData: FormData) {
   appendFrameworkActionState(params, formData);
 
   params.set("preview", "true");
-  params.set("step", "validate");
 
   try {
     const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
@@ -1182,13 +1034,10 @@ export default async function NewFrameworkPage({
   const hasCreateResultFromQuery =
     Number(params.created ?? 0) > 0 || Number(params.skipped ?? 0) > 0 || Number(params.overwritten ?? 0) > 0;
   const hasSavedCreateResult = Boolean(savedBuild);
-  const currentStep = getWizardStep(params.step, hasCreateResultFromQuery || hasSavedCreateResult);
-  const currentStepIndex = wizardStepOrder.indexOf(currentStep);
-  const shouldPreview = params.preview === "true" || currentStep === "validate";
+  // The build form and the file-count/conflict preview now live on the same page (no more
+  // "validate" wizard step to gate this on), so the preview is always fetched.
   const [{ error, preview }, repositories, frameworkBuilds] = await Promise.all([
-    shouldPreview
-      ? getFrameworkPreview(request)
-      : Promise.resolve({ error: null, preview: null }),
+    getFrameworkPreview(request),
     getRepositories(),
     getFrameworkBuilds(),
   ]);
@@ -1244,10 +1093,6 @@ export default async function NewFrameworkPage({
   const latestFrameworkBuildIsCurrent = Boolean(frameworkBuildId && latestFrameworkBuild?.id === frameworkBuildId);
   const createCount = preview?.files.filter((file) => file.status === "create").length ?? 0;
   const existingCount = preview?.files.filter((file) => file.status === "exists").length ?? 0;
-  const destinationLabel = request.destinationType === "github" ? "GitHub pull request" : "Local folder";
-  const includedFeatureLabels = featureOptions
-    .filter((option) => selectedFeatures.has(option.value))
-    .map((option) => option.label);
   const shouldInitializeGit = getCheckedParam(params.initializeGitRepository, true);
   const shouldRegisterLocalRepository = getCheckedParam(params.registerLocalRepository, true);
   const shouldCreateGithubRepository = getCheckedParam(params.createGithubRepository, false);
@@ -1367,73 +1212,10 @@ export default async function NewFrameworkPage({
       status: smokeDisplayStatus,
     },
   ];
-  const nextStep: FrameworkWizardStep =
-    currentStep === "framework"
-      ? "local-git"
-      : currentStep === "local-git"
-        ? "github"
-        : currentStep === "github"
-          ? "register"
-          : "validate";
-  const previousStep: FrameworkWizardStep | null =
-    currentStep === "local-git"
-      ? "framework"
-      : currentStep === "github"
-        ? "local-git"
-        : currentStep === "register"
-          ? "github"
-          : currentStep === "validate"
-            ? "register"
-            : null;
-  const formSubmitLabel =
-    currentStep === "framework"
-      ? "Continue to Local Git"
-      : currentStep === "local-git"
-        ? "Continue to GitHub"
-        : currentStep === "github"
-          ? "Continue to Register"
-          : "Review & Validate";
-  const hiddenDestinationInputs =
-    currentStep === "framework" ? null : (
-      <>
-        <input name="destinationType" type="hidden" value={request.destinationType} />
-        <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
-      </>
-    );
-  const hiddenGithubInputs =
-    currentStep === "github" ? null : (
-      <>
-        <input name="createGithubRepository" type="hidden" value={String(shouldCreateGithubRepository)} />
-        <input name="githubBranch" type="hidden" value={request.githubBranch} />
-        <input name="githubOwner" type="hidden" value={request.githubOwner} />
-        <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
-        <input name="githubRepository" type="hidden" value={request.githubRepository} />
-      </>
-    );
-  const hiddenBasicsInputs =
-    currentStep === "framework" ? null : (
-      <>
-        <input name="baseUrl" type="hidden" value={request.baseUrl} />
-        <input name="packageName" type="hidden" value={request.packageName} />
-        <input name="projectName" type="hidden" value={request.projectName} />
-      </>
-    );
-  const hiddenFeatureInputs =
-    currentStep === "framework"
-      ? null
-      : request.features.map((feature) => <input key={feature} name="features" type="hidden" value={feature} />);
-  const hiddenGitInput =
-    currentStep === "local-git" ? null : (
-      <input name="initializeGitRepository" type="hidden" value={String(shouldInitializeGit)} />
-    );
-  const hiddenRegisterInput =
-    currentStep === "register" ? null : (
-      <input name="registerLocalRepository" type="hidden" value={String(shouldRegisterLocalRepository)} />
-    );
 
   return (
     <AppShell active="framework">
-      <section className={`workspace ${currentStep === "validate" ? "framework-validate-workspace" : ""}`}>
+      <section className="workspace">
         <header className="topbar">
           <div>
             <p className="eyebrow">Create</p>
@@ -1496,292 +1278,139 @@ export default async function NewFrameworkPage({
           </div>
         ) : null}
 
-        <nav aria-label="Framework builder steps" className="framework-wizard-steps">
-          {wizardSteps.map((step, index) => {
-            const isCurrent = step.value === currentStep;
-            const isComplete = index < currentStepIndex || (step.value === "validate" && hasCreateResult);
-
-            return (
-              <a
-                aria-current={isCurrent ? "step" : undefined}
-                className={`${isCurrent ? "active" : ""} ${isComplete ? "complete" : ""}`}
-                href={buildFrameworkHref(params, step.value)}
-                key={step.value}
-              >
-                <span>{index + 1}</span>
-                <strong>{step.label}</strong>
-                <small>{step.description}</small>
-              </a>
-            );
-          })}
-        </nav>
-
-        <section className="page-grid two-column framework-builder-grid">
+        <section className="page-grid framework-builder-grid">
           <section className="panel">
             <div className="panel-header">
               <div>
-                <h2>
-                  {currentStep === "framework"
-                    ? "Create Local Framework"
-                    : currentStep === "local-git"
-                      ? "Create Local Git Repo"
-                      : currentStep === "github"
-                        ? "Create GitHub Project"
-                        : currentStep === "register"
-                          ? "Register in FF2"
-                          : "Validate Framework"}
-                </h2>
-                <p>Build a usable automation project one pipeline step at a time.</p>
+                <h2>Framework Builder</h2>
+                <p>Set the destination, naming, included capabilities, and post-build actions, then build.</p>
               </div>
             </div>
 
-            {currentStep === "validate" ? (
+            {hasCreateResult ? (
               <div className="framework-step-placeholder">
-                <p className="eyebrow">Step 5</p>
-                <h3>{hasCreateResult ? "Framework creation is complete." : "Review, create, then validate."}</h3>
-                <p>
-                  {hasCreateResult
-                    ? "Use the results and generated commands below to continue from the framework folder."
-                    : "Create the local framework first. Dependency install and smoke-test execution will become a dedicated validation action next."}
-                </p>
-                {previousStep ? (
-                  <a className="secondary-button" href={buildFrameworkHref(params, previousStep)}>
-                    Back to Register
-                  </a>
-                ) : null}
+                <h3>Framework creation is complete.</h3>
+                <p>Use the results and generated commands below to continue from the framework folder.</p>
               </div>
             ) : (
-              <form className="job-form standalone-form" method="get">
-                <input name="step" type="hidden" value={nextStep} />
-                {currentStep === "register" ? <input name="preview" type="hidden" value="true" /> : null}
-                {hiddenDestinationInputs}
-                {hiddenGithubInputs}
-                {hiddenBasicsInputs}
-                {hiddenFeatureInputs}
-                {hiddenGitInput}
-                {hiddenRegisterInput}
+              <FrameworkBuilderForm
+                action={createFramework}
+                className="job-form standalone-form framework-builder-form"
+                initialDestinationType={request.destinationType}
+              >
+                <section className="framework-wizard-section">
+                  <div className="framework-wizard-section-header">
+                    <span>1</span>
+                    <div>
+                      <h3>Where</h3>
+                      <p>Choose a local folder or a GitHub repository as the build destination.</p>
+                    </div>
+                  </div>
+                  <FrameworkFolderPicker
+                    defaultGithubBranch={request.githubBranch}
+                    defaultGithubOwner={request.githubOwner}
+                    defaultGithubRepositoryId={request.githubRepositoryId}
+                    defaultGithubRepository={request.githubRepository}
+                    defaultValue={request.targetDirectory}
+                    repositories={repositories}
+                  />
+                </section>
 
-                {currentStep === "framework" ? (
-                  <section className="framework-wizard-section">
-                    <div className="framework-wizard-section-header">
-                      <span>1</span>
-                      <div>
-                        <h3>Framework Details</h3>
-                        <p>Choose the folder, naming, base URL, and generated framework capabilities.</p>
-                      </div>
+                <section className="framework-wizard-section">
+                  <div className="framework-wizard-section-header">
+                    <span>2</span>
+                    <div>
+                      <h3>Naming</h3>
+                      <p>Project name, package name, and the base URL the generated tests target.</p>
                     </div>
-                    <FrameworkFolderPicker
-                      defaultDestinationType={request.destinationType}
-                      defaultGithubBranch={request.githubBranch}
-                      defaultGithubOwner={request.githubOwner}
-                      defaultGithubRepositoryId={request.githubRepositoryId}
-                      defaultGithubRepository={request.githubRepository}
-                      defaultValue={request.targetDirectory}
-                      repositories={repositories}
-                    />
-                    <div className="framework-basics-grid">
-                      <label>
-                        Project Name
-                        <input name="projectName" defaultValue={request.projectName} required />
-                      </label>
-                      <label>
-                        Package Name
-                        <input name="packageName" defaultValue={request.packageName} required />
-                      </label>
-                      <label>
-                        Base URL
-                        <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
-                      </label>
-                    </div>
-                    <fieldset className="framework-options">
-                      <legend>Include</legend>
-                      {featureOptions.map((option) => (
-                        <label key={option.value} className="framework-option">
-                          <input
-                            defaultChecked={selectedFeatures.has(option.value)}
-                            name="features"
-                            type="checkbox"
-                            value={option.value}
-                          />
-                          <span>
-                            <strong>{option.label}</strong>
-                            <small>{option.description}</small>
-                          </span>
-                        </label>
-                      ))}
-                    </fieldset>
-                  </section>
-                ) : null}
-
-                {currentStep === "local-git" ? (
-                  <section className="framework-wizard-section">
-                    <div className="framework-wizard-section-header">
-                      <span>2</span>
-                      <div>
-                        <h3>Initialize Local Git</h3>
-                        <p>After files are generated, FF2 can create the first local commit for the framework.</p>
-                      </div>
-                    </div>
-                    <label className="framework-overwrite-option">
-                      <input name="initializeGitRepository" type="hidden" value="false" />
-                      <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" value="true" />
-                      <span>
-                        <strong>Initialize git repository</strong>
-                        <small>Create a local git repo and initial commit after files are generated.</small>
-                      </span>
+                  </div>
+                  <div className="framework-basics-grid">
+                    <label>
+                      Project Name
+                      <input name="projectName" defaultValue={request.projectName} required />
                     </label>
-                  </section>
-                ) : null}
-
-                {currentStep === "github" ? (
-                  <section className="framework-wizard-section">
-                    <div className="framework-wizard-section-header">
-                      <span>3</span>
-                      <div>
-                        <h3>GitHub Project</h3>
-                        <p>Create or connect a GitHub remote after the local project exists.</p>
-                      </div>
-                    </div>
-                    <label className="framework-overwrite-option">
-                      <input name="createGithubRepository" type="hidden" value="false" />
-                      <input defaultChecked={shouldCreateGithubRepository} name="createGithubRepository" type="checkbox" value="true" />
-                      <span>
-                        <strong>Create GitHub repository</strong>
-                        <small>Create a private GitHub repository, add it as origin, and push the initial branch.</small>
-                      </span>
+                    <label>
+                      Package Name
+                      <input name="packageName" defaultValue={request.packageName} required />
                     </label>
-                    <div className="framework-basics-grid">
-                      <label>
-                        Owner
-                        <input name="githubOwner" defaultValue={request.githubOwner} placeholder="rgmichaels" />
-                      </label>
-                      <label>
-                        Repository
+                    <label>
+                      Base URL
+                      <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
+                    </label>
+                  </div>
+                </section>
+
+                <section className="framework-wizard-section">
+                  <div className="framework-wizard-section-header">
+                    <span>3</span>
+                    <div>
+                      <h3>Include</h3>
+                      <p>Pick the capabilities generated into the new framework.</p>
+                    </div>
+                  </div>
+                  <fieldset className="framework-options">
+                    <legend>Include</legend>
+                    {featureOptions.map((option) => (
+                      <label key={option.value} className="framework-option">
                         <input
-                          name="githubRepository"
-                          defaultValue={request.githubRepository}
-                          placeholder={request.packageName.replace(/^@[^/]+\//, "")}
+                          defaultChecked={selectedFeatures.has(option.value)}
+                          name="features"
+                          type="checkbox"
+                          value={option.value}
                         />
+                        <span>
+                          <strong>{option.label}</strong>
+                          <small>{option.description}</small>
+                        </span>
                       </label>
-                      <label>
-                        Initial Branch
-                        <input name="githubBranch" defaultValue={request.githubBranch} placeholder="main" />
-                      </label>
-                    </div>
-                    <div className="framework-pipeline-note">
-                      <strong>Optional</strong>
-                      <p>Leave this off to keep the generated framework local. Existing remote connection is still a later slice.</p>
-                    </div>
-                  </section>
-                ) : null}
+                    ))}
+                  </fieldset>
+                </section>
 
-                {currentStep === "register" ? (
-                  <section className="framework-wizard-section">
-                    <div className="framework-wizard-section-header">
-                      <span>4</span>
-                      <div>
-                        <h3>Track This Framework in FF2</h3>
-                        <p>Register the generated local folder so Features, Discover, and Jobs can use it immediately.</p>
-                      </div>
+                <section className="framework-wizard-section">
+                  <div className="framework-wizard-section-header">
+                    <span>4</span>
+                    <div>
+                      <h3>After building</h3>
+                      <p>Choose what FF2 does once the framework files are generated.</p>
                     </div>
-                    <label className="framework-overwrite-option">
-                      <input name="registerLocalRepository" type="hidden" value="false" />
-                      <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" value="true" />
-                      <span>
-                        <strong>Register in FF2</strong>
-                        <small>Add this generated folder to Repositories after files are created.</small>
-                      </span>
-                    </label>
-                  </section>
-                ) : null}
+                  </div>
+                  <label className="framework-overwrite-option">
+                    <input name="initializeGitRepository" type="hidden" value="false" />
+                    <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" value="true" />
+                    <span>
+                      <strong>Initialize git repository</strong>
+                      <small>Create a local git repo and initial commit after files are generated.</small>
+                    </span>
+                  </label>
+                  <FrameworkGithubPushToggle
+                    githubBranch={request.githubBranch}
+                    githubOwner={request.githubOwner}
+                    githubRepository={request.githubRepository}
+                    packageName={request.packageName}
+                    shouldCreateGithubRepository={shouldCreateGithubRepository}
+                  />
+                  <label className="framework-overwrite-option">
+                    <input name="registerLocalRepository" type="hidden" value="false" />
+                    <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" value="true" />
+                    <span>
+                      <strong>Register in FF2</strong>
+                      <small>Add this generated folder to Repositories after files are created.</small>
+                    </span>
+                  </label>
+                </section>
 
-                <div className="framework-wizard-actions">
-                  {previousStep ? (
-                    <a className="secondary-button" href={buildFrameworkHref(params, previousStep)}>
-                      Back
-                    </a>
-                  ) : null}
-                  <button type="submit">{formSubmitLabel}</button>
-                </div>
-              </form>
+                <FrameworkFilesPreview initialError={error} initialPreview={preview} initialRequest={request} />
+              </FrameworkBuilderForm>
             )}
           </section>
-
-          <aside className="panel framework-builder-summary">
-            <div className="panel-header">
-              <div>
-                <h2>Build Plan</h2>
-                <p>Current choices before preview and creation.</p>
-              </div>
-            </div>
-            <dl className="framework-plan-list">
-              <div>
-                <dt>Destination</dt>
-                <dd>{destinationLabel}</dd>
-              </div>
-              <div>
-                <dt>Target</dt>
-                <dd>{request.destinationType === "github" ? `${request.githubOwner}/${request.githubRepository}` : request.targetDirectory}</dd>
-              </div>
-              <div>
-                <dt>Base URL</dt>
-                <dd>{request.baseUrl}</dd>
-              </div>
-              <div>
-                <dt>Capabilities</dt>
-                <dd>{includedFeatureLabels.join(", ") || "None selected"}</dd>
-              </div>
-              <div>
-                <dt>Local Git</dt>
-                <dd>{shouldInitializeGit ? "Initialize after file creation" : "Skip git initialization"}</dd>
-              </div>
-              <div>
-                <dt>GitHub</dt>
-                <dd>
-                  {shouldCreateGithubRepository
-                    ? `Create ${request.githubOwner || "authenticated user"}/${request.githubRepository || request.packageName.replace(/^@[^/]+\//, "")}`
-                    : "Keep local only"}
-                </dd>
-              </div>
-              <div>
-                <dt>FF2 Registration</dt>
-                <dd>{shouldRegisterLocalRepository ? "Register generated repository" : "Do not register automatically"}</dd>
-              </div>
-            </dl>
-            <section className="framework-roadmap">
-              <h3>Pipeline Progress</h3>
-              <ol className="framework-pipeline-list">
-                <li className="ready">
-                  <strong>Framework</strong>
-                  <span>Generate Playwright, TypeScript, Cucumber files.</span>
-                </li>
-                <li className={shouldInitializeGit ? "ready" : "muted"}>
-                  <strong>Local Git</strong>
-                  <span>{shouldInitializeGit ? "Initialize repo and commit generated files." : "Skipped by current plan."}</span>
-                </li>
-                <li className="future">
-                  <strong>GitHub</strong>
-                  <span>{shouldCreateGithubRepository ? "Create private remote and push initial branch." : "Skipped by current plan."}</span>
-                </li>
-                <li className={shouldRegisterLocalRepository ? "ready" : "muted"}>
-                  <strong>Register</strong>
-                  <span>{shouldRegisterLocalRepository ? "Add generated repo to FF2." : "Skipped by current plan."}</span>
-                </li>
-                <li className="future">
-                  <strong>Validate</strong>
-                  <span>Install dependencies and run the sample smoke test.</span>
-                </li>
-              </ol>
-            </section>
-          </aside>
         </section>
 
-        {preview && currentStep === "validate" ? (
+        {preview && hasCreateResult ? (
           <section className="panel framework-preview">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">Step 5</p>
-                <h2>{hasCreateResult ? "Results & Next Steps" : "Review & Create"}</h2>
+                <h2>Results & Next Steps</h2>
                 <p>
                   {request.destinationType === "github" ? (
                     <>
@@ -1802,8 +1431,7 @@ export default async function NewFrameworkPage({
               <span>{preview.packageName}</span>
             </div>
 
-            {hasCreateResult ? (
-              <section className="framework-results-panel framework-results-checklist-panel">
+            <section className="framework-results-panel framework-results-checklist-panel">
                 <div className="framework-results-heading">
                   <strong>{params.prUrl ? "Pull request is ready for review." : "Framework action center"}</strong>
                   <span>
@@ -2056,66 +1684,18 @@ export default async function NewFrameworkPage({
                   ) : null}
                 </div>
               </section>
-            ) : (
-              <form action={createFramework} className="framework-create-form">
-                <input name="baseUrl" type="hidden" value={request.baseUrl} />
-                <input name="destinationType" type="hidden" value={request.destinationType} />
-                <input name="githubBranch" type="hidden" value={request.githubBranch} />
-                <input name="githubOwner" type="hidden" value={request.githubOwner} />
-                <input name="githubRepositoryId" type="hidden" value={request.githubRepositoryId} />
-                <input name="githubRepository" type="hidden" value={request.githubRepository} />
-                <input name="packageName" type="hidden" value={request.packageName} />
-                <input name="projectName" type="hidden" value={request.projectName} />
-                <input name="targetDirectory" type="hidden" value={request.targetDirectory} />
-                {request.features.map((feature) => (
-                  <input key={feature} name="features" type="hidden" value={feature} />
-                ))}
-                <label className="framework-overwrite-option">
-                  <input name="overwriteExisting" type="checkbox" />
-                  <span>
-                    <strong>Overwrite existing files</strong>
-                    <small>
-                      {request.destinationType === "github"
-                        ? "Leave unchecked to skip files that already exist in the target branch."
-                        : "Leave unchecked to create missing files and skip conflicts."}
-                    </small>
-                  </span>
-                </label>
-                {request.destinationType === "local" ? (
-                  <>
-                    <label className="framework-overwrite-option">
-                      <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" />
-                      <span>
-                        <strong>Initialize git repository</strong>
-                        <small>Create a local git repo and initial commit after files are generated.</small>
-                      </span>
-                    </label>
-                    <label className="framework-overwrite-option">
-                      <input defaultChecked={shouldCreateGithubRepository} name="createGithubRepository" type="checkbox" />
-                      <span>
-                        <strong>Create GitHub repository</strong>
-                        <small>Create a private remote, add origin, and push the initial branch.</small>
-                      </span>
-                    </label>
-                    <label className="framework-overwrite-option">
-                      <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" />
-                      <span>
-                        <strong>Register in FF2</strong>
-                        <small>Add this generated folder to Repositories after files are created.</small>
-                      </span>
-                    </label>
-                  </>
-                ) : null}
-                <div className="framework-create-actions">
-                  <a className="secondary-button" href={buildFrameworkHref(params, "register")}>
-                    Back
-                  </a>
-                  <button type="submit">
-                    {request.destinationType === "github" ? "Create Pull Request" : "Create from Target Directory"}
-                  </button>
-                </div>
-              </form>
-            )}
+
+            <section className="framework-file-list-panel">
+              <div>
+                <h3>Files</h3>
+                <p>
+                  {existingCount > 0
+                    ? `${preview.totalFiles} files, ${existingCount} conflicts.`
+                    : `${preview.totalFiles} files.`}
+                </p>
+              </div>
+              <FrameworkFilePreviewDetails existingCount={existingCount} preview={preview} />
+            </section>
 
             <section className="framework-next-steps">
               <div>
@@ -2155,20 +1735,6 @@ export default async function NewFrameworkPage({
                 <span>Run</span>
                 <code>{preview.runCommand}</code>
               </div>
-            </div>
-
-            <div className="framework-file-list">
-              {preview.files.map((file) => (
-                <article key={file.path} className="framework-file-card">
-                  <div>
-                    <span>{file.category}</span>
-                    <strong>{file.path}</strong>
-                    <p>{file.description}</p>
-                  </div>
-                  {file.status ? <mark className={`framework-file-status ${file.status}`}>{file.status}</mark> : null}
-                  <code>{file.contentPreview}</code>
-                </article>
-              ))}
             </div>
           </section>
         ) : null}

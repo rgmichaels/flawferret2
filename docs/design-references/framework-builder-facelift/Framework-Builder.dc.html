@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+body { margin: 0; background: #f3f2f2; color: #201e1d; font-family: Archivo, system-ui, sans-serif; }
+* { box-sizing: border-box; }
+a { color: #ae1800; text-decoration: none; }
+a:hover { color: #ec3013; }
+input, select, button, textarea { font-family: inherit; }
+</style>
+</helmet>
+
+<link rel="stylesheet" href="broadsheet-styles.css">
+
+<section style="display:flex;flex-direction:column;gap:28px;padding:40px">
+  <div style="display:flex;align-items:baseline;gap:16px;padding-bottom:12px">
+    <h2 style="font-size:32px;margin:0">Turn 2 — Broadsheet theme (no red, cyan accent)</h2>
+    <span style="font-size:13px;color:var(--color-text)">Same one-page layout as 1a. Two takes on the sidebar, since Broadsheet's own rule is "no dark surfaces."</span>
+  </div>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+
+    <div id="2a" style="display:flex;flex-direction:column;gap:12px;width:1200px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span style="background:var(--color-accent);color:var(--color-bg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:2px">2a</span>
+        <strong style="font-size:17px;font-family:var(--font-heading)">Dark sidebar kept, content re-themed</strong>
+        <span style="font-size:13px;color:var(--color-text);opacity:.65">Nav stays dark for orientation. Everything else — type, accent, spacing — is pure Broadsheet.</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:236px minmax(0,1fr);background:var(--color-bg);min-height:900px">
+
+        <aside style="background:#201e1d;color:#d7d3d3;display:flex;flex-direction:column;gap:28px;padding:20px 0">
+          <div style="display:flex;align-items:center;gap:10px;padding:0 16px 16px;border-bottom:1px solid rgba(255,255,255,.15)">
+            <img src="../assets/flawferret2-brand-mark.png" alt="" style="width:36px;height:36px;object-fit:cover;display:block;flex:0 0 auto;filter:grayscale(1) contrast(1.08)">
+            <div>
+              <strong style="color:#f3f2f2;display:block;font-size:17px;line-height:1.1;font-family:var(--font-heading)">FlawFerret 2</strong>
+              <span style="color:#9b9797;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase">QA orchestration</span>
+            </div>
+          </div>
+          <nav style="display:grid">
+            <span style="color:#7d7979;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:0 16px 8px">Main</span>
+            <a href="#2a" style="color:#d7d3d3;font-size:14px;padding:9px 16px;text-decoration:none">Dashboard</a>
+            <a href="#2a" style="color:#d7d3d3;font-size:14px;padding:9px 16px;text-decoration:none">Features</a>
+            <a href="#2a" style="color:#d7d3d3;font-size:14px;padding:9px 16px;text-decoration:none">Settings</a>
+          </nav>
+          <nav style="display:grid">
+            <span style="color:#7d7979;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:0 16px 8px">Create</span>
+            <a href="#2a" style="color:#d7d3d3;font-size:14px;padding:9px 16px;text-decoration:none">Discover Tests</a>
+            <a href="#2a" style="background:var(--color-accent-700, #006786);color:#f3f2f2;font-weight:600;font-size:14px;padding:9px 16px;text-decoration:none">Create Framework</a>
+            <a href="#2a" style="color:#d7d3d3;font-size:14px;padding:9px 16px;text-decoration:none">New Job</a>
+          </nav>
+          <div style="margin-top:auto;padding:16px;border-top:1px solid rgba(255,255,255,.15);display:grid;gap:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px">runner</span><span style="color:#f3f2f2;font-size:11px;font-weight:600">Idle · 12s</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px">queue</span><span style="color:#f3f2f2;font-size:11px;font-weight:600">Active</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px">tracked</span><span style="color:#f3f2f2;font-size:11px;font-weight:600">14 jobs / 3 repos</span></div>
+          </div>
+        </aside>
+
+        <section style="display:flex;flex-direction:column;min-width:0">
+
+          <header style="display:flex;align-items:flex-end;justify-content:space-between;padding:28px 32px 20px">
+            <div>
+              <p style="color:var(--color-accent-700, #006786);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:0 0 6px">Create</p>
+              <h1 style="font-size:42px;margin:0">Framework Builder</h1>
+            </div>
+            <a href="#2a" class="btn btn-secondary">All builds</a>
+          </header>
+
+          <div style="display:flex;flex-direction:column;padding:0 32px 140px">
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:26px 0;border-top:1px solid var(--color-divider)">
+              <div>
+                <h5 style="margin:0 0 4px">Where</h5>
+                <p style="font-size:13px;opacity:.65;margin:0">Folder or GitHub repo.</p>
+              </div>
+              <div style="display:grid;gap:16px">
+                <div class="seg" style="width:max-content">
+                  <label class="seg-opt"><input type="radio" name="src2a" checked><span class="dot"></span>Local folder</label>
+                  <label class="seg-opt"><input type="radio" name="src2a"><span class="dot"></span>GitHub repository</label>
+                </div>
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px">
+                  <input class="input" value="~/dev/acme-web/qa/e2e" style="font-family:monospace">
+                  <button type="button" class="btn btn-secondary">Choose…</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:26px 0;border-top:1px solid var(--color-divider)">
+              <div>
+                <h5 style="margin:0 0 4px">Naming</h5>
+                <p style="font-size:13px;opacity:.65;margin:0">Package name is derived; edit if you need to.</p>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+                <div class="field"><label>Project name</label><input class="input" value="Acme Web E2E"></div>
+                <div class="field"><label>Package name</label><input class="input" style="font-family:monospace" value="acme-web-e2e"></div>
+                <div class="field" style="grid-column:1 / -1"><label>Base URL</label><input class="input" style="font-family:monospace" value="https://staging.acme.com"></div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:26px 0;border-top:1px solid var(--color-divider)">
+              <div>
+                <h5 style="margin:0 0 4px">Include</h5>
+                <p style="font-size:13px;opacity:.65;margin:0">Five optional pieces. All on by default.</p>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>Page objects</label>
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>API testing</label>
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>Accessibility</label>
+                <label class="tag tag-neutral" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;border:1px solid var(--color-divider);border-radius:2px;flex:none"></span>GitHub Actions</label>
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>Sample smoke test</label>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:26px 0;border-top:1px solid var(--color-divider)">
+              <div>
+                <h5 style="margin:0 0 4px">After building</h5>
+                <p style="font-size:13px;opacity:.65;margin:0">The old steps 2, 3 and 4 — three checkboxes, one row.</p>
+              </div>
+              <div style="display:grid;gap:2px">
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+                  <span style="width:16px;height:16px;background:var(--color-accent);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1">Initialize a git repo and make the first commit</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+                  <span style="width:16px;height:16px;background:var(--color-accent);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1">Register in FF2 so Features and Jobs can use it</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--color-divider);cursor:pointer">
+                  <span style="width:16px;height:16px;background:var(--color-accent);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1">Install dependencies and run the smoke test</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;cursor:pointer">
+                  <span style="width:16px;height:16px;border:1px solid var(--color-divider);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1;opacity:.65">Create a private GitHub repo and push</span>
+                  <input class="input" placeholder="owner/repo" style="width:200px;min-height:34px;font-family:monospace;font-size:13px">
+                </label>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:26px 0;border-top:1px solid var(--color-divider)">
+              <div>
+                <h5 style="margin:0 0 4px">Files</h5>
+                <p style="font-size:13px;opacity:.65;margin:0">24 to create, 0 conflicts.</p>
+              </div>
+              <div class="card" style="font-family:monospace;font-size:12.5px;line-height:1.9;opacity:.85;columns:2;column-gap:32px">
+                <div>package.json</div>
+                <div>playwright.config.ts</div>
+                <div>cucumber.cjs</div>
+                <div>tsconfig.json</div>
+                <div>.gitignore</div>
+                <div>src/pages/BasePage.ts</div>
+                <div>src/pages/HomePage.ts</div>
+                <div>src/support/world.ts</div>
+                <div>src/support/hooks.ts</div>
+                <div>src/api/client.ts</div>
+                <div>src/a11y/scan.ts</div>
+                <div>features/smoke.feature</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="position:sticky;bottom:0;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 32px;margin-top:auto">
+            <div style="display:flex;gap:28px;min-width:0">
+              <div style="display:grid;gap:2px;min-width:0"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#9b9797">Target</span><strong style="font-size:13px;font-family:monospace;font-weight:400">~/dev/acme-web/qa/e2e</strong></div>
+              <div style="display:grid;gap:2px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#9b9797">Files</span><strong style="font-size:13px">24 new</strong></div>
+              <div style="display:grid;gap:2px"><span style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#9b9797">Then</span><strong style="font-size:13px">git init · register · smoke</strong></div>
+            </div>
+            <button type="button" class="btn btn-primary" style="font-size:15px;padding:12px 28px">Build framework</button>
+          </div>
+
+        </section>
+      </div>
+    </div>
+
+    <div id="2b" style="display:flex;flex-direction:column;gap:12px;width:1200px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span style="background:var(--color-accent);color:var(--color-bg);font-weight:600;font-size:13px;padding:4px 10px;border-radius:2px">2b</span>
+        <strong style="font-size:17px;font-family:var(--font-heading)">All-paper, per the system's own rule</strong>
+        <span style="font-size:13px;color:var(--color-text);opacity:.65">Broadsheet says "no dark surfaces" — sidebar becomes a light rail, sections separated by whitespace instead of rules.</span>
+      </div>
+
+      <div style="display:flex;min-height:900px;background:var(--color-bg);box-shadow:var(--shadow-sm)">
+
+        <aside style="width:220px;flex:none;background:var(--color-surface);display:flex;flex-direction:column;gap:32px;padding:24px 0">
+          <div style="display:flex;align-items:center;gap:10px;padding:0 20px">
+            <img src="../assets/flawferret2-brand-mark.png" alt="" style="width:32px;height:32px;object-fit:cover;display:block;flex:0 0 auto">
+            <strong class="nav-brand" style="margin:0;font-size:16px">FlawFerret 2</strong>
+          </div>
+          <nav style="display:grid;gap:2px;padding:0 12px">
+            <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.5;padding:0 8px 6px">Main</span>
+            <a href="#2b" style="color:var(--color-text);font-size:14px;padding:9px 8px;text-decoration:none;border-radius:2px">Dashboard</a>
+            <a href="#2b" style="color:var(--color-text);font-size:14px;padding:9px 8px;text-decoration:none;border-radius:2px">Features</a>
+            <a href="#2b" style="color:var(--color-text);font-size:14px;padding:9px 8px;text-decoration:none;border-radius:2px">Settings</a>
+            <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;opacity:.5;padding:16px 8px 6px">Create</span>
+            <a href="#2b" style="color:var(--color-text);font-size:14px;padding:9px 8px;text-decoration:none;border-radius:2px">Discover Tests</a>
+            <a href="#2b" style="color:var(--color-bg);background:var(--color-accent);font-weight:600;font-size:14px;padding:9px 8px;text-decoration:none;border-radius:2px">Create Framework</a>
+            <a href="#2b" style="color:var(--color-text);font-size:14px;padding:9px 8px;text-decoration:none;border-radius:2px">New Job</a>
+          </nav>
+          <div style="margin-top:auto;padding:16px 20px;display:grid;gap:8px;font-size:11px">
+            <div style="display:flex;justify-content:space-between;opacity:.65"><span>runner</span><strong style="opacity:1">Idle · 12s</strong></div>
+            <div style="display:flex;justify-content:space-between;opacity:.65"><span>queue</span><strong style="opacity:1">Active</strong></div>
+            <div style="display:flex;justify-content:space-between;opacity:.65"><span>tracked</span><strong style="opacity:1">14 jobs / 3 repos</strong></div>
+          </div>
+        </aside>
+
+        <section style="display:flex;flex-direction:column;min-width:0;flex:1">
+
+          <header style="display:flex;align-items:flex-end;justify-content:space-between;padding:32px 40px 24px">
+            <div>
+              <p style="color:var(--color-accent-700, #006786);font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin:0 0 6px">Create</p>
+              <h1 style="font-size:42px;margin:0">Framework Builder</h1>
+            </div>
+            <a href="#2b" class="btn btn-secondary">All builds</a>
+          </header>
+
+          <div style="display:flex;flex-direction:column;gap:36px;padding:0 40px 120px">
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px">
+              <div><h5 style="margin:0 0 4px">Where</h5><p style="font-size:13px;opacity:.65;margin:0">Folder or GitHub repo.</p></div>
+              <div style="display:grid;gap:16px">
+                <div class="seg" style="width:max-content">
+                  <label class="seg-opt"><input type="radio" name="src2b" checked><span class="dot"></span>Local folder</label>
+                  <label class="seg-opt"><input type="radio" name="src2b"><span class="dot"></span>GitHub repository</label>
+                </div>
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px">
+                  <input class="input" value="~/dev/acme-web/qa/e2e" style="font-family:monospace">
+                  <button type="button" class="btn btn-secondary">Choose…</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px">
+              <div><h5 style="margin:0 0 4px">Naming</h5><p style="font-size:13px;opacity:.65;margin:0">Package name is derived; edit if you need to.</p></div>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+                <div class="field"><label>Project name</label><input class="input" value="Acme Web E2E"></div>
+                <div class="field"><label>Package name</label><input class="input" style="font-family:monospace" value="acme-web-e2e"></div>
+                <div class="field" style="grid-column:1 / -1"><label>Base URL</label><input class="input" style="font-family:monospace" value="https://staging.acme.com"></div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px">
+              <div><h5 style="margin:0 0 4px">Include</h5><p style="font-size:13px;opacity:.65;margin:0">Five optional pieces. All on by default.</p></div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>Page objects</label>
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>API testing</label>
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>Accessibility</label>
+                <label class="tag tag-neutral" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;border:1px solid var(--color-divider);border-radius:2px;flex:none"></span>GitHub Actions</label>
+                <label class="tag tag-accent" style="padding:9px 14px;font-size:14px;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><span style="width:14px;height:14px;background:var(--color-accent);border-radius:2px;flex:none"></span>Sample smoke test</label>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px">
+              <div><h5 style="margin:0 0 4px">After building</h5><p style="font-size:13px;opacity:.65;margin:0">The old steps 2, 3 and 4 — three checkboxes, one row.</p></div>
+              <div class="card" style="gap:0;padding:0">
+                <label style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+                  <span style="width:16px;height:16px;background:var(--color-accent);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1">Initialize a git repo and make the first commit</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+                  <span style="width:16px;height:16px;background:var(--color-accent);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1">Register in FF2 so Features and Jobs can use it</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+                  <span style="width:16px;height:16px;background:var(--color-accent);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1">Install dependencies and run the smoke test</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+                  <span style="width:16px;height:16px;border:1px solid var(--color-divider);border-radius:2px;flex:none"></span>
+                  <span style="font-size:14px;flex:1;opacity:.65">Create a private GitHub repo and push</span>
+                  <input class="input" placeholder="owner/repo" style="width:200px;min-height:34px;font-family:monospace;font-size:13px">
+                </label>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px">
+              <div><h5 style="margin:0 0 4px">Files</h5><p style="font-size:13px;opacity:.65;margin:0">24 to create, 0 conflicts.</p></div>
+              <div class="card" style="font-family:monospace;font-size:12.5px;line-height:1.9;opacity:.85;columns:2;column-gap:32px">
+                <div>package.json</div>
+                <div>playwright.config.ts</div>
+                <div>cucumber.cjs</div>
+                <div>tsconfig.json</div>
+                <div>.gitignore</div>
+                <div>src/pages/BasePage.ts</div>
+                <div>src/pages/HomePage.ts</div>
+                <div>src/support/world.ts</div>
+                <div>src/support/hooks.ts</div>
+                <div>src/api/client.ts</div>
+                <div>src/a11y/scan.ts</div>
+                <div>features/smoke.feature</div>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:16px">
+              <button type="button" class="btn btn-primary" style="font-size:15px;padding:12px 28px">Build framework</button>
+              <span style="font-size:13px;opacity:.65">24 files into <span style="font-family:monospace">qa/e2e</span>, then git init, register, install, smoke.</span>
+            </div>
+          </div>
+
+        </section>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:28px;padding:40px">
+  <div style="display:flex;align-items:baseline;gap:16px;border-bottom:2px solid rgba(32,30,29,.4);padding-bottom:12px">
+    <h2 style="font-size:32px;margin:0;letter-spacing:-.015em">Turn 1 — Create Framework, simplified</h2>
+    <span style="font-size:13px;color:rgba(32,30,29,.55)">Two directions. Both cut the 5-step wizard to two steps and drop the right sidebar.</span>
+  </div>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:12px;width:1200px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span style="background:#ec3013;color:#f3f2f2;font-weight:800;font-size:13px;padding:4px 10px">1a</span>
+        <strong style="font-size:17px">One page, sticky build bar</strong>
+        <span style="font-size:13px;color:rgba(32,30,29,.55)">Everything visible, nothing to page through. The plan lives in the bar, not a sidebar.</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:236px minmax(0,1fr);background:#f3f2f2;border:2px solid rgba(32,30,29,.4);min-height:900px">
+
+        <aside style="background:#201e1d;color:#d7d3d3;display:flex;flex-direction:column;gap:28px;padding:20px 0">
+          <div style="display:flex;align-items:center;gap:10px;padding:0 16px 16px;border-bottom:1px solid rgba(255,255,255,.15)">
+            <img src="../assets/flawferret2-brand-mark.png" alt="" style="width:36px;height:36px;object-fit:cover;display:block;flex:0 0 auto;filter:grayscale(1) contrast(1.08)">
+            <div>
+              <strong style="color:#f3f2f2;display:block;font-size:17px;line-height:1.1">FlawFerret 2</strong>
+              <span style="color:#9b9797;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase">QA orchestration</span>
+            </div>
+          </div>
+          <nav style="display:grid">
+            <span style="color:#7d7979;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:0 16px 8px">Main</span>
+            <a href="#1a" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Dashboard</a>
+            <a href="#1a" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Features</a>
+            <a href="#1a" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Settings</a>
+          </nav>
+          <nav style="display:grid">
+            <span style="color:#7d7979;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:0 16px 8px">Create</span>
+            <a href="#1a" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Discover Tests</a>
+            <a href="#1a" style="background:#ec3013;color:#f3f2f2;font-weight:800;font-size:14px;padding:9px 16px">Create Framework</a>
+            <a href="#1a" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">New Job</a>
+          </nav>
+          <div style="margin-top:auto;padding:16px;border-top:1px solid rgba(255,255,255,.15);display:grid;gap:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px;font-weight:600">runner</span><span style="color:#f3f2f2;font-size:11px;font-weight:800">Idle · 12s</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px;font-weight:600">queue</span><span style="color:#f3f2f2;font-size:11px;font-weight:800">Active</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px;font-weight:600">tracked</span><span style="color:#f3f2f2;font-size:11px;font-weight:800">14 jobs / 3 repos</span></div>
+          </div>
+        </aside>
+
+        <section style="display:flex;flex-direction:column;min-width:0">
+
+          <header style="display:flex;align-items:flex-end;justify-content:space-between;padding:28px 32px 16px;border-bottom:2px solid rgba(32,30,29,.4)">
+            <div>
+              <p style="color:#ae1800;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 6px">Create</p>
+              <h1 style="font-size:42px;margin:0;letter-spacing:-.015em">Framework Builder</h1>
+            </div>
+            <div style="display:flex;gap:8px">
+              <a href="#1a" style="border:1px solid rgba(32,30,29,.4);color:#201e1d;font-weight:800;font-size:14px;padding:8px 14px">All builds</a>
+            </div>
+          </header>
+
+          <div style="display:flex;flex-direction:column;padding:0 32px 140px">
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:28px 0;border-bottom:2px solid rgba(32,30,29,.4)">
+              <div>
+                <h5 style="font-size:16px;margin:0 0 4px">Where</h5>
+                <p style="font-size:13px;color:rgba(32,30,29,.55);margin:0">Folder or GitHub repo.</p>
+              </div>
+              <div style="display:grid;gap:16px">
+                <div style="display:inline-flex;border:1px solid rgba(32,30,29,.4);width:max-content">
+                  <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;font-weight:800;background:#ec3013;color:#f3f2f2;cursor:pointer">Local folder</label>
+                  <label style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;font-weight:600;border-left:1px solid rgba(32,30,29,.4);cursor:pointer">GitHub repository</label>
+                </div>
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px">
+                  <input value="~/dev/acme-web/qa/e2e" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                  <button type="button" style="border:1px solid rgba(32,30,29,.4);background:transparent;font-weight:800;font-size:14px;padding:8px 16px;cursor:pointer">Choose…</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:28px 0;border-bottom:2px solid rgba(32,30,29,.4)">
+              <div>
+                <h5 style="font-size:16px;margin:0 0 4px">Naming</h5>
+                <p style="font-size:13px;color:rgba(32,30,29,.55);margin:0">Package name is derived; edit if you need to.</p>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+                <div>
+                  <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Project name</label>
+                  <input value="Acme Web E2E" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                </div>
+                <div>
+                  <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Package name</label>
+                  <input value="acme-web-e2e" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                </div>
+                <div style="grid-column:1 / -1">
+                  <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Base URL</label>
+                  <input value="https://staging.acme.com" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                </div>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:28px 0;border-bottom:2px solid rgba(32,30,29,.4)">
+              <div>
+                <h5 style="font-size:16px;margin:0 0 4px">Include</h5>
+                <p style="font-size:13px;color:rgba(32,30,29,.55);margin:0">Five optional pieces. All on by default.</p>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>Page objects</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>API testing</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>Accessibility</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:transparent;border:1px solid rgba(32,30,29,.4);color:rgba(32,30,29,.7);cursor:pointer"><span style="width:14px;height:14px;border:1px solid rgba(32,30,29,.4);flex:none"></span>GitHub Actions</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>Sample smoke test</label>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:28px 0;border-bottom:2px solid rgba(32,30,29,.4)">
+              <div>
+                <h5 style="font-size:16px;margin:0 0 4px">After building</h5>
+                <p style="font-size:13px;color:rgba(32,30,29,.55);margin:0">The old steps 2, 3 and 4 — three checkboxes, one row.</p>
+              </div>
+              <div style="display:grid;gap:2px">
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(32,30,29,.15);cursor:pointer">
+                  <span style="width:16px;height:16px;background:#ec3013;flex:none"></span>
+                  <span style="font-size:14px;font-weight:600;flex:1">Initialize a git repo and make the first commit</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(32,30,29,.15);cursor:pointer">
+                  <span style="width:16px;height:16px;background:#ec3013;flex:none"></span>
+                  <span style="font-size:14px;font-weight:600;flex:1">Register in FF2 so Features and Jobs can use it</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(32,30,29,.15);cursor:pointer">
+                  <span style="width:16px;height:16px;background:#ec3013;flex:none"></span>
+                  <span style="font-size:14px;font-weight:600;flex:1">Install dependencies and run the smoke test</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:12px;padding:12px 0;cursor:pointer">
+                  <span style="width:16px;height:16px;border:1px solid rgba(32,30,29,.4);flex:none"></span>
+                  <span style="font-size:14px;font-weight:600;flex:1;color:rgba(32,30,29,.7)">Create a private GitHub repo and push</span>
+                  <input placeholder="owner/repo" style="width:200px;min-height:34px;padding:6px 10px;font-size:13px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                </label>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;padding:28px 0">
+              <div>
+                <h5 style="font-size:16px;margin:0 0 4px">Files</h5>
+                <p style="font-size:13px;color:rgba(32,30,29,.55);margin:0">24 to create, 0 conflicts.</p>
+              </div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.9;color:rgba(32,30,29,.75);background:#eae9e9;padding:16px 20px;border:1px solid rgba(32,30,29,.4);columns:2;column-gap:32px">
+                <div>package.json</div>
+                <div>playwright.config.ts</div>
+                <div>cucumber.cjs</div>
+                <div>tsconfig.json</div>
+                <div>.gitignore</div>
+                <div>src/pages/BasePage.ts</div>
+                <div>src/pages/HomePage.ts</div>
+                <div>src/support/world.ts</div>
+                <div>src/support/hooks.ts</div>
+                <div>src/api/client.ts</div>
+                <div>src/a11y/scan.ts</div>
+                <div>features/smoke.feature</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="position:sticky;bottom:0;background:#201e1d;color:#f3f2f2;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px 32px;margin-top:auto">
+            <div style="display:flex;gap:28px;min-width:0">
+              <div style="display:grid;gap:2px;min-width:0"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9b9797">Target</span><strong style="font-size:13px;font-family:'IBM Plex Mono',monospace;font-weight:600">~/dev/acme-web/qa/e2e</strong></div>
+              <div style="display:grid;gap:2px"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9b9797">Files</span><strong style="font-size:13px">24 new</strong></div>
+              <div style="display:grid;gap:2px"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9b9797">Then</span><strong style="font-size:13px">git init · register · smoke</strong></div>
+            </div>
+            <button type="button" style="background:#ec3013;color:#f3f2f2;border:0;font-weight:800;font-size:15px;padding:12px 28px;cursor:pointer;flex:none">Build framework</button>
+          </div>
+
+        </section>
+      </div>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:12px;width:1200px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span style="background:#ec3013;color:#f3f2f2;font-weight:800;font-size:13px;padding:4px 10px">1b</span>
+        <strong style="font-size:17px">Preset first, run log below</strong>
+        <span style="font-size:13px;color:rgba(32,30,29,.55)">Pick a preset, edit only what differs, watch it run in one log.</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:236px minmax(0,1fr);background:#f3f2f2;border:2px solid rgba(32,30,29,.4);min-height:900px">
+
+        <aside style="background:#201e1d;color:#d7d3d3;display:flex;flex-direction:column;gap:28px;padding:20px 0">
+          <div style="display:flex;align-items:center;gap:10px;padding:0 16px 16px;border-bottom:1px solid rgba(255,255,255,.15)">
+            <img src="../assets/flawferret2-brand-mark.png" alt="" style="width:36px;height:36px;object-fit:cover;display:block;flex:0 0 auto;filter:grayscale(1) contrast(1.08)">
+            <div>
+              <strong style="color:#f3f2f2;display:block;font-size:17px;line-height:1.1">FlawFerret 2</strong>
+              <span style="color:#9b9797;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase">QA orchestration</span>
+            </div>
+          </div>
+          <nav style="display:grid">
+            <span style="color:#7d7979;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:0 16px 8px">Main</span>
+            <a href="#1b" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Dashboard</a>
+            <a href="#1b" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Features</a>
+            <a href="#1b" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Settings</a>
+          </nav>
+          <nav style="display:grid">
+            <span style="color:#7d7979;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:0 16px 8px">Create</span>
+            <a href="#1b" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">Discover Tests</a>
+            <a href="#1b" style="background:#ec3013;color:#f3f2f2;font-weight:800;font-size:14px;padding:9px 16px">Create Framework</a>
+            <a href="#1b" style="color:#d7d3d3;font-weight:600;font-size:14px;padding:9px 16px">New Job</a>
+          </nav>
+          <div style="margin-top:auto;padding:16px;border-top:1px solid rgba(255,255,255,.15);display:grid;gap:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px;font-weight:600">runner</span><span style="color:#f3f2f2;font-size:11px;font-weight:800">Idle · 12s</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px;font-weight:600">queue</span><span style="color:#f3f2f2;font-size:11px;font-weight:800">Active</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between"><span style="color:#9b9797;font-size:11px;font-weight:600">tracked</span><span style="color:#f3f2f2;font-size:11px;font-weight:800">14 jobs / 3 repos</span></div>
+          </div>
+        </aside>
+
+        <section style="display:flex;flex-direction:column;min-width:0">
+
+          <header style="display:flex;align-items:flex-end;justify-content:space-between;padding:28px 32px 16px;border-bottom:2px solid rgba(32,30,29,.4)">
+            <div>
+              <p style="color:#ae1800;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:0 0 6px">Create</p>
+              <h1 style="font-size:42px;margin:0;letter-spacing:-.015em">Framework Builder</h1>
+            </div>
+            <a href="#1b" style="border:1px solid rgba(32,30,29,.4);color:#201e1d;font-weight:800;font-size:14px;padding:8px 14px">All builds</a>
+          </header>
+
+          <div style="padding:28px 32px;border-bottom:2px solid rgba(32,30,29,.4)">
+            <h6 style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 12px;color:rgba(32,30,29,.6)">Start from</h6>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;border:1px solid rgba(32,30,29,.4)">
+              <label style="display:grid;gap:6px;padding:18px 20px;background:#ec3013;color:#f3f2f2;cursor:pointer">
+                <strong style="font-size:17px">Local quick start</strong>
+                <span style="font-size:13px;opacity:.9">Folder, git init, register, smoke. Nothing remote.</span>
+              </label>
+              <label style="display:grid;gap:6px;padding:18px 20px;border-left:1px solid rgba(32,30,29,.4);cursor:pointer">
+                <strong style="font-size:17px">Local + new GitHub</strong>
+                <span style="font-size:13px;color:rgba(32,30,29,.6)">Same, plus a private repo pushed to your account.</span>
+              </label>
+              <label style="display:grid;gap:6px;padding:18px 20px;border-left:1px solid rgba(32,30,29,.4);cursor:pointer">
+                <strong style="font-size:17px">Into an existing repo</strong>
+                <span style="font-size:13px;color:rgba(32,30,29,.6)">Open a pull request against a registered repository.</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;padding:28px 32px;border-bottom:2px solid rgba(32,30,29,.4)">
+            <div>
+              <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Project name</label>
+              <input value="Acme Web E2E" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Base URL</label>
+              <input value="https://staging.acme.com" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Folder</label>
+              <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px">
+                <input value="~/dev/acme-web/qa/e2e" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                <button type="button" style="border:1px solid rgba(32,30,29,.4);background:transparent;font-weight:800;font-size:14px;padding:8px 14px;cursor:pointer">…</button>
+              </div>
+            </div>
+          </div>
+
+          <details style="border-bottom:2px solid rgba(32,30,29,.4)">
+            <summary style="padding:16px 32px;font-size:14px;font-weight:800;cursor:pointer;color:#ae1800;list-style:none">Advanced — package name, included helpers (5 of 5), overwrite behaviour</summary>
+            <div style="padding:0 32px 24px;display:grid;gap:16px">
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+                <div>
+                  <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">Package name</label>
+                  <input value="acme-web-e2e" style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;font-family:'IBM Plex Mono',monospace;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                </div>
+                <div>
+                  <label style="display:block;font-size:12px;margin-bottom:5px;color:rgba(32,30,29,.7)">On conflict</label>
+                  <select style="width:100%;min-height:40px;padding:8px 12px;font-size:14px;background:#eae9e9;border:1px solid rgba(32,30,29,.4);color:#201e1d">
+                    <option>Skip existing files</option>
+                    <option>Overwrite existing files</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>Page objects</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>API testing</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>Accessibility</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>GitHub Actions</label>
+                <label style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;font-size:14px;font-weight:600;background:#ffe0d9;border:1px solid #ec3013;cursor:pointer"><span style="width:14px;height:14px;background:#ec3013;flex:none"></span>Sample smoke test</label>
+              </div>
+            </div>
+          </details>
+
+          <div style="display:flex;align-items:center;gap:16px;padding:20px 32px;border-bottom:2px solid rgba(32,30,29,.4)">
+            <button type="button" style="background:#ec3013;color:#f3f2f2;border:0;font-weight:800;font-size:15px;padding:12px 28px;cursor:pointer">Build &amp; validate</button>
+            <span style="font-size:13px;color:rgba(32,30,29,.6)">24 files into <span style="font-family:'IBM Plex Mono',monospace">qa/e2e</span>, then git init, register, install, smoke.</span>
+          </div>
+
+          <div style="padding:28px 32px;display:grid;gap:16px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <h5 style="font-size:16px;margin:0">Last run — build 4f2a91c</h5>
+              <span style="font-size:12px;color:rgba(32,30,29,.55);font-family:'IBM Plex Mono',monospace">2m 14s ago · 48s</span>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid rgba(32,30,29,.4)">
+              <div style="padding:12px 14px;display:grid;gap:4px"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(32,30,29,.55)">Files</span><strong style="font-size:15px">24 created</strong></div>
+              <div style="padding:12px 14px;display:grid;gap:4px;border-left:1px solid rgba(32,30,29,.4)"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(32,30,29,.55)">Git</span><strong style="font-size:15px">Committed</strong></div>
+              <div style="padding:12px 14px;display:grid;gap:4px;border-left:1px solid rgba(32,30,29,.4)"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(32,30,29,.55)">Registered</span><strong style="font-size:15px">local/acme-web-e2e</strong></div>
+              <div style="padding:12px 14px;display:grid;gap:4px;border-left:1px solid rgba(32,30,29,.4)"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(32,30,29,.55)">Deps</span><strong style="font-size:15px">Installed</strong></div>
+              <div style="padding:12px 14px;display:grid;gap:4px;border-left:1px solid rgba(32,30,29,.4);background:#ffe0d9"><span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#ae1800">Smoke</span><strong style="font-size:15px;color:#ae1800">Failed · exit 1</strong></div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:12px;border-left:4px solid #ec3013;background:#ffe0d9;padding:14px 16px">
+              <div style="display:grid;gap:4px">
+                <strong style="font-size:14px;color:#ae1800">Smoke failed while opening the base URL.</strong>
+                <span style="font-size:13px;color:rgba(32,30,29,.75)">Chromium could not reach <span style="font-family:'IBM Plex Mono',monospace">https://staging.acme.com</span>. Check the URL is reachable from this machine, then rerun.</span>
+              </div>
+              <button type="button" style="margin-left:auto;flex:none;background:#ec3013;color:#f3f2f2;border:0;font-weight:800;font-size:14px;padding:9px 18px;cursor:pointer">Rerun smoke</button>
+            </div>
+
+            <div style="background:#201e1d;color:#d7d3d3;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.85;padding:18px 20px;overflow:auto;max-height:280px">
+              <div><span style="color:#7d7979">14:02:11</span> <span style="color:#ff9783">files</span>  wrote 24 files to ~/dev/acme-web/qa/e2e</div>
+              <div><span style="color:#7d7979">14:02:11</span> <span style="color:#ff9783">git</span>    initialized repository, commit 4f2a91c "chore: scaffold e2e framework"</div>
+              <div><span style="color:#7d7979">14:02:12</span> <span style="color:#ff9783">ff2</span>    registered local/acme-web-e2e</div>
+              <div><span style="color:#7d7979">14:02:12</span> <span style="color:#ff9783">deps</span>   pnpm install</div>
+              <div style="color:#9b9797">           Packages: +412  done in 31.4s</div>
+              <div><span style="color:#7d7979">14:02:44</span> <span style="color:#ff9783">deps</span>   pnpm exec playwright install chromium</div>
+              <div style="color:#9b9797">           Chromium 129.0.6668.29 downloaded to ~/Library/Caches/ms-playwright</div>
+              <div><span style="color:#7d7979">14:02:56</span> <span style="color:#ff9783">smoke</span>  pnpm test:smoke</div>
+              <div style="color:#9b9797">           Feature: Smoke</div>
+              <div style="color:#9b9797">             Scenario: Home page loads</div>
+              <div style="color:#ff563c">             ✗ Given I open the base URL</div>
+              <div style="color:#ff563c">               Error: page.goto: net::ERR_CONNECTION_REFUSED at https://staging.acme.com/</div>
+              <div style="color:#ff563c">               at src/support/hooks.ts:24:14</div>
+              <div style="color:#9b9797">           1 scenario (1 failed) · 1 step (1 failed) · 12.1s</div>
+              <div><span style="color:#7d7979">14:03:08</span> <span style="color:#ff563c">exit</span>   1</div>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:8px;padding-top:4px">
+              <a href="#1b" style="border:1px solid rgba(32,30,29,.4);color:#201e1d;font-weight:800;font-size:14px;padding:9px 16px">Open folder</a>
+              <a href="#1b" style="border:1px solid rgba(32,30,29,.4);color:#201e1d;font-weight:800;font-size:14px;padding:9px 16px">Feature catalog</a>
+              <a href="#1b" style="border:1px solid rgba(32,30,29,.4);color:#201e1d;font-weight:800;font-size:14px;padding:9px 16px">Repository settings</a>
+              <a href="#1b" style="border:1px solid rgba(32,30,29,.4);color:#201e1d;font-weight:800;font-size:14px;padding:9px 16px">Copy full log</a>
+            </div>
+          </div>
+
+        </section>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

@@ -2,12 +2,9 @@
 
 import type { ChangeEvent } from "react";
 import { useState } from "react";
-import type { FrameworkTemplateDestinationType, RepositoryResponse } from "@flawferret2/job-schemas";
-
-type PickFolderResponse = {
-  message?: string;
-  path?: string;
-};
+import type { RepositoryResponse } from "@flawferret2/job-schemas";
+import { useFrameworkDestination } from "./framework-destination-context";
+import { pickFolder } from "./pick-folder";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -18,7 +15,6 @@ const getSelectValue = (event: ChangeEvent<HTMLSelectElement>) => ((event.curren
 const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
 
 export function FrameworkFolderPicker({
-  defaultDestinationType,
   defaultGithubBranch,
   defaultGithubOwner,
   defaultGithubRepositoryId,
@@ -26,7 +22,6 @@ export function FrameworkFolderPicker({
   defaultValue,
   repositories,
 }: {
-  defaultDestinationType: FrameworkTemplateDestinationType;
   defaultGithubBranch: string;
   defaultGithubOwner: string;
   defaultGithubRepositoryId: string;
@@ -34,7 +29,7 @@ export function FrameworkFolderPicker({
   defaultValue: string;
   repositories: RepositoryResponse[];
 }) {
-  const [destinationType, setDestinationType] = useState<FrameworkTemplateDestinationType>(defaultDestinationType);
+  const { destinationType, notifyFieldChanged, setDestinationType } = useFrameworkDestination();
   const [githubBranch, setGithubBranch] = useState(defaultGithubBranch);
   const [githubOwner, setGithubOwner] = useState(defaultGithubOwner);
   const [githubRepository, setGithubRepository] = useState(defaultGithubRepository);
@@ -50,22 +45,20 @@ export function FrameworkFolderPicker({
     setIsPicking(true);
     setError(null);
 
-    try {
-      const response = await fetch(`${apiUrl}/frameworks/pick-folder`, {
-        cache: "no-store",
-      });
-      const body = (await response.json().catch(() => null)) as PickFolderResponse | null;
+    const result = await pickFolder({ apiUrl });
 
-      if (!response.ok || !body?.path) {
-        throw new Error(body?.message ?? "No folder was selected.");
-      }
-
-      setTargetDirectory(body.path);
-    } catch (pickError) {
-      setError(pickError instanceof Error ? pickError.message : "Unable to choose a folder.");
-    } finally {
-      setIsPicking(false);
+    if (result.kind === "error") {
+      setError(result.message);
+    } else {
+      setTargetDirectory(result.path);
+      // setTargetDirectory above is a plain React setState, not a native DOM input/change event, so
+      // the Files preview's form-level event listeners never see this update on their own —
+      // notifyFieldChanged bumps the shared refreshSignal so the preview refetches anyway. See the
+      // FrameworkDestinationContextValue comment for the general pattern this covers.
+      notifyFieldChanged();
     }
+
+    setIsPicking(false);
   };
 
   const selectDestination = (event: ChangeEvent<HTMLInputElement>) => {
