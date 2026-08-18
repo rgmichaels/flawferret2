@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseApiErrorMessage, toNpmPackageName } from "./page.js";
+import { parseApiErrorMessage, toNpmPackageName } from "./framework-request-utils.js";
 
 describe("toNpmPackageName", () => {
   it("lowercases and preserves an already-valid name", () => {
