@@ -497,6 +497,9 @@ export const frameworkTemplateRequestSchema = z
   });
 
 export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
+  // Defaults true to match the builder's "After building" UI default — install and smoke run
+  // automatically for local-destination builds unless the user unchecks the toggle.
+  autoRunDependenciesAndSmoke: z.boolean().default(true),
   createGithubRepository: z.boolean().default(false),
   initializeGitRepository: z.boolean().default(false),
   overwriteExisting: z.boolean().default(false),

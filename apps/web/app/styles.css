@@ -2073,6 +2073,15 @@ button {
   font-size: 13px;
 }
 
+.framework-toggle-timing {
+  color: var(--signal-waiting);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  margin-left: 8px;
+  text-transform: none;
+}
+
 .framework-command-grid {
   display: grid;
   gap: 12px;

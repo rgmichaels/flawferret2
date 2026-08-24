@@ -17,6 +17,7 @@ import {
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "../../app-shell";
+import { FrameworkAutoRunToggle } from "./framework-auto-run-toggle";
 import { FrameworkBuilderForm } from "./framework-builder-form";
 import { FrameworkFilePreviewDetails } from "./framework-file-preview-details";
 import { FrameworkFilesPreview } from "./framework-files-preview";
@@ -69,6 +70,7 @@ const featureOptions: Array<{
 ];
 
 type FrameworkNewSearchParams = {
+  autoRunDependenciesAndSmoke?: string | string[];
   baseUrl?: string;
   createGithubRepository?: string | string[];
   createError?: string;
@@ -757,6 +759,7 @@ const getFrameworkPreview = async (
 };
 
 const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
+  autoRunDependenciesAndSmoke: getCheckedFormValue(formData, "autoRunDependenciesAndSmoke"),
   baseUrl: String(formData.get("baseUrl") ?? "").trim() || "https://example.com",
   createGithubRepository: getCheckedFormValue(formData, "createGithubRepository"),
   destinationType: getDestinationType(String(formData.get("destinationType") ?? "")),
@@ -771,6 +774,92 @@ const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
   projectName: String(formData.get("projectName") ?? "").trim() || "Playwright Cucumber Tests",
   registerLocalRepository: getCheckedFormValue(formData, "registerLocalRepository"),
   targetDirectory: String(formData.get("targetDirectory") ?? "").trim() || "qa/e2e",
+});
+
+type FrameworkActionTarget = {
+  frameworkBuildId: string | undefined;
+  targetDirectory: string;
+};
+
+// Dependency install and smoke validation are shared by two callers: their own manual buttons on
+// the results checklist, and the auto-run chain inside createFramework. Both write the same result
+// params so the checklist renders identically no matter which path produced them. Neither helper
+// throws — a failed auto-run must never take the framework build itself down with it.
+const runFrameworkDependencyInstall = async (params: URLSearchParams, target: FrameworkActionTarget): Promise<string> => {
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
+      body: JSON.stringify({
+        frameworkBuildId: target.frameworkBuildId,
+        targetDirectory: target.targetDirectory,
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error(parseApiErrorMessage(await response.text(), "Unable to install framework dependencies."));
+    }
+
+    const result = (await response.json()) as FrameworkDependencyInstallResponse;
+    params.set("installCommand", result.command);
+    params.set("installDurationMs", String(result.durationMs));
+    params.set("installMessage", result.message);
+    params.set("installStatus", result.status);
+    params.set("installStderr", trimQueryOutput(result.stderr));
+    params.set("installStdout", trimQueryOutput(result.stdout));
+    if (result.exitCode !== null) {
+      params.set("installExitCode", String(result.exitCode));
+    }
+
+    return result.status;
+  } catch (error) {
+    params.set("installMessage", error instanceof Error ? error.message : "Unable to install framework dependencies.");
+    params.set("installStatus", "failed");
+
+    return "failed";
+  }
+};
+
+const runFrameworkSmokeValidation = async (params: URLSearchParams, target: FrameworkActionTarget): Promise<void> => {
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
+      body: JSON.stringify({
+        frameworkBuildId: target.frameworkBuildId,
+        targetDirectory: target.targetDirectory,
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error(parseApiErrorMessage(await response.text(), "Unable to validate framework."));
+    }
+
+    const result = (await response.json()) as FrameworkSmokeValidationResponse;
+    params.set("validationCommand", result.command);
+    params.set("validationDurationMs", String(result.durationMs));
+    params.set("validationMessage", result.message);
+    params.set("validationStatus", result.status);
+    params.set("validationStderr", trimQueryOutput(result.stderr));
+    params.set("validationStdout", trimQueryOutput(result.stdout));
+    if (result.exitCode !== null) {
+      params.set("validationExitCode", String(result.exitCode));
+    }
+  } catch (error) {
+    params.set("validationMessage", error instanceof Error ? error.message : "Unable to validate framework.");
+    params.set("validationStatus", "failed");
+  }
+};
+
+const toFrameworkActionTarget = (formData: FormData): FrameworkActionTarget => ({
+  frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
+  targetDirectory: String(formData.get("targetDirectory") ?? ""),
 });
 
 async function createFramework(formData: FormData) {
@@ -796,6 +885,8 @@ async function createFramework(formData: FormData) {
   for (const feature of request.features) {
     params.append("features", feature);
   }
+
+  let autoRunTarget: FrameworkActionTarget | null = null;
 
   try {
     const response = await fetch(`${apiUrl}/frameworks/create`, {
@@ -845,8 +936,26 @@ async function createFramework(formData: FormData) {
       params.set("registeredRepositoryId", result.registeredRepository.id);
       params.set("registeredRepositoryName", `${result.registeredRepository.owner}/${result.registeredRepository.name}`);
     }
+
+    if (request.destinationType === "local" && request.autoRunDependenciesAndSmoke) {
+      autoRunTarget = {
+        frameworkBuildId: result.buildRecord?.id,
+        targetDirectory: request.targetDirectory,
+      };
+    }
   } catch (error) {
     params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
+  }
+
+  // Chained outside the try/catch above so an install/smoke problem can never be reported as a
+  // create failure. Smoke only runs after a successful install, mirroring the manual flow's
+  // canRunSmoke gating; otherwise Dependencies lands in "attention" and Smoke stays pending.
+  if (autoRunTarget) {
+    const installStatus = await runFrameworkDependencyInstall(params, autoRunTarget);
+
+    if (installStatus === "installed") {
+      await runFrameworkSmokeValidation(params, autoRunTarget);
+    }
   }
 
   redirect(`/framework/new?${params.toString()}`);
@@ -860,37 +969,7 @@ async function installFrameworkDependencies(formData: FormData) {
 
   params.set("preview", "true");
 
-  try {
-    const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
-      body: JSON.stringify({
-        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
-        targetDirectory: String(formData.get("targetDirectory") ?? ""),
-      }),
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-
-    if (!response.ok) {
-      throw new Error(parseApiErrorMessage(await response.text(), "Unable to install framework dependencies."));
-    }
-
-    const result = (await response.json()) as FrameworkDependencyInstallResponse;
-    params.set("installCommand", result.command);
-    params.set("installDurationMs", String(result.durationMs));
-    params.set("installMessage", result.message);
-    params.set("installStatus", result.status);
-    params.set("installStderr", trimQueryOutput(result.stderr));
-    params.set("installStdout", trimQueryOutput(result.stdout));
-    if (result.exitCode !== null) {
-      params.set("installExitCode", String(result.exitCode));
-    }
-  } catch (error) {
-    params.set("installMessage", error instanceof Error ? error.message : "Unable to install framework dependencies.");
-    params.set("installStatus", "failed");
-  }
+  await runFrameworkDependencyInstall(params, toFrameworkActionTarget(formData));
 
   redirect(`/framework/new?${params.toString()}`);
 }
@@ -986,37 +1065,7 @@ async function validateFramework(formData: FormData) {
 
   params.set("preview", "true");
 
-  try {
-    const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
-      body: JSON.stringify({
-        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
-        targetDirectory: String(formData.get("targetDirectory") ?? ""),
-      }),
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-
-    if (!response.ok) {
-      throw new Error(parseApiErrorMessage(await response.text(), "Unable to validate framework."));
-    }
-
-    const result = (await response.json()) as FrameworkSmokeValidationResponse;
-    params.set("validationCommand", result.command);
-    params.set("validationDurationMs", String(result.durationMs));
-    params.set("validationMessage", result.message);
-    params.set("validationStatus", result.status);
-    params.set("validationStderr", trimQueryOutput(result.stderr));
-    params.set("validationStdout", trimQueryOutput(result.stdout));
-    if (result.exitCode !== null) {
-      params.set("validationExitCode", String(result.exitCode));
-    }
-  } catch (error) {
-    params.set("validationMessage", error instanceof Error ? error.message : "Unable to validate framework.");
-    params.set("validationStatus", "failed");
-  }
+  await runFrameworkSmokeValidation(params, toFrameworkActionTarget(formData));
 
   redirect(`/framework/new?${params.toString()}`);
 }
@@ -1096,6 +1145,7 @@ export default async function NewFrameworkPage({
   const shouldInitializeGit = getCheckedParam(params.initializeGitRepository, true);
   const shouldRegisterLocalRepository = getCheckedParam(params.registerLocalRepository, true);
   const shouldCreateGithubRepository = getCheckedParam(params.createGithubRepository, false);
+  const shouldAutoRunDependenciesAndSmoke = getCheckedParam(params.autoRunDependenciesAndSmoke, true);
   const localGitStatus = (params.localGitStatus ?? savedBuild?.localGitStatus ?? undefined)?.replace(/_/g, " ");
   const githubRemoteStatus = (params.githubRemoteStatus ?? savedBuild?.githubRemoteStatus ?? undefined)?.replace(/_/g, " ");
   const registeredRepositoryId = params.registeredRepositoryId ?? savedBuild?.registeredRepositoryId ?? undefined;
@@ -1398,6 +1448,7 @@ export default async function NewFrameworkPage({
                       <small>Add this generated folder to Repositories after files are created.</small>
                     </span>
                   </label>
+                  <FrameworkAutoRunToggle shouldAutoRun={shouldAutoRunDependenciesAndSmoke} />
                 </section>
 
                 <FrameworkFilesPreview initialError={error} initialPreview={preview} initialRequest={request} />
