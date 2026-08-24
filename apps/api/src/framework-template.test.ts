@@ -163,12 +163,14 @@ describe("framework template preview", () => {
       baseUrl: "https://example.test",
       ...localDestination,
       createGithubRepository: false,
+      githubRepositoryVisibility: "private",
       features: ["sampleFeature"],
       initializeGitRepository: false,
       overwriteExisting: false,
       packageName: "created-framework",
       projectName: "Created Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
 
@@ -189,12 +191,14 @@ describe("framework template preview", () => {
       baseUrl: "https://example.test",
       ...localDestination,
       createGithubRepository: false,
+      githubRepositoryVisibility: "private",
       features: [],
       initializeGitRepository: false,
       overwriteExisting: true,
       packageName: "overwritten-framework",
       projectName: "Overwritten Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
 
@@ -209,12 +213,14 @@ describe("framework template preview", () => {
       baseUrl: "https://example.test",
       ...localDestination,
       createGithubRepository: false,
+      githubRepositoryVisibility: "private",
       features: ["sampleFeature"],
       initializeGitRepository: true,
       overwriteExisting: false,
       packageName: "git-framework",
       projectName: "Git Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
 
@@ -254,11 +260,13 @@ describe("framework template preview", () => {
       ...localDestination,
       features: ["sampleFeature"],
       createGithubRepository: false,
+      githubRepositoryVisibility: "private",
       initializeGitRepository: true,
       overwriteExisting: false,
       packageName: "existing-git-framework",
       projectName: "Existing Git Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
     const { stdout } = await execFileAsync("git", ["rev-list", "--count", "HEAD"], {
@@ -349,6 +357,7 @@ describe("framework template preview", () => {
         destinationType: "github",
         features: ["sampleFeature"],
         createGithubRepository: false,
+        githubRepositoryVisibility: "private",
         githubBranch: "main",
         githubOwner: "rgmichaels",
         githubRepository: "qa-framework",
@@ -358,6 +367,7 @@ describe("framework template preview", () => {
         packageName: "qa-framework",
         projectName: "QA Framework",
         registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
         targetDirectory: "qa/e2e",
       },
       {
@@ -398,6 +408,7 @@ describe("framework template preview", () => {
             destinationType: "github",
             features: ["sampleFeature"],
             createGithubRepository: false,
+            githubRepositoryVisibility: "private",
             githubBranch: "release/candidate",
             githubOwner: "rgmichaels",
             githubRepository: "qa-framework",
@@ -407,6 +418,7 @@ describe("framework template preview", () => {
             packageName: "qa-framework",
             projectName: "QA Framework",
             registerLocalRepository: false,
+            autoRunDependenciesAndSmoke: false,
             targetDirectory: "qa/e2e",
           },
           {
@@ -486,6 +498,7 @@ describe("framework template preview", () => {
         baseUrl: "https://example.test",
         ...localDestination,
         createGithubRepository: true,
+        githubRepositoryVisibility: "private",
         features: ["sampleFeature"],
         githubOwner: "rgmichaels",
         githubRepository: "qa-framework",
@@ -494,6 +507,7 @@ describe("framework template preview", () => {
         packageName: "qa-framework",
         projectName: "QA Framework",
         registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
         targetDirectory,
       },
       targetDirectory,
@@ -512,6 +526,343 @@ describe("framework template preview", () => {
     assert.ok(fetchCalls.some((call) => call.method === "POST" && call.url.endsWith("/user/repos")));
     assert.ok(gitCalls.some((call) => call.args.join(" ") === "remote add origin https://github.com/rgmichaels/qa-framework.git"));
     assert.ok(gitCalls.some((call) => call.args.join(" ") === "push -u origin main"));
+  });
+
+  it("creates a new GitHub repository, then opens the framework pull request against its default branch", async () => {
+    const calls: Array<{ body: unknown; method: string; url: string }> = [];
+    const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(String(init.body)) : null;
+      calls.push({ body, method, url: requestUrl });
+
+      if (requestUrl.endsWith("/user")) {
+        return Response.json({
+          login: "rgmichaels",
+        });
+      }
+
+      if (requestUrl.endsWith("/user/repos")) {
+        return Response.json({
+          clone_url: "https://github.com/rgmichaels/brand-new-framework.git",
+          // Deliberately not "main": the wizard's Branch field can't pick a new repo's default
+          // branch, so the rest of the flow has to follow whatever GitHub actually created.
+          default_branch: "trunk",
+          full_name: "rgmichaels/brand-new-framework",
+          html_url: "https://github.com/rgmichaels/brand-new-framework",
+        });
+      }
+
+      if (requestUrl.endsWith("/branches/trunk")) {
+        return Response.json({
+          sha: "base-commit-sha",
+          commit: {
+            tree: {
+              sha: "base-tree-sha",
+            },
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/git/trees/base-tree-sha?recursive=1")) {
+        return Response.json({
+          sha: "base-tree-sha",
+          tree: [
+            {
+              // The stub README auto_init leaves behind in every new repository.
+              path: "README.md",
+              type: "blob",
+            },
+          ],
+        });
+      }
+
+      if (requestUrl.endsWith("/git/refs")) {
+        return Response.json({
+          object: {
+            sha: "base-commit-sha",
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/git/trees")) {
+        return Response.json({
+          sha: "new-tree-sha",
+        });
+      }
+
+      if (requestUrl.endsWith("/git/commits")) {
+        return Response.json({
+          sha: "new-commit-sha",
+          commit: {
+            tree: {
+              sha: "new-tree-sha",
+            },
+          },
+        });
+      }
+
+      if (requestUrl.includes("/git/refs/heads/flawferret/create-framework-")) {
+        return Response.json({
+          object: {
+            sha: "new-commit-sha",
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/pulls")) {
+        return Response.json({
+          html_url: "https://github.com/rgmichaels/brand-new-framework/pull/1",
+          number: 1,
+        });
+      }
+
+      return new Response("unexpected request", { status: 500 });
+    }) as typeof fetch;
+
+    const result = await createFrameworkPullRequest(
+      {
+        baseUrl: "https://example.test",
+        destinationType: "github",
+        features: ["sampleFeature"],
+        createGithubRepository: true,
+        githubBranch: "main",
+        githubOwner: "rgmichaels",
+        githubRepository: "brand-new-framework",
+        githubRepositoryId: "",
+        githubRepositoryVisibility: "public",
+        initializeGitRepository: false,
+        overwriteExisting: false,
+        packageName: "brand-new-framework",
+        projectName: "Brand New Framework",
+        registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
+        targetDirectory: ".",
+      },
+      {
+        env: {
+          GITHUB_TOKEN: "test-token",
+        },
+        fetcher,
+        now: new Date("2026-08-01T12:34:56.000Z"),
+      },
+    );
+
+    const createRepositoryCall = calls.find((call) => call.method === "POST" && call.url.endsWith("/user/repos"));
+    assert.ok(createRepositoryCall);
+    assert.deepEqual(createRepositoryCall.body, {
+      auto_init: true,
+      description: "Playwright, TypeScript, and Cucumber test framework generated by FlawFerret 2.",
+      name: "brand-new-framework",
+      private: false,
+    });
+    // Repo creation must be the first write, so a rejected name can't leave files behind.
+    assert.ok(calls.findIndex((call) => call.url.endsWith("/user/repos")) < calls.findIndex((call) => call.url.endsWith("/pulls")));
+    assert.ok(calls.some((call) => call.url.endsWith("/repos/rgmichaels/brand-new-framework/branches/trunk")));
+    assert.equal(
+      (calls.find((call) => call.url.endsWith("/pulls"))?.body as { base?: string }).base,
+      "trunk",
+    );
+    assert.equal(result.githubPullRequest?.prNumber, 1);
+    assert.ok(result.overwrittenFiles.some((file) => file.path === "README.md"));
+    assert.equal(result.skippedFiles.length, 0);
+  });
+
+  it("creates a new repository under an organization the token can access", async () => {
+    const calls: Array<{ method: string; url: string }> = [];
+    const fetcher = (async (url: string | URL | Request, init?: RequestInit) => {
+      const requestUrl = String(url);
+      calls.push({ method: init?.method ?? "GET", url: requestUrl });
+
+      if (requestUrl.endsWith("/user")) {
+        return Response.json({
+          login: "rgmichaels",
+        });
+      }
+
+      if (requestUrl.endsWith("/orgs/flawferret-org/repos")) {
+        return new Response('{"message":"Not Found"}', { status: 404 });
+      }
+
+      return new Response("unexpected request", { status: 500 });
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        createFrameworkPullRequest(
+          {
+            baseUrl: "https://example.test",
+            destinationType: "github",
+            features: ["sampleFeature"],
+            createGithubRepository: true,
+            githubBranch: "main",
+            githubOwner: "flawferret-org",
+            githubRepository: "qa-framework",
+            githubRepositoryId: "",
+            githubRepositoryVisibility: "private",
+            initializeGitRepository: false,
+            overwriteExisting: false,
+            packageName: "qa-framework",
+            projectName: "QA Framework",
+            registerLocalRepository: false,
+            autoRunDependenciesAndSmoke: false,
+            targetDirectory: "qa/e2e",
+          },
+          {
+            env: {
+              GITHUB_TOKEN: "test-token",
+            },
+            fetcher,
+          },
+        ),
+      /Unable to create GitHub repository flawferret-org\/qa-framework failed with 404/,
+    );
+
+    assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/orgs/flawferret-org/repos")));
+  });
+
+  it("explains that a new GitHub repository name is already taken", async () => {
+    const calls: string[] = [];
+    const fetcher = (async (url: string | URL | Request) => {
+      const requestUrl = String(url);
+      calls.push(requestUrl);
+
+      if (requestUrl.endsWith("/user")) {
+        return Response.json({
+          login: "rgmichaels",
+        });
+      }
+
+      if (requestUrl.endsWith("/user/repos")) {
+        return new Response(
+          '{"message":"Repository creation failed.","errors":[{"resource":"Repository","field":"name","message":"name already exists on this account"}]}',
+          { status: 422 },
+        );
+      }
+
+      return new Response("unexpected request", { status: 500 });
+    }) as typeof fetch;
+
+    await assert.rejects(
+      () =>
+        createFrameworkPullRequest(
+          {
+            baseUrl: "https://example.test",
+            destinationType: "github",
+            features: ["sampleFeature"],
+            createGithubRepository: true,
+            githubBranch: "main",
+            githubOwner: "rgmichaels",
+            githubRepository: "qa-framework",
+            githubRepositoryId: "",
+            githubRepositoryVisibility: "private",
+            initializeGitRepository: false,
+            overwriteExisting: false,
+            packageName: "qa-framework",
+            projectName: "QA Framework",
+            registerLocalRepository: false,
+            autoRunDependenciesAndSmoke: false,
+            targetDirectory: "qa/e2e",
+          },
+          {
+            env: {
+              GITHUB_TOKEN: "test-token",
+            },
+            fetcher,
+          },
+        ),
+      /GitHub repository rgmichaels\/qa-framework already exists\. Pick a different repository name/,
+    );
+
+    // Nothing beyond the failed creation attempt should have been requested.
+    assert.deepEqual(calls, ["https://api.github.com/user", "https://api.github.com/user/repos"]);
+  });
+
+  it("leaves the existing-repository GitHub flow untouched when repo creation is not requested", async () => {
+    const calls: string[] = [];
+    const fetcher = (async (url: string | URL | Request) => {
+      const requestUrl = String(url);
+      calls.push(requestUrl);
+
+      if (requestUrl.endsWith("/branches/main")) {
+        return Response.json({
+          sha: "base-commit-sha",
+          commit: {
+            tree: {
+              sha: "base-tree-sha",
+            },
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/git/trees/base-tree-sha?recursive=1")) {
+        return Response.json({
+          sha: "base-tree-sha",
+          tree: [],
+        });
+      }
+
+      if (requestUrl.endsWith("/git/trees")) {
+        return Response.json({
+          sha: "new-tree-sha",
+        });
+      }
+
+      if (requestUrl.endsWith("/git/commits")) {
+        return Response.json({
+          sha: "new-commit-sha",
+          commit: {
+            tree: {
+              sha: "new-tree-sha",
+            },
+          },
+        });
+      }
+
+      if (requestUrl.endsWith("/pulls")) {
+        return Response.json({
+          html_url: "https://github.com/rgmichaels/qa-framework/pull/9",
+          number: 9,
+        });
+      }
+
+      return Response.json({
+        object: {
+          sha: "base-commit-sha",
+        },
+      });
+    }) as typeof fetch;
+
+    const result = await createFrameworkPullRequest(
+      {
+        baseUrl: "https://example.test",
+        destinationType: "github",
+        features: ["sampleFeature"],
+        createGithubRepository: false,
+        githubBranch: "main",
+        githubOwner: "rgmichaels",
+        githubRepository: "qa-framework",
+        githubRepositoryId: "repo-1",
+        githubRepositoryVisibility: "private",
+        initializeGitRepository: false,
+        overwriteExisting: false,
+        packageName: "qa-framework",
+        projectName: "QA Framework",
+        registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
+        targetDirectory: "qa/e2e",
+      },
+      {
+        env: {
+          GITHUB_TOKEN: "test-token",
+        },
+        fetcher,
+        now: new Date("2026-08-01T12:34:56.000Z"),
+      },
+    );
+
+    assert.equal(result.githubPullRequest?.prNumber, 9);
+    assert.ok(!calls.some((requestUrl) => requestUrl.endsWith("/user/repos") || requestUrl.endsWith("/user")));
   });
 
 });

@@ -2,7 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useState } from "react";
-import type { RepositoryResponse } from "@flawferret2/job-schemas";
+import type { FrameworkGithubRepositoryVisibility, RepositoryResponse } from "@flawferret2/job-schemas";
 import { useFrameworkDestination } from "./framework-destination-context";
 import { pickFolder } from "./pick-folder";
 
@@ -10,23 +10,35 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 const getInputValue = (event: ChangeEvent<HTMLInputElement>) => ((event.currentTarget as unknown) as { value: string }).value;
 
+const getCheckedValue = (event: ChangeEvent<HTMLInputElement>) => ((event.currentTarget as unknown) as { checked: boolean }).checked;
+
 const getSelectValue = (event: ChangeEvent<HTMLSelectElement>) => ((event.currentTarget as unknown) as { value: string }).value;
 
 const repositoryLabel = (repository: RepositoryResponse) => `${repository.owner}/${repository.name}`;
 
+// A repository name suggestion for the "create a new repository" flow: the package name without its
+// npm scope, which is already constrained to characters GitHub accepts in a repo name.
+const repositoryNameFromPackage = (packageName: string) => packageName.replace(/^@[^/]+\//, "");
+
 export function FrameworkFolderPicker({
+  defaultCreateGithubRepository,
   defaultGithubBranch,
   defaultGithubOwner,
   defaultGithubRepositoryId,
   defaultGithubRepository,
+  defaultGithubRepositoryVisibility,
   defaultValue,
+  packageName,
   repositories,
 }: {
+  defaultCreateGithubRepository: boolean;
   defaultGithubBranch: string;
   defaultGithubOwner: string;
   defaultGithubRepositoryId: string;
   defaultGithubRepository: string;
+  defaultGithubRepositoryVisibility: FrameworkGithubRepositoryVisibility;
   defaultValue: string;
+  packageName: string;
   repositories: RepositoryResponse[];
 }) {
   const { destinationType, notifyFieldChanged, setDestinationType } = useFrameworkDestination();
@@ -34,6 +46,10 @@ export function FrameworkFolderPicker({
   const [githubOwner, setGithubOwner] = useState(defaultGithubOwner);
   const [githubRepository, setGithubRepository] = useState(defaultGithubRepository);
   const [githubRepositoryId, setGithubRepositoryId] = useState(defaultGithubRepositoryId);
+  const [createGithubRepository, setCreateGithubRepository] = useState(defaultCreateGithubRepository);
+  const [githubRepositoryVisibility, setGithubRepositoryVisibility] = useState<FrameworkGithubRepositoryVisibility>(
+    defaultGithubRepositoryVisibility,
+  );
   const [targetDirectory, setTargetDirectory] = useState(defaultValue);
   const [isPicking, setIsPicking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +101,24 @@ export function FrameworkFolderPicker({
     setGithubBranch(repository.defaultBranch);
   };
 
+  const toggleCreateGithubRepository = (event: ChangeEvent<HTMLInputElement>) => {
+    const shouldCreate = getCheckedValue(event);
+    setCreateGithubRepository(shouldCreate);
+    setError(null);
+
+    if (!shouldCreate) {
+      return;
+    }
+
+    // A repository that doesn't exist yet can't also be a registered one, and the name field is
+    // usually empty at this point, so seed it from the package name the user already chose.
+    setGithubRepositoryId("");
+
+    if (!githubRepository.trim()) {
+      setGithubRepository(repositoryNameFromPackage(packageName));
+    }
+  };
+
   return (
     <fieldset className="framework-destination">
       <legend className="framework-field-label">Destination</legend>
@@ -118,7 +152,7 @@ export function FrameworkFolderPicker({
       <p className="framework-segmented-hint">
         {destinationType === "local"
           ? "Create files on this machine, then commit or register the repo when ready."
-          : "Preview the target repository and branch now. Writing to GitHub comes in the next slice."}
+          : "Commit the generated framework to an existing repository, or create a new one."}
       </p>
 
       {destinationType === "local" ? (
@@ -146,18 +180,34 @@ export function FrameworkFolderPicker({
 
       {destinationType === "github" ? (
         <div className="framework-github-destination">
-          <label className="framework-github-repository-picker">
-            Choose Registered Repository
-            <select name="githubRepositoryId" onChange={selectRepository} value={githubRepositoryId}>
-              <option value="">Manual repository</option>
-              {repositories.map((repository) => (
-                <option key={repository.id} value={repository.id}>
-                  {repositoryLabel(repository)} on {repository.defaultBranch}
-                </option>
-              ))}
-            </select>
-            <small>Registered repos prefill the GitHub target. New GitHub repo creation comes later.</small>
+          <label className="framework-overwrite-option">
+            <input name="createGithubRepository" type="hidden" value="false" />
+            <input
+              checked={createGithubRepository}
+              name="createGithubRepository"
+              onChange={toggleCreateGithubRepository}
+              type="checkbox"
+              value="true"
+            />
+            <span>
+              <strong>Create a new GitHub repository</strong>
+              <small>Create the repository on GitHub first, then open the framework pull request against it.</small>
+            </span>
           </label>
+          {createGithubRepository ? null : (
+            <label className="framework-github-repository-picker">
+              Choose Registered Repository
+              <select name="githubRepositoryId" onChange={selectRepository} value={githubRepositoryId}>
+                <option value="">Manual repository</option>
+                {repositories.map((repository) => (
+                  <option key={repository.id} value={repository.id}>
+                    {repositoryLabel(repository)} on {repository.defaultBranch}
+                  </option>
+                ))}
+              </select>
+              <small>Registered repos prefill the GitHub target.</small>
+            </label>
+          )}
           <label>
             Owner
             <input
@@ -167,6 +217,9 @@ export function FrameworkFolderPicker({
               required
               value={githubOwner}
             />
+            {createGithubRepository ? (
+              <small>Your GitHub username, or an organization your token can create repositories in.</small>
+            ) : null}
           </label>
           <label>
             Repository
@@ -177,17 +230,33 @@ export function FrameworkFolderPicker({
               required
               value={githubRepository}
             />
+            {createGithubRepository ? <small>Must not already exist under the owner above.</small> : null}
           </label>
-          <label>
-            Branch
-            <input
-              name="githubBranch"
-              onChange={(event) => setGithubBranch(getInputValue(event))}
-              placeholder="main"
-              required
-              value={githubBranch}
-            />
-          </label>
+          {createGithubRepository ? (
+            <label>
+              Visibility
+              <select
+                name="githubRepositoryVisibility"
+                onChange={(event) => setGithubRepositoryVisibility(getSelectValue(event) === "public" ? "public" : "private")}
+                value={githubRepositoryVisibility}
+              >
+                <option value="private">Private</option>
+                <option value="public">Public</option>
+              </select>
+              <small>The pull request targets whatever default branch GitHub creates with the repository.</small>
+            </label>
+          ) : (
+            <label>
+              Branch
+              <input
+                name="githubBranch"
+                onChange={(event) => setGithubBranch(getInputValue(event))}
+                placeholder="main"
+                required
+                value={githubBranch}
+              />
+            </label>
+          )}
           <label>
             Repository Path
             <input

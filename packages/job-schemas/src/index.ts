@@ -496,8 +496,14 @@ export const frameworkTemplateRequestSchema = z
     }
   });
 
+export const frameworkGithubRepositoryVisibilitySchema = z.enum(["private", "public"]).default("private");
+
 export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
+  // Defaults true to match the builder's "After building" UI default — install and smoke run
+  // automatically for local-destination builds unless the user unchecks the toggle.
+  autoRunDependenciesAndSmoke: z.boolean().default(true),
   createGithubRepository: z.boolean().default(false),
+  githubRepositoryVisibility: frameworkGithubRepositoryVisibilitySchema,
   initializeGitRepository: z.boolean().default(false),
   overwriteExisting: z.boolean().default(false),
   registerLocalRepository: z.boolean().default(false),
@@ -836,6 +842,7 @@ export type DiscoverRunResponse = z.infer<typeof discoverRunResponseSchema>;
 export type FrameworkTemplateFeature = z.infer<typeof frameworkTemplateFeatureSchema>;
 export type FrameworkTemplateDestinationType = z.infer<typeof frameworkTemplateDestinationTypeSchema>;
 export type FrameworkTemplateRequest = z.infer<typeof frameworkTemplateRequestSchema>;
+export type FrameworkGithubRepositoryVisibility = z.infer<typeof frameworkGithubRepositoryVisibilitySchema>;
 export type CreateFrameworkRequest = z.infer<typeof createFrameworkRequestSchema>;
 export type FrameworkTemplateFile = z.infer<typeof frameworkTemplateFileSchema>;
 export type FrameworkTemplatePreviewResponse = z.infer<typeof frameworkTemplatePreviewResponseSchema>;

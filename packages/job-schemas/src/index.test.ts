@@ -583,6 +583,7 @@ describe("job schemas", () => {
     });
 
     assert.equal(request.overwriteExisting, true);
+    assert.equal(request.autoRunDependenciesAndSmoke, true);
     assert.equal(request.registerLocalRepository, true);
     assert.equal(request.destinationType, "local");
 
