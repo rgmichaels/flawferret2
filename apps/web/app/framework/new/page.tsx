@@ -23,6 +23,7 @@ import { FrameworkFilesPreview } from "./framework-files-preview";
 import { FrameworkFolderPicker } from "./framework-folder-picker";
 import { FrameworkGithubPushToggle } from "./framework-github-push-toggle";
 import { getDestinationType, toNpmPackageName } from "./framework-request-utils";
+import { formatPostBuildActions } from "./post-build-summary";
 
 export { toNpmPackageName } from "./framework-request-utils";
 
@@ -1215,7 +1216,8 @@ export default async function NewFrameworkPage({
 
   return (
     <AppShell active="framework">
-      <section className="workspace">
+      {/* framework-builder-page scopes this route's --font-display override — see styles.css. */}
+      <section className="workspace framework-builder-page">
         <header className="topbar">
           <div>
             <p className="eyebrow">Create</p>
@@ -1298,109 +1300,118 @@ export default async function NewFrameworkPage({
                 className="job-form standalone-form framework-builder-form"
                 initialDestinationType={request.destinationType}
               >
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>1</span>
-                    <div>
-                      <h3>Where</h3>
-                      <p>Choose a local folder or a GitHub repository as the build destination.</p>
-                    </div>
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>Where</h5>
+                    <p>Folder or GitHub repo.</p>
                   </div>
-                  <FrameworkFolderPicker
-                    defaultGithubBranch={request.githubBranch}
-                    defaultGithubOwner={request.githubOwner}
-                    defaultGithubRepositoryId={request.githubRepositoryId}
-                    defaultGithubRepository={request.githubRepository}
-                    defaultValue={request.targetDirectory}
-                    repositories={repositories}
-                  />
-                </section>
-
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>2</span>
-                    <div>
-                      <h3>Naming</h3>
-                      <p>Project name, package name, and the base URL the generated tests target.</p>
-                    </div>
-                  </div>
-                  <div className="framework-basics-grid">
-                    <label>
-                      Project Name
-                      <input name="projectName" defaultValue={request.projectName} required />
-                    </label>
-                    <label>
-                      Package Name
-                      <input name="packageName" defaultValue={request.packageName} required />
-                    </label>
-                    <label>
-                      Base URL
-                      <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
-                    </label>
+                  <div className="framework-section-body">
+                    <FrameworkFolderPicker
+                      defaultGithubBranch={request.githubBranch}
+                      defaultGithubOwner={request.githubOwner}
+                      defaultGithubRepositoryId={request.githubRepositoryId}
+                      defaultGithubRepository={request.githubRepository}
+                      defaultValue={request.targetDirectory}
+                      repositories={repositories}
+                    />
                   </div>
                 </section>
 
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>3</span>
-                    <div>
-                      <h3>Include</h3>
-                      <p>Pick the capabilities generated into the new framework.</p>
-                    </div>
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>Naming</h5>
+                    <p>What the generated project is called, and what it points at.</p>
                   </div>
-                  <fieldset className="framework-options">
-                    <legend>Include</legend>
-                    {featureOptions.map((option) => (
-                      <label key={option.value} className="framework-option">
-                        <input
-                          defaultChecked={selectedFeatures.has(option.value)}
-                          name="features"
-                          type="checkbox"
-                          value={option.value}
-                        />
-                        <span>
-                          <strong>{option.label}</strong>
-                          <small>{option.description}</small>
-                        </span>
+                  <div className="framework-section-body">
+                    <div className="framework-basics-grid">
+                      <label>
+                        Project Name
+                        <input name="projectName" defaultValue={request.projectName} required />
                       </label>
-                    ))}
-                  </fieldset>
-                </section>
-
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>4</span>
-                    <div>
-                      <h3>After building</h3>
-                      <p>Choose what FF2 does once the framework files are generated.</p>
+                      <label>
+                        Package Name
+                        <input name="packageName" defaultValue={request.packageName} required />
+                      </label>
+                      <label>
+                        Base URL
+                        <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
+                      </label>
                     </div>
                   </div>
-                  <label className="framework-overwrite-option">
-                    <input name="initializeGitRepository" type="hidden" value="false" />
-                    <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" value="true" />
-                    <span>
-                      <strong>Initialize git repository</strong>
-                      <small>Create a local git repo and initial commit after files are generated.</small>
-                    </span>
-                  </label>
-                  <FrameworkGithubPushToggle
-                    githubBranch={request.githubBranch}
-                    githubOwner={request.githubOwner}
-                    githubRepository={request.githubRepository}
-                    packageName={request.packageName}
-                    shouldCreateGithubRepository={shouldCreateGithubRepository}
-                  />
-                  <label className="framework-overwrite-option">
-                    <input name="registerLocalRepository" type="hidden" value="false" />
-                    <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" value="true" />
-                    <span>
-                      <strong>Register in FF2</strong>
-                      <small>Add this generated folder to Repositories after files are created.</small>
-                    </span>
-                  </label>
                 </section>
 
-                <FrameworkFilesPreview initialError={error} initialPreview={preview} initialRequest={request} />
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>Include</h5>
+                    <p>Capabilities generated into the new framework.</p>
+                  </div>
+                  <div className="framework-section-body">
+                    <fieldset className="framework-chips">
+                      <legend className="framework-field-label">Include</legend>
+                      {/* Real checkboxes, kept for keyboard/screen-reader semantics and only
+                          visually hidden; the checked state is carried by a fill *and* a checkmark
+                          glyph so it never depends on color alone. Each feature's longer
+                          description moves to the chip's title rather than being dropped. */}
+                      <div className="framework-chip-row">
+                        {featureOptions.map((option) => (
+                          <label key={option.value} className="framework-chip" title={option.description}>
+                            <input
+                              defaultChecked={selectedFeatures.has(option.value)}
+                              name="features"
+                              type="checkbox"
+                              value={option.value}
+                            />
+                            <span aria-hidden="true" className="framework-chip-mark" />
+                            <span className="framework-chip-text">{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  </div>
+                </section>
+
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>After building</h5>
+                    <p>What FF2 does once the files are generated.</p>
+                  </div>
+                  <div className="framework-section-body">
+                    <label className="framework-overwrite-option">
+                      <input name="initializeGitRepository" type="hidden" value="false" />
+                      <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" value="true" />
+                      <span>
+                        <strong>Initialize git repository</strong>
+                        <small>Create a local git repo and initial commit after files are generated.</small>
+                      </span>
+                    </label>
+                    <FrameworkGithubPushToggle
+                      githubBranch={request.githubBranch}
+                      githubOwner={request.githubOwner}
+                      githubRepository={request.githubRepository}
+                      packageName={request.packageName}
+                      shouldCreateGithubRepository={shouldCreateGithubRepository}
+                    />
+                    <label className="framework-overwrite-option">
+                      <input name="registerLocalRepository" type="hidden" value="false" />
+                      <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" value="true" />
+                      <span>
+                        <strong>Register in FF2</strong>
+                        <small>Add this generated folder to Repositories after files are created.</small>
+                      </span>
+                    </label>
+                  </div>
+                </section>
+
+                <FrameworkFilesPreview
+                  initialError={error}
+                  initialPostBuildActions={formatPostBuildActions({
+                    createGithubRepository: shouldCreateGithubRepository,
+                    initializeGitRepository: shouldInitializeGit,
+                    registerLocalRepository: shouldRegisterLocalRepository,
+                  })}
+                  initialPreview={preview}
+                  initialRequest={request}
+                />
               </FrameworkBuilderForm>
             )}
           </section>
