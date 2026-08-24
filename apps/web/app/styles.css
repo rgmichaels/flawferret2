@@ -787,8 +787,8 @@ button {
 }
 
 .framework-folder-input-row button:hover {
-  border-color: #2563eb;
-  color: #2563eb;
+  border-color: var(--action);
+  color: var(--action);
 }
 
 .framework-folder-error,
