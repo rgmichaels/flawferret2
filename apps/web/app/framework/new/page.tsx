@@ -7,6 +7,7 @@ import {
   type CreateRepositoryRequest,
   type FrameworkBuildResponse,
   type FrameworkDependencyInstallResponse,
+  type FrameworkGithubRepositoryVisibility,
   type FrameworkOpenFolderResponse,
   type FrameworkSmokeValidationResponse,
   type FrameworkTemplateFeature,
@@ -79,6 +80,7 @@ type FrameworkNewSearchParams = {
   githubOwner?: string;
   githubRepositoryId?: string;
   githubRepository?: string;
+  githubRepositoryVisibility?: string;
   githubRemoteMessage?: string;
   githubRemoteRepository?: string;
   githubRemoteStatus?: string;
@@ -136,6 +138,7 @@ const frameworkActionPassthroughKeys: Array<keyof FrameworkNewSearchParams> = [
   "githubRemoteWebUrl",
   "githubRepository",
   "githubRepositoryId",
+  "githubRepositoryVisibility",
   "initializeGitRepository",
   "installCommand",
   "installDurationMs",
@@ -210,6 +213,9 @@ const slugValue = (value: string, fallback: string) => {
   return slug || fallback;
 };
 
+const getGithubRepositoryVisibility = (value: string | undefined): FrameworkGithubRepositoryVisibility =>
+  value === "public" ? "public" : "private";
+
 const getCheckedFormValue = (formData: FormData, name: string) => {
   const values = formData.getAll(name).map(String);
   const lastValue = values.at(-1);
@@ -267,6 +273,7 @@ function FrameworkActionHiddenFields({
     githubRemoteWebUrl: params.githubRemoteWebUrl,
     githubRepository: request.githubRepository,
     githubRepositoryId: request.githubRepositoryId,
+    githubRepositoryVisibility: params.githubRepositoryVisibility,
     initializeGitRepository: String(getCheckedParam(params.initializeGitRepository, true)),
     installCommand: params.installCommand,
     installDurationMs: params.installDurationMs,
@@ -765,6 +772,7 @@ const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
   githubOwner: String(formData.get("githubOwner") ?? "").trim(),
   githubRepositoryId: String(formData.get("githubRepositoryId") ?? "").trim(),
   githubRepository: String(formData.get("githubRepository") ?? "").trim(),
+  githubRepositoryVisibility: getGithubRepositoryVisibility(String(formData.get("githubRepositoryVisibility") ?? "")),
   initializeGitRepository: getCheckedFormValue(formData, "initializeGitRepository"),
   overwriteExisting: getCheckedFormValue(formData, "overwriteExisting"),
   packageName: toNpmPackageName(String(formData.get("packageName") ?? "").trim(), "playwright-cucumber-tests"),
@@ -785,6 +793,7 @@ async function createFramework(formData: FormData) {
     githubOwner: request.githubOwner,
     githubRepositoryId: request.githubRepositoryId,
     githubRepository: request.githubRepository,
+    githubRepositoryVisibility: request.githubRepositoryVisibility,
     initializeGitRepository: String(request.initializeGitRepository),
     packageName: request.packageName,
     preview: "true",
@@ -1096,6 +1105,7 @@ export default async function NewFrameworkPage({
   const shouldInitializeGit = getCheckedParam(params.initializeGitRepository, true);
   const shouldRegisterLocalRepository = getCheckedParam(params.registerLocalRepository, true);
   const shouldCreateGithubRepository = getCheckedParam(params.createGithubRepository, false);
+  const githubRepositoryVisibility = getGithubRepositoryVisibility(params.githubRepositoryVisibility);
   const localGitStatus = (params.localGitStatus ?? savedBuild?.localGitStatus ?? undefined)?.replace(/_/g, " ");
   const githubRemoteStatus = (params.githubRemoteStatus ?? savedBuild?.githubRemoteStatus ?? undefined)?.replace(/_/g, " ");
   const registeredRepositoryId = params.registeredRepositoryId ?? savedBuild?.registeredRepositoryId ?? undefined;
@@ -1307,11 +1317,14 @@ export default async function NewFrameworkPage({
                     </div>
                   </div>
                   <FrameworkFolderPicker
+                    defaultCreateGithubRepository={shouldCreateGithubRepository}
                     defaultGithubBranch={request.githubBranch}
                     defaultGithubOwner={request.githubOwner}
                     defaultGithubRepositoryId={request.githubRepositoryId}
                     defaultGithubRepository={request.githubRepository}
+                    defaultGithubRepositoryVisibility={githubRepositoryVisibility}
                     defaultValue={request.targetDirectory}
+                    packageName={request.packageName}
                     repositories={repositories}
                   />
                 </section>

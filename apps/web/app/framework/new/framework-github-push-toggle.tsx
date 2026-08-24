@@ -44,9 +44,11 @@ export function FrameworkGithubPushToggle({
 
   if (destinationType !== "local") {
     // GitHub destination: FrameworkFolderPicker above already renders editable
-    // githubOwner/githubRepository/githubBranch inputs for the PR target, so only the (here,
-    // inapplicable) "push to GitHub" toggle needs a fallback value.
-    return <input name="createGithubRepository" type="hidden" value="false" />;
+    // githubOwner/githubRepository/githubBranch inputs for the PR target, plus its own
+    // createGithubRepository checkbox for the "create a new repository" option. Rendering anything
+    // here would duplicate those names — and because this component sits after the picker in the
+    // form, its value would win the last-value-wins read in getCheckedFormValue.
+    return null;
   }
 
   return (
