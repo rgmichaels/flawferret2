@@ -170,6 +170,7 @@ describe("framework template preview", () => {
       packageName: "created-framework",
       projectName: "Created Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
 
@@ -197,6 +198,7 @@ describe("framework template preview", () => {
       packageName: "overwritten-framework",
       projectName: "Overwritten Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
 
@@ -218,6 +220,7 @@ describe("framework template preview", () => {
       packageName: "git-framework",
       projectName: "Git Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
 
@@ -263,6 +266,7 @@ describe("framework template preview", () => {
       packageName: "existing-git-framework",
       projectName: "Existing Git Framework",
       registerLocalRepository: false,
+      autoRunDependenciesAndSmoke: false,
       targetDirectory,
     });
     const { stdout } = await execFileAsync("git", ["rev-list", "--count", "HEAD"], {
@@ -363,6 +367,7 @@ describe("framework template preview", () => {
         packageName: "qa-framework",
         projectName: "QA Framework",
         registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
         targetDirectory: "qa/e2e",
       },
       {
@@ -413,6 +418,7 @@ describe("framework template preview", () => {
             packageName: "qa-framework",
             projectName: "QA Framework",
             registerLocalRepository: false,
+            autoRunDependenciesAndSmoke: false,
             targetDirectory: "qa/e2e",
           },
           {
@@ -501,6 +507,7 @@ describe("framework template preview", () => {
         packageName: "qa-framework",
         projectName: "QA Framework",
         registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
         targetDirectory,
       },
       targetDirectory,
@@ -629,6 +636,7 @@ describe("framework template preview", () => {
         packageName: "brand-new-framework",
         projectName: "Brand New Framework",
         registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
         targetDirectory: ".",
       },
       {
@@ -697,6 +705,7 @@ describe("framework template preview", () => {
             packageName: "qa-framework",
             projectName: "QA Framework",
             registerLocalRepository: false,
+            autoRunDependenciesAndSmoke: false,
             targetDirectory: "qa/e2e",
           },
           {
@@ -752,6 +761,7 @@ describe("framework template preview", () => {
             packageName: "qa-framework",
             projectName: "QA Framework",
             registerLocalRepository: false,
+            autoRunDependenciesAndSmoke: false,
             targetDirectory: "qa/e2e",
           },
           {
@@ -839,6 +849,7 @@ describe("framework template preview", () => {
         packageName: "qa-framework",
         projectName: "QA Framework",
         registerLocalRepository: false,
+        autoRunDependenciesAndSmoke: false,
         targetDirectory: "qa/e2e",
       },
       {

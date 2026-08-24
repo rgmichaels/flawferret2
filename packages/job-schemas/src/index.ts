@@ -499,6 +499,9 @@ export const frameworkTemplateRequestSchema = z
 export const frameworkGithubRepositoryVisibilitySchema = z.enum(["private", "public"]).default("private");
 
 export const createFrameworkRequestSchema = frameworkTemplateRequestSchema.extend({
+  // Defaults true to match the builder's "After building" UI default — install and smoke run
+  // automatically for local-destination builds unless the user unchecks the toggle.
+  autoRunDependenciesAndSmoke: z.boolean().default(true),
   createGithubRepository: z.boolean().default(false),
   githubRepositoryVisibility: frameworkGithubRepositoryVisibilitySchema,
   initializeGitRepository: z.boolean().default(false),

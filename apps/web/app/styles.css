@@ -787,8 +787,8 @@ button {
 }
 
 .framework-folder-input-row button:hover {
-  border-color: #2563eb;
-  color: #2563eb;
+  border-color: var(--action);
+  color: var(--action);
 }
 
 .framework-folder-error,
@@ -2071,6 +2071,15 @@ button {
 .framework-overwrite-option small {
   color: #667085;
   font-size: 13px;
+}
+
+.framework-toggle-timing {
+  color: var(--signal-waiting);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  margin-left: 8px;
+  text-transform: none;
 }
 
 .framework-command-grid {
