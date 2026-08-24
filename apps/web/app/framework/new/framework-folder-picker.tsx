@@ -121,25 +121,45 @@ export function FrameworkFolderPicker({
 
   return (
     <fieldset className="framework-destination">
-      <legend>Destination</legend>
+      <legend className="framework-field-label">Destination</legend>
 
-      <label className={`framework-destination-option ${destinationType === "local" ? "selected" : ""}`}>
-        <input
-          checked={destinationType === "local"}
-          name="destinationType"
-          onChange={selectDestination}
-          type="radio"
-          value="local"
-        />
-        <span>
-          <strong>Local folder</strong>
-          <small>Create files on this machine, then commit or register the repo when ready.</small>
-        </span>
-      </label>
+      {/* Segmented toggle (one radio per segment) rather than two stacked radio cards — the per-
+          option description each card used to carry now renders once, below, for whichever
+          destination is selected. */}
+      <div className="framework-segmented">
+        <label className={`framework-segment ${destinationType === "local" ? "selected" : ""}`}>
+          <input
+            checked={destinationType === "local"}
+            name="destinationType"
+            onChange={selectDestination}
+            type="radio"
+            value="local"
+          />
+          <span>Local folder</span>
+        </label>
+        <label className={`framework-segment ${destinationType === "github" ? "selected" : ""}`}>
+          <input
+            checked={destinationType === "github"}
+            name="destinationType"
+            onChange={selectDestination}
+            type="radio"
+            value="github"
+          />
+          <span>GitHub repository</span>
+        </label>
+      </div>
+
+      <p className="framework-segmented-hint">
+        {destinationType === "local"
+          ? "Create files on this machine, then commit or register the repo when ready."
+          : "Commit the generated framework to an existing repository, or create a new one."}
+      </p>
 
       {destinationType === "local" ? (
         <div className="framework-folder-picker">
-          <label htmlFor="targetDirectory">Target Directory</label>
+          <label className="framework-field-label" htmlFor="targetDirectory">
+            Target Directory
+          </label>
           <div className="framework-folder-input-row">
             <input
               id="targetDirectory"
@@ -157,20 +177,6 @@ export function FrameworkFolderPicker({
       ) : null}
 
       {error ? <p className="framework-folder-error">{error}</p> : null}
-
-      <label className={`framework-destination-option ${destinationType === "github" ? "selected" : ""}`}>
-        <input
-          checked={destinationType === "github"}
-          name="destinationType"
-          onChange={selectDestination}
-          type="radio"
-          value="github"
-        />
-        <span>
-          <strong>GitHub repository</strong>
-          <small>Commit the generated framework to an existing repository, or create a new one.</small>
-        </span>
-      </label>
 
       {destinationType === "github" ? (
         <div className="framework-github-destination">
