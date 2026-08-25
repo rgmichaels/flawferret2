@@ -7,6 +7,7 @@ import { fetchFrameworkPreview } from "./fetch-framework-preview";
 import { useFrameworkDestination } from "./framework-destination-context";
 import { FrameworkFilePreviewDetails } from "./framework-file-preview-details";
 import { createRequestSequencer } from "./preview-request-sequencer";
+import { describePostBuildActions } from "./post-build-summary";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const previewDebounceMs = 400;
@@ -27,10 +28,12 @@ const readFormData = (form: unknown): FormData => new (FormData as unknown as Fo
 // never dispatch a native "input"/"change" event for the form listener below to catch.
 export function FrameworkFilesPreview({
   initialError,
+  initialPostBuildActions,
   initialPreview,
   initialRequest,
 }: {
   initialError: string | null;
+  initialPostBuildActions: string;
   initialPreview: FrameworkTemplatePreviewResponse | null;
   initialRequest: FrameworkTemplateRequest;
 }) {
@@ -38,6 +41,9 @@ export function FrameworkFilesPreview({
   const [preview, setPreview] = useState(initialPreview);
   const [error, setError] = useState(initialError);
   const [request, setRequest] = useState(initialRequest);
+  // The sticky build bar's "Then" cell. Read from the same live FormData snapshot as the preview
+  // request so it can't disagree with the "After building" toggles the user just changed.
+  const [postBuildActions, setPostBuildActions] = useState(initialPostBuildActions);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRefreshSignalRender = useRef(true);
@@ -56,8 +62,10 @@ export function FrameworkFilesPreview({
       return;
     }
 
-    const liveRequest = buildClientPreviewRequest(readFormData(form));
+    const formData = readFormData(form);
+    const liveRequest = buildClientPreviewRequest(formData);
     setRequest(liveRequest);
+    setPostBuildActions(describePostBuildActions(formData));
     setIsRefreshing(true);
 
     abortControllerRef.current?.abort();
@@ -132,53 +140,61 @@ export function FrameworkFilesPreview({
 
   return (
     <>
-      <section className="framework-wizard-section">
-        <div className="framework-wizard-section-header">
-          <span>5</span>
-          <div>
-            <h3>Files</h3>
-            <p>
-              Preview what will be generated, and how to handle files that already exist.
-              {isRefreshing ? " Refreshing preview…" : ""}
-            </p>
-          </div>
+      <section className="framework-section">
+        <div className="framework-section-label">
+          <h5>Files</h5>
+          <p>
+            {preview
+              ? `${createCount} to create, ${existingCount} conflicts.`
+              : "Preview unavailable."}
+            {isRefreshing ? " Refreshing…" : ""}
+          </p>
         </div>
-        {preview ? (
-          <>
-            {error ? <p className="framework-preview-stale-error">Refresh failed: {error}</p> : null}
-            <p className="framework-file-summary">
-              {preview.totalFiles} files under <code>{preview.targetDirectory}</code>. {createCount} will be
-              created{existingCount > 0 ? `, ${existingCount} already exist` : ""}.
-            </p>
-            <label className="framework-overwrite-option">
-              <input name="overwriteExisting" type="checkbox" />
-              <span>
-                <strong>Overwrite existing files</strong>
-                <small>
-                  {destinationType === "github"
-                    ? "Leave unchecked to skip files that already exist in the target branch."
-                    : "Leave unchecked to create missing files and skip conflicts."}
-                </small>
-              </span>
-            </label>
-            <FrameworkFilePreviewDetails existingCount={existingCount} preview={preview} />
-          </>
-        ) : (
-          <p>{error ?? "Preview unavailable."}</p>
-        )}
+        <div className="framework-section-body">
+          {preview ? (
+            <>
+              {error ? <p className="framework-preview-stale-error">Refresh failed: {error}</p> : null}
+              <label className="framework-overwrite-option">
+                <input name="overwriteExisting" type="checkbox" />
+                <span>
+                  <strong>Overwrite existing files</strong>
+                  <small>
+                    {destinationType === "github"
+                      ? "Leave unchecked to skip files that already exist in the target branch."
+                      : "Leave unchecked to create missing files and skip conflicts."}
+                  </small>
+                </span>
+              </label>
+              <FrameworkFilePreviewDetails existingCount={existingCount} preview={preview} />
+            </>
+          ) : (
+            <p>{error ?? "Preview unavailable."}</p>
+          )}
+        </div>
       </section>
 
-      <div className="framework-wizard-actions framework-build-actions">
-        <div className="framework-build-summary">
-          <span>Target</span>
-          <strong>
-            {destinationType === "github"
-              ? `${request.githubOwner || "authenticated user"}/${request.githubRepository || request.packageName.replace(/^@[^/]+\//, "")}`
-              : request.targetDirectory}
-          </strong>
-          {preview ? <span>{preview.totalFiles} files</span> : null}
-        </div>
-        <button type="submit">Build framework</button>
+      <div className="framework-build-bar">
+        <dl>
+          <div>
+            <dt>Target</dt>
+            <dd className="mono">
+              {destinationType === "github"
+                ? `${request.githubOwner || "authenticated user"}/${request.githubRepository || request.packageName.replace(/^@[^/]+\//, "")}`
+                : request.targetDirectory}
+            </dd>
+          </div>
+          <div>
+            <dt>Files</dt>
+            <dd>{preview ? `${createCount} new` : "—"}</dd>
+          </div>
+          <div>
+            <dt>Then</dt>
+            <dd>{postBuildActions}</dd>
+          </div>
+        </dl>
+        <button className="primary-button" type="submit">
+          Build framework
+        </button>
       </div>
     </>
   );

@@ -7,6 +7,7 @@ import {
   type CreateRepositoryRequest,
   type FrameworkBuildResponse,
   type FrameworkDependencyInstallResponse,
+  type FrameworkGithubRepositoryVisibility,
   type FrameworkOpenFolderResponse,
   type FrameworkSmokeValidationResponse,
   type FrameworkTemplateFeature,
@@ -17,12 +18,14 @@ import {
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "../../app-shell";
+import { FrameworkAutoRunToggle } from "./framework-auto-run-toggle";
 import { FrameworkBuilderForm } from "./framework-builder-form";
 import { FrameworkFilePreviewDetails } from "./framework-file-preview-details";
 import { FrameworkFilesPreview } from "./framework-files-preview";
 import { FrameworkFolderPicker } from "./framework-folder-picker";
 import { FrameworkGithubPushToggle } from "./framework-github-push-toggle";
 import { getDestinationType, parseApiErrorMessage, toNpmPackageName } from "./framework-request-utils";
+import { formatPostBuildActions } from "./post-build-summary";
 
 // Nothing other than the default export may be exported from this module. A named re-export here
 // ("export { toNpmPackageName } from ...") stopped Next from registering this file's server actions
@@ -72,6 +75,7 @@ const featureOptions: Array<{
 ];
 
 type FrameworkNewSearchParams = {
+  autoRunDependenciesAndSmoke?: string | string[];
   baseUrl?: string;
   createGithubRepository?: string | string[];
   createError?: string;
@@ -82,6 +86,7 @@ type FrameworkNewSearchParams = {
   githubOwner?: string;
   githubRepositoryId?: string;
   githubRepository?: string;
+  githubRepositoryVisibility?: string;
   githubRemoteMessage?: string;
   githubRemoteRepository?: string;
   githubRemoteStatus?: string;
@@ -139,6 +144,7 @@ const frameworkActionPassthroughKeys: Array<keyof FrameworkNewSearchParams> = [
   "githubRemoteWebUrl",
   "githubRepository",
   "githubRepositoryId",
+  "githubRepositoryVisibility",
   "initializeGitRepository",
   "installCommand",
   "installDurationMs",
@@ -213,6 +219,9 @@ const slugValue = (value: string, fallback: string) => {
   return slug || fallback;
 };
 
+const getGithubRepositoryVisibility = (value: string | undefined): FrameworkGithubRepositoryVisibility =>
+  value === "public" ? "public" : "private";
+
 const getCheckedFormValue = (formData: FormData, name: string) => {
   const values = formData.getAll(name).map(String);
   const lastValue = values.at(-1);
@@ -270,6 +279,7 @@ function FrameworkActionHiddenFields({
     githubRemoteWebUrl: params.githubRemoteWebUrl,
     githubRepository: request.githubRepository,
     githubRepositoryId: request.githubRepositoryId,
+    githubRepositoryVisibility: params.githubRepositoryVisibility,
     initializeGitRepository: String(getCheckedParam(params.initializeGitRepository, true)),
     installCommand: params.installCommand,
     installDurationMs: params.installDurationMs,
@@ -715,6 +725,7 @@ const getFrameworkPreview = async (
 };
 
 const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
+  autoRunDependenciesAndSmoke: getCheckedFormValue(formData, "autoRunDependenciesAndSmoke"),
   baseUrl: String(formData.get("baseUrl") ?? "").trim() || "https://example.com",
   createGithubRepository: getCheckedFormValue(formData, "createGithubRepository"),
   destinationType: getDestinationType(String(formData.get("destinationType") ?? "")),
@@ -723,12 +734,99 @@ const toCreateRequest = (formData: FormData): CreateFrameworkRequest => ({
   githubOwner: String(formData.get("githubOwner") ?? "").trim(),
   githubRepositoryId: String(formData.get("githubRepositoryId") ?? "").trim(),
   githubRepository: String(formData.get("githubRepository") ?? "").trim(),
+  githubRepositoryVisibility: getGithubRepositoryVisibility(String(formData.get("githubRepositoryVisibility") ?? "")),
   initializeGitRepository: getCheckedFormValue(formData, "initializeGitRepository"),
   overwriteExisting: getCheckedFormValue(formData, "overwriteExisting"),
   packageName: toNpmPackageName(String(formData.get("packageName") ?? "").trim(), "playwright-cucumber-tests"),
   projectName: String(formData.get("projectName") ?? "").trim() || "Playwright Cucumber Tests",
   registerLocalRepository: getCheckedFormValue(formData, "registerLocalRepository"),
   targetDirectory: String(formData.get("targetDirectory") ?? "").trim() || "qa/e2e",
+});
+
+type FrameworkActionTarget = {
+  frameworkBuildId: string | undefined;
+  targetDirectory: string;
+};
+
+// Dependency install and smoke validation are shared by two callers: their own manual buttons on
+// the results checklist, and the auto-run chain inside createFramework. Both write the same result
+// params so the checklist renders identically no matter which path produced them. Neither helper
+// throws — a failed auto-run must never take the framework build itself down with it.
+const runFrameworkDependencyInstall = async (params: URLSearchParams, target: FrameworkActionTarget): Promise<string> => {
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
+      body: JSON.stringify({
+        frameworkBuildId: target.frameworkBuildId,
+        targetDirectory: target.targetDirectory,
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error(parseApiErrorMessage(await response.text(), "Unable to install framework dependencies."));
+    }
+
+    const result = (await response.json()) as FrameworkDependencyInstallResponse;
+    params.set("installCommand", result.command);
+    params.set("installDurationMs", String(result.durationMs));
+    params.set("installMessage", result.message);
+    params.set("installStatus", result.status);
+    params.set("installStderr", trimQueryOutput(result.stderr));
+    params.set("installStdout", trimQueryOutput(result.stdout));
+    if (result.exitCode !== null) {
+      params.set("installExitCode", String(result.exitCode));
+    }
+
+    return result.status;
+  } catch (error) {
+    params.set("installMessage", error instanceof Error ? error.message : "Unable to install framework dependencies.");
+    params.set("installStatus", "failed");
+
+    return "failed";
+  }
+};
+
+const runFrameworkSmokeValidation = async (params: URLSearchParams, target: FrameworkActionTarget): Promise<void> => {
+  try {
+    const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
+      body: JSON.stringify({
+        frameworkBuildId: target.frameworkBuildId,
+        targetDirectory: target.targetDirectory,
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      throw new Error(parseApiErrorMessage(await response.text(), "Unable to validate framework."));
+    }
+
+    const result = (await response.json()) as FrameworkSmokeValidationResponse;
+    params.set("validationCommand", result.command);
+    params.set("validationDurationMs", String(result.durationMs));
+    params.set("validationMessage", result.message);
+    params.set("validationStatus", result.status);
+    params.set("validationStderr", trimQueryOutput(result.stderr));
+    params.set("validationStdout", trimQueryOutput(result.stdout));
+    if (result.exitCode !== null) {
+      params.set("validationExitCode", String(result.exitCode));
+    }
+  } catch (error) {
+    params.set("validationMessage", error instanceof Error ? error.message : "Unable to validate framework.");
+    params.set("validationStatus", "failed");
+  }
+};
+
+const toFrameworkActionTarget = (formData: FormData): FrameworkActionTarget => ({
+  frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
+  targetDirectory: String(formData.get("targetDirectory") ?? ""),
 });
 
 async function createFramework(formData: FormData) {
@@ -743,6 +841,7 @@ async function createFramework(formData: FormData) {
     githubOwner: request.githubOwner,
     githubRepositoryId: request.githubRepositoryId,
     githubRepository: request.githubRepository,
+    githubRepositoryVisibility: request.githubRepositoryVisibility,
     initializeGitRepository: String(request.initializeGitRepository),
     packageName: request.packageName,
     preview: "true",
@@ -754,6 +853,8 @@ async function createFramework(formData: FormData) {
   for (const feature of request.features) {
     params.append("features", feature);
   }
+
+  let autoRunTarget: FrameworkActionTarget | null = null;
 
   try {
     const response = await fetch(`${apiUrl}/frameworks/create`, {
@@ -803,8 +904,26 @@ async function createFramework(formData: FormData) {
       params.set("registeredRepositoryId", result.registeredRepository.id);
       params.set("registeredRepositoryName", `${result.registeredRepository.owner}/${result.registeredRepository.name}`);
     }
+
+    if (request.destinationType === "local" && request.autoRunDependenciesAndSmoke) {
+      autoRunTarget = {
+        frameworkBuildId: result.buildRecord?.id,
+        targetDirectory: request.targetDirectory,
+      };
+    }
   } catch (error) {
     params.set("createError", error instanceof Error ? error.message : "Unable to create framework files.");
+  }
+
+  // Chained outside the try/catch above so an install/smoke problem can never be reported as a
+  // create failure. Smoke only runs after a successful install, mirroring the manual flow's
+  // canRunSmoke gating; otherwise Dependencies lands in "attention" and Smoke stays pending.
+  if (autoRunTarget) {
+    const installStatus = await runFrameworkDependencyInstall(params, autoRunTarget);
+
+    if (installStatus === "installed") {
+      await runFrameworkSmokeValidation(params, autoRunTarget);
+    }
   }
 
   redirect(`/framework/new?${params.toString()}`);
@@ -818,37 +937,7 @@ async function installFrameworkDependencies(formData: FormData) {
 
   params.set("preview", "true");
 
-  try {
-    const response = await fetch(`${apiUrl}/frameworks/install-dependencies`, {
-      body: JSON.stringify({
-        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
-        targetDirectory: String(formData.get("targetDirectory") ?? ""),
-      }),
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-
-    if (!response.ok) {
-      throw new Error(parseApiErrorMessage(await response.text(), "Unable to install framework dependencies."));
-    }
-
-    const result = (await response.json()) as FrameworkDependencyInstallResponse;
-    params.set("installCommand", result.command);
-    params.set("installDurationMs", String(result.durationMs));
-    params.set("installMessage", result.message);
-    params.set("installStatus", result.status);
-    params.set("installStderr", trimQueryOutput(result.stderr));
-    params.set("installStdout", trimQueryOutput(result.stdout));
-    if (result.exitCode !== null) {
-      params.set("installExitCode", String(result.exitCode));
-    }
-  } catch (error) {
-    params.set("installMessage", error instanceof Error ? error.message : "Unable to install framework dependencies.");
-    params.set("installStatus", "failed");
-  }
+  await runFrameworkDependencyInstall(params, toFrameworkActionTarget(formData));
 
   redirect(`/framework/new?${params.toString()}`);
 }
@@ -944,37 +1033,7 @@ async function validateFramework(formData: FormData) {
 
   params.set("preview", "true");
 
-  try {
-    const response = await fetch(`${apiUrl}/frameworks/validate-smoke`, {
-      body: JSON.stringify({
-        frameworkBuildId: String(formData.get("frameworkBuildId") ?? "") || undefined,
-        targetDirectory: String(formData.get("targetDirectory") ?? ""),
-      }),
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-
-    if (!response.ok) {
-      throw new Error(parseApiErrorMessage(await response.text(), "Unable to validate framework."));
-    }
-
-    const result = (await response.json()) as FrameworkSmokeValidationResponse;
-    params.set("validationCommand", result.command);
-    params.set("validationDurationMs", String(result.durationMs));
-    params.set("validationMessage", result.message);
-    params.set("validationStatus", result.status);
-    params.set("validationStderr", trimQueryOutput(result.stderr));
-    params.set("validationStdout", trimQueryOutput(result.stdout));
-    if (result.exitCode !== null) {
-      params.set("validationExitCode", String(result.exitCode));
-    }
-  } catch (error) {
-    params.set("validationMessage", error instanceof Error ? error.message : "Unable to validate framework.");
-    params.set("validationStatus", "failed");
-  }
+  await runFrameworkSmokeValidation(params, toFrameworkActionTarget(formData));
 
   redirect(`/framework/new?${params.toString()}`);
 }
@@ -1054,6 +1113,8 @@ export default async function NewFrameworkPage({
   const shouldInitializeGit = getCheckedParam(params.initializeGitRepository, true);
   const shouldRegisterLocalRepository = getCheckedParam(params.registerLocalRepository, true);
   const shouldCreateGithubRepository = getCheckedParam(params.createGithubRepository, false);
+  const githubRepositoryVisibility = getGithubRepositoryVisibility(params.githubRepositoryVisibility);
+  const shouldAutoRunDependenciesAndSmoke = getCheckedParam(params.autoRunDependenciesAndSmoke, true);
   const localGitStatus = (params.localGitStatus ?? savedBuild?.localGitStatus ?? undefined)?.replace(/_/g, " ");
   const githubRemoteStatus = (params.githubRemoteStatus ?? savedBuild?.githubRemoteStatus ?? undefined)?.replace(/_/g, " ");
   const registeredRepositoryId = params.registeredRepositoryId ?? savedBuild?.registeredRepositoryId ?? undefined;
@@ -1173,7 +1234,8 @@ export default async function NewFrameworkPage({
 
   return (
     <AppShell active="framework">
-      <section className="workspace">
+      {/* framework-builder-page scopes this route's --font-display override — see styles.css. */}
+      <section className="workspace framework-builder-page">
         <header className="topbar">
           <div>
             <p className="eyebrow">Create</p>
@@ -1256,109 +1318,122 @@ export default async function NewFrameworkPage({
                 className="job-form standalone-form framework-builder-form"
                 initialDestinationType={request.destinationType}
               >
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>1</span>
-                    <div>
-                      <h3>Where</h3>
-                      <p>Choose a local folder or a GitHub repository as the build destination.</p>
-                    </div>
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>Where</h5>
+                    <p>Folder or GitHub repo.</p>
                   </div>
-                  <FrameworkFolderPicker
-                    defaultGithubBranch={request.githubBranch}
-                    defaultGithubOwner={request.githubOwner}
-                    defaultGithubRepositoryId={request.githubRepositoryId}
-                    defaultGithubRepository={request.githubRepository}
-                    defaultValue={request.targetDirectory}
-                    repositories={repositories}
-                  />
-                </section>
-
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>2</span>
-                    <div>
-                      <h3>Naming</h3>
-                      <p>Project name, package name, and the base URL the generated tests target.</p>
-                    </div>
-                  </div>
-                  <div className="framework-basics-grid">
-                    <label>
-                      Project Name
-                      <input name="projectName" defaultValue={request.projectName} required />
-                    </label>
-                    <label>
-                      Package Name
-                      <input name="packageName" defaultValue={request.packageName} required />
-                    </label>
-                    <label>
-                      Base URL
-                      <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
-                    </label>
+                  <div className="framework-section-body">
+                    <FrameworkFolderPicker
+                      defaultCreateGithubRepository={shouldCreateGithubRepository}
+                      defaultGithubBranch={request.githubBranch}
+                      defaultGithubOwner={request.githubOwner}
+                      defaultGithubRepositoryId={request.githubRepositoryId}
+                      defaultGithubRepository={request.githubRepository}
+                      defaultGithubRepositoryVisibility={githubRepositoryVisibility}
+                      defaultValue={request.targetDirectory}
+                      packageName={request.packageName}
+                      repositories={repositories}
+                    />
                   </div>
                 </section>
 
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>3</span>
-                    <div>
-                      <h3>Include</h3>
-                      <p>Pick the capabilities generated into the new framework.</p>
-                    </div>
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>Naming</h5>
+                    <p>What the generated project is called, and what it points at.</p>
                   </div>
-                  <fieldset className="framework-options">
-                    <legend>Include</legend>
-                    {featureOptions.map((option) => (
-                      <label key={option.value} className="framework-option">
-                        <input
-                          defaultChecked={selectedFeatures.has(option.value)}
-                          name="features"
-                          type="checkbox"
-                          value={option.value}
-                        />
-                        <span>
-                          <strong>{option.label}</strong>
-                          <small>{option.description}</small>
-                        </span>
+                  <div className="framework-section-body">
+                    <div className="framework-basics-grid">
+                      <label>
+                        Project Name
+                        <input name="projectName" defaultValue={request.projectName} required />
                       </label>
-                    ))}
-                  </fieldset>
-                </section>
-
-                <section className="framework-wizard-section">
-                  <div className="framework-wizard-section-header">
-                    <span>4</span>
-                    <div>
-                      <h3>After building</h3>
-                      <p>Choose what FF2 does once the framework files are generated.</p>
+                      <label>
+                        Package Name
+                        <input name="packageName" defaultValue={request.packageName} required />
+                      </label>
+                      <label>
+                        Base URL
+                        <input name="baseUrl" defaultValue={request.baseUrl} required type="url" />
+                      </label>
                     </div>
                   </div>
-                  <label className="framework-overwrite-option">
-                    <input name="initializeGitRepository" type="hidden" value="false" />
-                    <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" value="true" />
-                    <span>
-                      <strong>Initialize git repository</strong>
-                      <small>Create a local git repo and initial commit after files are generated.</small>
-                    </span>
-                  </label>
-                  <FrameworkGithubPushToggle
-                    githubBranch={request.githubBranch}
-                    githubOwner={request.githubOwner}
-                    githubRepository={request.githubRepository}
-                    packageName={request.packageName}
-                    shouldCreateGithubRepository={shouldCreateGithubRepository}
-                  />
-                  <label className="framework-overwrite-option">
-                    <input name="registerLocalRepository" type="hidden" value="false" />
-                    <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" value="true" />
-                    <span>
-                      <strong>Register in FF2</strong>
-                      <small>Add this generated folder to Repositories after files are created.</small>
-                    </span>
-                  </label>
                 </section>
 
-                <FrameworkFilesPreview initialError={error} initialPreview={preview} initialRequest={request} />
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>Include</h5>
+                    <p>Capabilities generated into the new framework.</p>
+                  </div>
+                  <div className="framework-section-body">
+                    <fieldset className="framework-chips">
+                      <legend className="framework-field-label">Include</legend>
+                      {/* Real checkboxes, kept for keyboard/screen-reader semantics and only
+                          visually hidden; the checked state is carried by a fill *and* a checkmark
+                          glyph so it never depends on color alone. Each feature's longer
+                          description moves to the chip's title rather than being dropped. */}
+                      <div className="framework-chip-row">
+                        {featureOptions.map((option) => (
+                          <label key={option.value} className="framework-chip" title={option.description}>
+                            <input
+                              defaultChecked={selectedFeatures.has(option.value)}
+                              name="features"
+                              type="checkbox"
+                              value={option.value}
+                            />
+                            <span aria-hidden="true" className="framework-chip-mark" />
+                            <span className="framework-chip-text">{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  </div>
+                </section>
+
+                <section className="framework-section">
+                  <div className="framework-section-label">
+                    <h5>After building</h5>
+                    <p>What FF2 does once the files are generated.</p>
+                  </div>
+                  <div className="framework-section-body">
+                    <label className="framework-overwrite-option">
+                      <input name="initializeGitRepository" type="hidden" value="false" />
+                      <input defaultChecked={shouldInitializeGit} name="initializeGitRepository" type="checkbox" value="true" />
+                      <span>
+                        <strong>Initialize git repository</strong>
+                        <small>Create a local git repo and initial commit after files are generated.</small>
+                      </span>
+                    </label>
+                    <FrameworkGithubPushToggle
+                      githubBranch={request.githubBranch}
+                      githubOwner={request.githubOwner}
+                      githubRepository={request.githubRepository}
+                      packageName={request.packageName}
+                      shouldCreateGithubRepository={shouldCreateGithubRepository}
+                    />
+                    <label className="framework-overwrite-option">
+                      <input name="registerLocalRepository" type="hidden" value="false" />
+                      <input defaultChecked={shouldRegisterLocalRepository} name="registerLocalRepository" type="checkbox" value="true" />
+                      <span>
+                        <strong>Register in FF2</strong>
+                        <small>Add this generated folder to Repositories after files are created.</small>
+                      </span>
+                    </label>
+                    <FrameworkAutoRunToggle shouldAutoRun={shouldAutoRunDependenciesAndSmoke} />
+                  </div>
+                </section>
+
+                <FrameworkFilesPreview
+                  initialError={error}
+                  initialPostBuildActions={formatPostBuildActions({
+                    createGithubRepository: shouldCreateGithubRepository,
+                    initializeGitRepository: shouldInitializeGit,
+                    registerLocalRepository: shouldRegisterLocalRepository,
+                  })}
+                  initialPreview={preview}
+                  initialRequest={request}
+                />
               </FrameworkBuilderForm>
             )}
           </section>

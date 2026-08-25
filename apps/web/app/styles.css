@@ -539,21 +539,293 @@ button {
   min-width: 0;
 }
 
-.framework-options {
-  border: 1px solid #dce3ee;
-  border-radius: 8px;
+/* ── Framework Builder create flow ──────────────────────────────────────────────────────────────
+   Page-scoped restyle, see docs/specs/framework-builder-visual-restyle.md. The block below
+   re-points the existing --font-display token at Source Serif 4 (loaded per-route in
+   app/framework/new/framework-builder-theme.ts) for this subtree only: same token name the rest of
+   the app reads, no :root value changed, and swapping the face later is a one-block edit.
+
+   Serif covers the short fixed strings a user reads once — page title, section labels and
+   descriptions, field labels, toggle captions, chip text, the CTA. Typed input values, the file
+   list, and the build bar's dt/dd data cells stay sans/mono on purpose: those are the text a user
+   verifies character-by-character, and serif costs real legibility at 13-14px. --action stays the
+   existing indigo; no accent or surface token is overridden here. */
+.framework-builder-page {
+  --font-display: var(--font-serif-display), ui-serif, Georgia, serif;
+}
+
+.framework-builder-page .topbar h1 {
+  font: 600 42px/1.1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* The right-hand "Build Plan" aside this second column was sized for no longer exists. */
+.framework-builder-page .framework-builder-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.framework-builder-page .framework-builder-form {
+  gap: 0;
+  padding: 0 24px 24px;
+}
+
+/* Sections read as a spec sheet — 180px label column, hairline rule — instead of boxed cards. */
+.framework-section {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 32px;
+  grid-template-columns: 180px minmax(0, 1fr);
+  padding: 26px 0;
+}
+
+.framework-section:first-of-type {
+  border-top: 0;
+}
+
+.framework-section-label h5 {
+  font: 600 16px/1.2 var(--font-display);
+  margin: 0 0 4px;
+}
+
+.framework-section-label p {
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  font: 400 14px/1.4 var(--font-display);
+  margin: 0;
+}
+
+.framework-section-body {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.framework-builder-page label,
+.framework-builder-page .framework-field-label {
+  color: var(--ink);
+  font: 500 13px/1.4 var(--font-display);
+}
+
+/* Typed values are the one thing on this page the user edits rather than reads. */
+.framework-builder-page input,
+.framework-builder-page select,
+.framework-builder-page textarea {
+  font: var(--text-body);
+}
+
+.framework-builder-page label small,
+.framework-builder-page .framework-segmented-hint {
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+  font: var(--text-body-s);
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Where: segmented toggle instead of two stacked radio cards. */
+.framework-builder-page .framework-destination {
+  border: 0;
+  gap: 10px;
+  padding: 0;
+}
+
+.framework-builder-page .framework-destination legend {
+  color: var(--ink);
+  font: 500 13px/1.4 var(--font-display);
+  padding: 0;
+  text-transform: none;
+}
+
+.framework-segmented {
+  background: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: inline-grid;
+  gap: 4px;
+  grid-auto-flow: column;
+  justify-self: start;
+  padding: 4px;
+}
+
+.framework-segment {
+  border-radius: 3px;
+  cursor: pointer;
+  font: 500 13px/1.2 var(--font-display);
+  padding: 9px 18px;
+  position: relative;
+  text-align: center;
+}
+
+.framework-builder-page .framework-segment input {
+  height: 0;
+  opacity: 0;
+  position: absolute;
+  width: 0;
+}
+
+.framework-segment.selected {
+  background: var(--action);
+  color: var(--surface);
+}
+
+.framework-segment:focus-within {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* Include: toggle chips. Checked state = fill + checkmark glyph, never color alone. */
+.framework-chips {
+  border: 0;
   display: grid;
   gap: 10px;
   margin: 0;
-  padding: 14px;
+  padding: 0;
 }
 
-.framework-options legend {
-  color: #667085;
-  font-size: 12px;
-  font-weight: 900;
-  padding: 0 6px;
+.framework-chips legend {
+  padding: 0;
+}
+
+.framework-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.framework-chip {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  font: 500 13px/1.2 var(--font-display);
+  gap: 8px;
+  padding: 9px 14px;
+  position: relative;
+}
+
+.framework-builder-page .framework-chip input {
+  height: 0;
+  opacity: 0;
+  position: absolute;
+  width: 0;
+}
+
+.framework-chip:has(input:checked) {
+  background: color-mix(in srgb, var(--action) 10%, var(--surface));
+  border-color: var(--action);
+}
+
+.framework-chip:focus-within {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.framework-chip-mark {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  display: inline-flex;
+  flex: none;
+  height: 14px;
+  justify-content: center;
+  width: 14px;
+}
+
+.framework-chip:has(input:checked) .framework-chip-mark {
+  background: var(--action);
+  border-color: var(--action);
+}
+
+.framework-chip:has(input:checked) .framework-chip-mark::after {
+  color: var(--surface);
+  content: "✓";
+  font: 700 10px/1 var(--font-body);
+}
+
+/* After building: short fixed captions are serif, longer helper copy stays sans. */
+.framework-builder-page .framework-overwrite-option strong {
+  font: 500 14px/1.3 var(--font-display);
+}
+
+/* Files: dense two-column monospace list behind a disclosure, not a card per file. */
+.framework-files-list summary {
+  cursor: pointer;
+  font: 500 13px/1.4 var(--font-display);
+}
+
+.framework-files-grid {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  column-gap: 32px;
+  columns: 2;
+  font: 400 13px/1.9 var(--font-mono);
+  margin-top: 10px;
+  padding: 16px 20px;
+}
+
+.framework-file-entry {
+  break-inside: avoid;
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.framework-file-entry.conflict {
+  color: var(--signal-attention);
+}
+
+.framework-file-entry em {
+  font: var(--text-caption);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  margin-left: 8px;
   text-transform: uppercase;
+}
+
+/* The single commitment point on the page. --ink matches the existing dark sidebar. */
+.framework-build-bar {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 4px;
+  bottom: 0;
+  color: var(--paper);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  justify-content: space-between;
+  padding: 16px 24px;
+  position: sticky;
+}
+
+.framework-build-bar dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin: 0;
+  min-width: 0;
+}
+
+.framework-build-bar dt {
+  color: color-mix(in srgb, var(--paper) 60%, transparent);
+  font: var(--text-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.framework-build-bar dd {
+  font: var(--text-body-s);
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.framework-build-bar dd.mono {
+  font-family: var(--font-mono);
+}
+
+.framework-build-bar .primary-button {
+  background: var(--action);
+  color: var(--paper);
+  font: 600 15px var(--font-display);
+  padding: 12px 20px;
 }
 
 .framework-wizard-steps {
@@ -587,8 +859,7 @@ button {
   color: #16803c;
 }
 
-.framework-wizard-steps span,
-.framework-wizard-section-header > span {
+.framework-wizard-steps span {
   align-items: center;
   background: #eff6ff;
   border-radius: 999px;
@@ -613,45 +884,6 @@ button {
 .framework-wizard-steps small {
   color: #667085;
   font-size: 12px;
-}
-
-.framework-wizard-section {
-  border-top: 1px solid #e2e8f0;
-  display: grid;
-  gap: 14px;
-  padding-top: 18px;
-}
-
-.framework-wizard-section:first-of-type {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.framework-wizard-section-header {
-  align-items: start;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-.framework-wizard-section-header h3 {
-  color: #172033;
-  font-size: 16px;
-  margin: 0 0 3px;
-}
-
-.framework-wizard-section-header p {
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.framework-wizard-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
 }
 
 .framework-step-placeholder {
@@ -700,52 +932,6 @@ button {
   text-transform: uppercase;
 }
 
-.framework-destination-option {
-  align-items: start;
-  border: 1px solid #dce3ee;
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr);
-  padding: 12px;
-}
-
-.framework-destination-option.selected {
-  background: #eff6ff;
-  border-color: #93c5fd;
-}
-
-.framework-destination-option.disabled {
-  background: #f8fafc;
-  color: #94a3b8;
-}
-
-.framework-destination-option input {
-  height: 16px;
-  margin-top: 3px;
-  width: 16px;
-}
-
-.framework-destination-option span {
-  display: grid;
-  gap: 3px;
-}
-
-.framework-destination-option strong {
-  color: #172033;
-  font-size: 14px;
-}
-
-.framework-destination-option.disabled strong {
-  color: #64748b;
-}
-
-.framework-destination-option small {
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.35;
-}
-
 .framework-github-destination {
   background: #f8fafc;
   border: 1px solid #dce3ee;
@@ -787,8 +973,8 @@ button {
 }
 
 .framework-folder-input-row button:hover {
-  border-color: #2563eb;
-  color: #2563eb;
+  border-color: var(--action);
+  color: var(--action);
 }
 
 .framework-folder-error,
@@ -806,34 +992,6 @@ button {
   color: #667085;
 }
 
-.framework-option {
-  align-items: start;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr);
-  padding: 12px;
-}
-
-.framework-option input {
-  height: 16px;
-  margin-top: 3px;
-  width: 16px;
-}
-
-.framework-option span {
-  display: grid;
-  gap: 3px;
-}
-
-.framework-option strong {
-  color: #172033;
-  font-size: 14px;
-}
-
-.framework-option small,
 .framework-roadmap li,
 .framework-pipeline-note p {
   color: #667085;
@@ -917,18 +1075,22 @@ button {
   padding: 10px;
 }
 
+/* These three states predate the six-tone status system
+   (docs/specs/design-status-signal-system.md) and were the last ad hoc status colors on this page;
+   they now read from the --signal-* tokens like every other status surface in the app. */
 .framework-pipeline-list li.ready {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
+  background: color-mix(in srgb, var(--signal-waiting) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--signal-waiting) 30%, var(--surface));
 }
 
 .framework-pipeline-list li.future {
-  background: #fff7ed;
-  border-color: #fed7aa;
+  background: color-mix(in srgb, var(--signal-active) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--signal-active) 30%, var(--surface));
 }
 
 .framework-pipeline-list li.muted {
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--signal-inactive) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--signal-inactive) 30%, var(--surface));
 }
 
 .framework-pipeline-list strong {
@@ -2073,6 +2235,15 @@ button {
   font-size: 13px;
 }
 
+.framework-toggle-timing {
+  color: var(--signal-waiting);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  margin-left: 8px;
+  text-transform: none;
+}
+
 .framework-command-grid {
   display: grid;
   gap: 12px;
@@ -2088,83 +2259,18 @@ button {
   padding: 14px;
 }
 
-.framework-command-grid span,
-.framework-file-card span {
+.framework-command-grid span {
   color: #2563eb;
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
-.framework-command-grid code,
-.framework-file-card code {
+.framework-command-grid code {
   color: #334155;
   font-size: 12px;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-}
-
-.framework-file-list {
-  display: grid;
-  gap: 12px;
-}
-
-.framework-file-card {
-  border: 1px solid #dce3ee;
-  border-radius: 8px;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(260px, 360px) auto minmax(0, 1fr);
-  padding: 14px;
-}
-
-.framework-file-card strong {
-  color: #172033;
-  display: block;
-  font-size: 14px;
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-}
-
-.framework-file-card p {
-  color: #667085;
-  font-size: 13px;
-  line-height: 1.35;
-  margin: 6px 0 0;
-}
-
-.framework-file-card code {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: block;
-  max-height: 180px;
-  overflow: auto;
-  padding: 12px;
-}
-
-.framework-file-status {
-  align-self: start;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  padding: 5px 8px;
-  text-transform: uppercase;
-}
-
-.framework-file-status.create {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.framework-file-status.exists {
-  background: #fef3c7;
-  color: #b45309;
-}
-
-.framework-file-status.overwrite {
-  background: #fee2e2;
-  color: #b91c1c;
 }
 
 .content-grid {
@@ -6486,8 +6592,21 @@ textarea {
   .framework-command-grid,
   .framework-next-steps ol,
   .framework-results-hero,
-  .framework-file-card {
+  .framework-section {
     grid-template-columns: 1fr;
+  }
+
+  .framework-section {
+    gap: 14px;
+  }
+
+  .framework-files-grid {
+    columns: 1;
+  }
+
+  .framework-build-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .framework-builder-summary {
