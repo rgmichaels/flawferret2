@@ -51,3 +51,48 @@ export const toNpmPackageName = (value: string, fallback: string): string => {
 
   return normalized || fallback;
 };
+
+// Formats the API's known JSON error response shapes into a plain-English message. Falls back to
+// the raw (trimmed) response text for any shape it doesn't recognize, and to `fallback` if that's
+// also empty, so no error information is silently dropped.
+export const parseApiErrorMessage = (text: string, fallback: string): string => {
+  const trimmedText = text.trim();
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+
+    if (parsed && typeof parsed === "object") {
+      const body = parsed as { error?: unknown; issues?: unknown; message?: unknown };
+
+      if (body.error === "ValidationError" && Array.isArray(body.issues)) {
+        const messages = body.issues
+          .map((issue) => {
+            if (!issue || typeof issue !== "object") {
+              return null;
+            }
+
+            const { path, message } = issue as { path?: unknown; message?: unknown };
+            if (typeof message !== "string") {
+              return null;
+            }
+
+            const field = Array.isArray(path) ? path.join(".") : "";
+            return field ? `${field}: ${message}` : message;
+          })
+          .filter((message): message is string => Boolean(message));
+
+        if (messages.length > 0) {
+          return messages.join("\n");
+        }
+      }
+
+      if (body.error === "InternalServerError" && typeof body.message === "string") {
+        return body.message;
+      }
+    }
+  } catch {
+    // Not JSON — fall through to the raw text below.
+  }
+
+  return trimmedText || fallback;
+};

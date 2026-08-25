@@ -24,10 +24,13 @@ import { FrameworkFilePreviewDetails } from "./framework-file-preview-details";
 import { FrameworkFilesPreview } from "./framework-files-preview";
 import { FrameworkFolderPicker } from "./framework-folder-picker";
 import { FrameworkGithubPushToggle } from "./framework-github-push-toggle";
-import { getDestinationType, toNpmPackageName } from "./framework-request-utils";
+import { getDestinationType, parseApiErrorMessage, toNpmPackageName } from "./framework-request-utils";
 import { formatPostBuildActions } from "./post-build-summary";
 
-export { toNpmPackageName } from "./framework-request-utils";
+// Nothing other than the default export may be exported from this module. A named re-export here
+// ("export { toNpmPackageName } from ...") stopped Next from registering this file's server actions
+// at all, so every form on this page failed at submit with "Server Action ... was not found on the
+// server" (FLW-14/FLW-15). Shared helpers belong in framework-request-utils.ts.
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -686,51 +689,6 @@ const buildPreviewRequest = (
     savedBuild?.targetDirectory ||
     (params.destinationType === "github" || savedBuild?.destinationType === "github" ? "." : "qa/e2e"),
 });
-
-// Formats the API's known JSON error response shapes into a plain-English message. Falls back to
-// the raw (trimmed) response text for any shape it doesn't recognize, and to `fallback` if that's
-// also empty, so no error information is silently dropped.
-export const parseApiErrorMessage = (text: string, fallback: string): string => {
-  const trimmedText = text.trim();
-
-  try {
-    const parsed = JSON.parse(text) as unknown;
-
-    if (parsed && typeof parsed === "object") {
-      const body = parsed as { error?: unknown; issues?: unknown; message?: unknown };
-
-      if (body.error === "ValidationError" && Array.isArray(body.issues)) {
-        const messages = body.issues
-          .map((issue) => {
-            if (!issue || typeof issue !== "object") {
-              return null;
-            }
-
-            const { path, message } = issue as { path?: unknown; message?: unknown };
-            if (typeof message !== "string") {
-              return null;
-            }
-
-            const field = Array.isArray(path) ? path.join(".") : "";
-            return field ? `${field}: ${message}` : message;
-          })
-          .filter((message): message is string => Boolean(message));
-
-        if (messages.length > 0) {
-          return messages.join("\n");
-        }
-      }
-
-      if (body.error === "InternalServerError" && typeof body.message === "string") {
-        return body.message;
-      }
-    }
-  } catch {
-    // Not JSON — fall through to the raw text below.
-  }
-
-  return trimmedText || fallback;
-};
 
 const getFrameworkPreview = async (
   request: FrameworkTemplateRequest,
