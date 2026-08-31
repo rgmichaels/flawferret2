@@ -175,7 +175,7 @@ export default async function NewJobPage({
         <header className="topbar">
           <div>
             <p className="eyebrow">Create</p>
-            <h1>New Job</h1>
+            <h1>Create Test</h1>
           </div>
           <a className="primary-link" href="/repositories">
             Repositories
@@ -185,7 +185,7 @@ export default async function NewJobPage({
         <section className="panel form-page-panel">
           <div className="panel-header">
             <div>
-              <h2>Create New Job</h2>
+              <h2>Create Test</h2>
               <p>Queue an Add Playwright Test request.</p>
             </div>
           </div>
@@ -216,14 +216,14 @@ export default async function NewJobPage({
                     <small>{repositories.length === 0 ? "Register a repository first" : "Choose a Scope above"}</small>
                   </div>
                   <span className="field-hint">
-                    New jobs need a scoped repository before they can be queued.
+                    A test needs a scoped repository before it can be created.
                   </span>
                 </>
               )}
             </div>
             {queueControl.paused ? (
               <p className="queue-paused-note">
-                Queue is paused. New jobs will wait until you resume it.
+                Queue is paused. New tests will wait until you resume it.
               </p>
             ) : null}
             <label>
@@ -277,7 +277,7 @@ export default async function NewJobPage({
               </label>
             </div>
             <button type="submit" disabled={!selectedRepositoryId}>
-              Queue Job
+              Create Test
             </button>
           </form>
         </section>
