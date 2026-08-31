@@ -233,7 +233,7 @@ export default async function FeatureDetailPage({
             <code>{detail.feature.path}</code>
           </div>
           <a className="primary-link" href="/jobs/new">
-            New Job
+            Create Test
           </a>
         </header>
 

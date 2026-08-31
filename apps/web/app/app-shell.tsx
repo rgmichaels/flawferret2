@@ -218,7 +218,7 @@ export async function AppShell({ active, children }: AppShellProps) {
             Create Framework
           </a>
           <a className={navClassName(active, "new-job")} href="/jobs/new">
-            New Job
+            Create Test
           </a>
         </nav>
 

@@ -417,7 +417,7 @@ export default async function Home({
               </form>
             ) : null}
             <a className="primary-link" href="/jobs/new">
-              New Job
+              Create Test
             </a>
           </div>
         </header>

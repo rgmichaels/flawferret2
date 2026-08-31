@@ -159,7 +159,7 @@ export default async function RepositoriesPage() {
             <h1>Repositories</h1>
           </div>
           <a className="primary-link" href="/jobs/new">
-            New Job
+            Create Test
           </a>
         </header>
 
