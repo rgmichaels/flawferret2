@@ -1,136 +1,240 @@
 # FlawFerret2
 
-FlawFerret2 is an AI-powered QA orchestration platform for turning captured browser context and human intent into validated engineering pull requests.
+FlawFerret2 is an AI-powered QA orchestration platform. It turns captured
+browser context and human intent into validated engineering pull requests,
+while keeping humans as the approval gate.
 
-The FlawFerret browser extension is the capture interface. The FlawFerret2 command center stores jobs, coordinates workers, invokes Codex, validates results with Playwright, and opens GitHub pull requests for human review.
+It is **not** another Playwright framework, and it is **not** the browser
+extension by itself (that is the capture interface). This repo is the
+orchestration backend: it stores jobs, coordinates workers, invokes Codex,
+validates the result with the repository's own test command, and opens draft
+GitHub pull requests for human review.
 
-## Milestone 1
+See [`VISION.md`](VISION.md) for the full product thesis and
+[`CLAUDE.md`](CLAUDE.md) for contributor conventions.
 
-Milestone 1 proves browser -> API -> database:
-
-- Fastify server
-- Prisma
-- Neon PostgreSQL connection via `DATABASE_URL`
-- `jobs` table
-- `workers` table
-- `GET /health`
-- `POST /jobs`
-- `GET /jobs`
-
-No worker, Codex, Playwright, or GitHub pull request automation is implemented in Milestone 1.
-
-## Milestone 2
-
-Milestone 2 proves database queue -> `ferret-runner` claim -> worker status:
-
-- `apps/ferret-runner`
-- Worker registration and heartbeat in the `workers` table
-- Atomic queued-job claim with PostgreSQL row locking
-- Claimed jobs move from `QUEUED` to `CLAIMED`, then `RUNNING`
-- `ferret-runner` logs the claimed job and sleeps to simulate work
-
-No Codex, Playwright, or GitHub pull request automation is implemented in Milestone 2.
-
-## Milestone 3
-
-Milestone 3 introduces repository registry state for future runner checkout:
-
-- `repositories` table
-- `GET /repositories`
-- `POST /repositories`
-- `GET /repositories/:id`
-- Dashboard repository registration
-- Job creation by registered repository and target branch
-- Optional repository validation command for runner checks
-
-No repository cloning, Codex invocation, Playwright validation, or pull request automation is implemented in Milestone 3.
-
-## Milestone 4
-
-Milestone 4 separates job requests from execution attempts:
-
-- `runs` table
-- `RunStatus` lifecycle enum
-- `GET /jobs/:id/runs`
-- Latest run status in the dashboard
-- Run history on the job detail page
-- `ferret-runner` creates a `STARTED` run when work begins
-
-No repository checkout, Codex invocation, Playwright validation, or pull request automation is implemented in Milestone 4.
-
-## Running Locally
-
-1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres connection string.
-   To enable Slack milestone notifications, create an incoming webhook for `#ff2-logs`
-   and set `SLACK_WEBHOOK_URL` in `.env`.
-   Repositories can also define their own validation command in the web UI.
-   `FERRET_RUNNER_VALIDATION_COMMAND` remains available as a global override.
-2. Install dependencies:
-
-```bash
-pnpm install
-```
-
-3. Generate Prisma Client:
-
-```bash
-pnpm --filter @flawferret2/db db:generate
-```
-
-4. Run database migrations:
-
-```bash
-pnpm --filter @flawferret2/db db:migrate
-```
-
-5. Start the API and web app:
-
-```bash
-pnpm --filter @flawferret2/api dev
-pnpm --filter @flawferret2/web dev
-```
-
-6. Start `ferret-runner` when you want to claim queued jobs:
-
-```bash
-pnpm --filter @flawferret2/ferret-runner dev
-```
-
-The API defaults to `http://localhost:4000`. The web app defaults to `http://localhost:3000`.
-
-`ferret-runner` starts in dry-run mode by default. See
-[`apps/ferret-runner/README.md`](apps/ferret-runner/README.md) for the safe first-live-run checklist
-before enabling Codex execution or draft PR creation.
-
-## v0.1 Goal
-
-The first complete workflow is `ADD_PLAYWRIGHT_TEST`:
-
-1. A user creates a job.
-2. The API stores the job in Postgres.
-3. `ferret-runner` claims the job.
-4. The runner prepares the repository.
-5. Codex modifies the repository.
-6. Playwright validates the change.
-7. The runner creates a draft GitHub pull request.
-8. The job moves to review.
-
-## Workspace
+## Pipeline
 
 ```text
-apps/
-  extension/       Chrome extension capture interface
-  web/             Next.js dashboard and job creation UI
-  api/             Fastify API
-  ferret-runner/   Worker service that orchestrates jobs
-packages/
-  db/              Database schema and access helpers
-  job-schemas/     Shared job payload schemas
-  shared/          Shared TypeScript utilities and types
-docs/              Architecture and product notes
-infra/             Deployment and infrastructure notes
+Browser extension
+  -> Web dashboard (apps/web)
+  -> API (apps/api)
+  -> Postgres / Neon (packages/db)
+  -> ferret-runner worker (apps/ferret-runner)
+  -> Codex
+  -> validation command
+  -> draft GitHub pull request
+  -> human review -> merge
 ```
 
-## Project Status
+Version 1 supports a single job type: `ADD_PLAYWRIGHT_TEST`.
 
-This repository is at the initial scaffolding stage. The first implementation milestone is a working `ADD_PLAYWRIGHT_TEST` vertical slice.
+## What's built today
+
+The full pipeline exists end to end. The AI-execution and
+repository-writing steps are gated behind explicit human approvals and are
+disabled by default, so an out-of-the-box install is safe to run against a
+real checkout.
+
+### Jobs pipeline
+
+- **Job creation** — `apps/web` job form (`/jobs/new`) collects repository,
+  target branch, feature area, goal, acceptance criteria, priority, and
+  optional captured browser context. Jobs can also arrive prefilled from the
+  browser extension.
+- **Event-sourced state** — job lifecycle is recorded as `JobEvent` rows
+  (`JobEventType` in [`schema.prisma`](packages/db/prisma/schema.prisma) is
+  the source of truth). `Run` rows track individual execution attempts
+  separately from the job request.
+- **Queue + claim** — `ferret-runner` registers a worker row with sparse
+  heartbeats and atomically claims the oldest highest-priority `QUEUED` job
+  with row locking. The queue can be paused and resumed from the dashboard
+  (`QueueControl`).
+- **Local checkout validation** — the runner does **not** clone. A
+  repository must point at an existing local Git work tree with a matching
+  `origin`, a clean tree, and the target branch available. Invalid checkouts
+  move the job to `BLOCKED`.
+- **Work branch** — the runner checks out the target branch and creates a
+  local-only `flawferret/job-<short-id>` branch. It refuses to overwrite an
+  existing branch.
+- **Codex approval gate** — the job stops at `READY_FOR_CODEX` and waits for
+  a manual approval (`POST /jobs/:id/approve-codex`). With
+  `FERRET_RUNNER_ENABLE_CODEX=false` (default) approved jobs only record the
+  invocation plan.
+- **Validation** — runs after Codex. Command resolution order:
+  `FERRET_RUNNER_VALIDATION_COMMAND` global override, then a focused command
+  suggested in Codex's final response, then the repository's configured
+  `validationCommand`. With none configured, validation only checks that
+  Codex left changed files.
+- **PR approval gate** — the job stops at `REVIEW` and waits for
+  `POST /jobs/:id/approve-pr`. With `FERRET_RUNNER_ENABLE_PR_CREATION=false`
+  (default) no branch is pushed and no PR is created. When enabled, the
+  runner commits, pushes, and opens a **draft** PR.
+- **PR check auto-heal** — on a failed PR check the runner can re-queue the
+  job for a bounded number of automatic retries
+  (`autoRetryCount`, `FERRET_RUNNER_MAX_AUTO_RETRIES`, default 2) with
+  race-safe queuing.
+- **Local checkout cleanup** — the runner restores the checkout to its base
+  branch afterward and records cleanup success or failure.
+- **Readiness view** — `GET /readiness` and the dashboard readiness page
+  summarize queue state, runner health, blocked jobs, pending approvals, and
+  a single suggested next action.
+
+### Framework Builder (`/framework/new`)
+
+Scaffolds a new Playwright + Cucumber/BDD test framework repository from a
+template. Preview the file set, then create it either in a local directory or
+as a brand-new GitHub repository. Optional follow-up actions: install
+dependencies and run a smoke test (automatic by default for local builds),
+initialize a Git repository, register the result as a FlawFerret2
+repository, and open the folder. Build history lives at `/framework/builds`.
+
+### Discover Tests (`/discover`)
+
+Given a page URL, tester notes, and the repository's existing Cucumber
+coverage, produces AI test-scenario recommendations with impact ratings,
+tags, and acceptance criteria. Keep/hide decisions are saved as a
+`DiscoverRun`, and selected titles can be queued as jobs.
+
+### Feature catalog & local test runs (`/features`)
+
+Browses the Cucumber features and scenarios in a registered checkout,
+explains a scenario in plain language with AI, and runs a single feature or
+scenario locally (`LocalTestRun`) with captured stdout/stderr and pass-rate
+stats.
+
+### Tracker (Jira) integrations (`/integrations`)
+
+Stores Jira credentials as reusable `TrackerIntegration` records, attaches
+them to repositories, and creates a Jira ticket as part of the job pipeline.
+The browser extension can also create tickets directly.
+
+### Browser extension (`apps/extension`)
+
+Chrome MV3, vanilla TypeScript. Right-click any element to capture URL,
+title, DOM snippet, screenshot, selected element and locator candidates,
+console errors, network events, and notes. From the overlay: create a Jira
+ticket, or open a prefilled `ADD_PLAYWRIGHT_TEST` job in the dashboard. AI
+scenario generation uses a separate AI server (not in this repo).
+
+## Not done yet
+
+- No repository cloning — checkouts must be prepared by hand.
+- Codex execution and PR creation are off by default and require per-job
+  approvals even when enabled.
+- Generated work branches are local-only unless PR creation is enabled.
+- Only one job type (`ADD_PLAYWRIGHT_TEST`). Other types in `VISION.md`
+  (`INVESTIGATE_FAILURE`, `FIX_FAILED_TEST`, `CREATE_BUG_REPORT`, …) are not
+  implemented.
+
+## Monorepo layout
+
+pnpm workspace (`pnpm-workspace.yaml`), Node >=22, `pnpm@11.7.0`.
+
+| Path | Purpose |
+| --- | --- |
+| `apps/api` | Fastify + Zod API; routes in `src/server.ts`; OpenAPI UI at `/documentation`. |
+| `apps/web` | Next.js dashboard. |
+| `apps/ferret-runner` | Worker service — claims jobs and orchestrates checkout / Codex / validation / PR steps. |
+| `apps/extension` | Chrome (MV3) capture extension. |
+| `packages/db` | Prisma schema and DB helpers. |
+| `packages/job-schemas` | Shared Zod schemas used by `apps/api` and `apps/web`. |
+| `packages/shared` | Shared TypeScript utilities and types. |
+
+## Commands
+
+From the repo root (each fans out via `pnpm -r`):
+
+```bash
+pnpm build
+pnpm check
+pnpm dev
+pnpm lint
+pnpm test
+pnpm typecheck
+```
+
+`lint` is `tsc --noEmit` in every package — there is no ESLint or Prettier in
+this repo. Tests run through Node's built-in runner (`tsx --test`;
+`apps/extension` uses `node --test`) and are colocated as `foo.ts` +
+`foo.test.ts`.
+
+Prisma (`packages/db`): `pnpm --filter @flawferret2/db db:generate`,
+`db:migrate`, `db:studio`, `db:validate`.
+
+Extension (`apps/extension`): `pnpm --filter @flawferret2/extension build`,
+`dev`, `build:release`.
+
+## Running locally
+
+1. Copy `.env.example` to `.env` and set `DATABASE_URL` to a Neon Postgres
+   connection string. Optional: `SLACK_WEBHOOK_URL` (milestone
+   notifications to `#ff2-logs`), `OPENAI_API_KEY` (Discover Tests and
+   scenario explanations), `GITHUB_TOKEN` (Framework Builder GitHub repos
+   and PR creation). Repositories can also set their own validation command
+   in the web UI; `FERRET_RUNNER_VALIDATION_COMMAND` is a global override.
+
+2. Install and set up the database:
+
+   ```bash
+   pnpm install
+   pnpm --filter @flawferret2/db db:generate
+   pnpm --filter @flawferret2/db db:migrate
+   ```
+
+3. Start the API and web app:
+
+   ```bash
+   pnpm --filter @flawferret2/api dev
+   pnpm --filter @flawferret2/web dev
+   ```
+
+4. Start `ferret-runner` when you want to claim queued jobs:
+
+   ```bash
+   pnpm --filter @flawferret2/ferret-runner dev
+   ```
+
+The API defaults to `http://localhost:4000`, the web app to
+`http://localhost:3000`. `ferret-runner` starts in dry-run mode
+(`FERRET_RUNNER_ENABLE_CODEX=false`, `FERRET_RUNNER_ENABLE_PR_CREATION=false`).
+See [`apps/ferret-runner/README.md`](apps/ferret-runner/README.md) for the
+safe first-live-run checklist before enabling Codex or PR creation.
+
+## Configuration
+
+The core environment is validated with Zod in `apps/api/src/config.ts`
+(API) and `apps/ferret-runner/src/config.ts` (worker); per CLAUDE.md, new
+variables should go in those schemas rather than raw `process.env` reads
+(a few older feature flags still read `process.env` directly). Key
+variables:
+
+| Variable | Used by | Default |
+| --- | --- | --- |
+| `DATABASE_URL` | all | — (required) |
+| `API_HOST` / `API_PORT` | api | `0.0.0.0` / `4000` |
+| `WEB_ORIGIN` | api | `http://localhost:3000` |
+| `NEXT_PUBLIC_API_URL` | web | `http://localhost:4000` |
+| `FERRET_RUNNER_ENABLE_CODEX` | runner | `false` |
+| `FERRET_RUNNER_ENABLE_PR_CREATION` | runner | `false` |
+| `FERRET_RUNNER_VALIDATION_COMMAND` | runner | unset (per-repo command used) |
+| `FERRET_RUNNER_MAX_AUTO_RETRIES` | runner | `2` |
+| `CODEX_COMMAND` | api, runner | `codex` |
+| `CODEX_MODEL` / `CODEX_TIMEOUT_MS` | runner | unset / 20 min |
+| `OPENAI_API_KEY` / `OPENAI_MODEL` | api (Discover, explanations) | — / `gpt-4.1-mini` |
+| `GITHUB_TOKEN` | api (Framework Builder GitHub repos / PRs) | — |
+| `SLACK_WEBHOOK_URL` | api, runner | unset |
+| `WORKER_*` | runner | see `.env.example` |
+
+## Development
+
+Implementation is driven through the subagent pipeline in `.claude/agents/`
+(visionary / qa-strategist -> product-manager -> graphic-designer -> coder ->
+code-reviewer -> qa-strategist release gate). Specs live in `docs/specs/`.
+Work is tracked in the `FLW` Jira project.
+
+## History
+
+The project was built layer by layer, proving one stage before adding the
+next. See [`CHANGELOG.md`](CHANGELOG.md) for the milestone-by-milestone
+history.
