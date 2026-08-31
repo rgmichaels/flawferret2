@@ -14,9 +14,9 @@ is `ADD_PLAYWRIGHT_TEST`. The intended pipeline is:
 Browser -> Web -> API -> DB -> Worker -> Codex -> Playwright -> GitHub PR
 ```
 
-See `VISION.md` for the full product thesis and `README.md` for milestone
-history and "what's actually built" — read both before assuming a capability
-exists (see Gotchas below).
+See `VISION.md` for the full product thesis, `README.md` for "what's
+actually built" today, and `CHANGELOG.md` for milestone history — read them
+before assuming a capability exists (see Gotchas below).
 
 ## Monorepo layout
 
@@ -113,15 +113,15 @@ Defined in `.claude/agents/*.md` — read those files directly for full detail
 - No ESLint/Prettier anywhere in the repo — see Commands above.
 - Specs live in `docs/specs/*.md`, written by `product-manager` (or
   `graphic-designer` for design specs) before `coder` implements.
-- `README.md`'s milestone list is the record of what's actually built —
-  check it before assuming a pipeline stage is live. As of the latest
-  documented milestone (Milestone 4: job/run split with a `RunStatus`
-  lifecycle), the README states no repository checkout, Codex invocation,
-  Playwright validation, or GitHub PR automation is implemented yet, even
-  though `apps/ferret-runner` already contains scaffolding for several of
-  those steps (`codex-invocation.ts`, `validation.ts`, `pull-request.ts`) —
-  confirm against README and the actual runner code, don't assume from file
-  presence alone that a step is wired end-to-end and enabled by default.
+- `README.md`'s "What's built today" section is the record of what's
+  actually wired up; `CHANGELOG.md` has the milestone history. Check the
+  README before assuming a pipeline stage is live. The full pipeline
+  (checkout validation, Codex invocation, validation, draft PR) now exists,
+  but the Codex-execution and PR-creation steps are gated behind per-job
+  approvals AND the `FERRET_RUNNER_ENABLE_CODEX` /
+  `FERRET_RUNNER_ENABLE_PR_CREATION` flags, both off by default — don't
+  assume from file presence (`codex-invocation.ts`, `validation.ts`,
+  `pull-request.ts`) that a step runs end-to-end without approval.
 - Commit/branch convention observed in `git log`: `Add/Improve/Fix <thing>`
   style commit subjects; ticket-prefixed branch names like
   `flw-9-flw-10-framework-wizard-fixes`.
