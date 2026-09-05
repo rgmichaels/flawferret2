@@ -29,6 +29,18 @@ Browser extension
 
 Version 1 supports a single job type: `ADD_PLAYWRIGHT_TEST`.
 
+## API documentation
+
+Published OpenAPI docs for `apps/api`: **https://rgmichaels.github.io/flawferret2/**
+
+Generated on every push to `main` that touches `apps/api`, `packages/job-schemas`,
+or `packages/db` (`.github/workflows/api-docs.yml`) — the OpenAPI document is
+rendered straight from the route schemas that Fastify already validates
+requests against, so it can't drift out of sync with actual API behavior.
+
+Running the API locally also serves an interactive Swagger UI at
+`/documentation` (source at `/documentation/json`).
+
 ## What's built today
 
 The full pipeline exists end to end. The AI-execution and
@@ -133,7 +145,7 @@ pnpm workspace (`pnpm-workspace.yaml`), Node >=22, `pnpm@11.7.0`.
 
 | Path | Purpose |
 | --- | --- |
-| `apps/api` | Fastify + Zod API; routes in `src/server.ts`; OpenAPI UI at `/documentation`. |
+| `apps/api` | Fastify + Zod API; routes in `src/server.ts`; OpenAPI UI at `/documentation`; [published docs](https://rgmichaels.github.io/flawferret2/). |
 | `apps/web` | Next.js dashboard. |
 | `apps/ferret-runner` | Worker service — claims jobs and orchestrates checkout / Codex / validation / PR steps. |
 | `apps/extension` | Chrome (MV3) capture extension. |
