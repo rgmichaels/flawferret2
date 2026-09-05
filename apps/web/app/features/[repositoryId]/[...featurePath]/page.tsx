@@ -313,6 +313,16 @@ export default async function FeatureDetailPage({
 
         <div className="page-grid feature-detail-grid">
           <div className="feature-detail-main">
+            <section className="panel feature-source-panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Feature Source</h2>
+                  <p>{detail.localPath}</p>
+                </div>
+              </div>
+              <pre>{detail.content}</pre>
+            </section>
+
             <section className="panel feature-detail-panel">
               <div className="panel-header">
                 <div>
@@ -383,16 +393,6 @@ export default async function FeatureDetailPage({
                   ))}
                 </ol>
               )}
-            </section>
-
-            <section className="panel feature-source-panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Feature Source</h2>
-                  <p>{detail.localPath}</p>
-                </div>
-              </div>
-              <pre>{detail.content}</pre>
             </section>
           </div>
 
