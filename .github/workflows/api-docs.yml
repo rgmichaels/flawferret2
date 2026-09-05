@@ -22,6 +22,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Satisfies config/schema validation in `prisma generate` and the API's
+      # own env schema. Nothing in this workflow opens a database
+      # connection — the OpenAPI document is rendered from route schemas.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -44,11 +49,6 @@ jobs:
         run: pnpm --filter @flawferret2/db db:generate
 
       - name: Generate OpenAPI document
-        # DATABASE_URL only needs to satisfy config validation here — the
-        # generator never opens a database connection, it just renders the
-        # route schemas that @fastify/swagger already collects.
-        env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
         run: pnpm --filter @flawferret2/api docs:openapi
 
       - name: Render static docs site
