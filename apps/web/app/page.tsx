@@ -553,7 +553,12 @@ export default async function Home({
                         <td>{formatRelativeTime(job.updatedAt)}</td>
                         <td>
                           {pullRequestUrl ? (
-                            <a className="artifact-link" href={pullRequestUrl}>
+                            <a
+                              className="artifact-link"
+                              href={pullRequestUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
                               Open PR
                             </a>
                           ) : (

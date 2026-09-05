@@ -203,7 +203,12 @@ export default async function FrameworkBuildDetailPage({
               </a>
             ) : null}
             {build.githubPullRequestUrl ? (
-              <a className="primary-link" href={build.githubPullRequestUrl}>
+              <a
+                className="primary-link"
+                href={build.githubPullRequestUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Open PR
               </a>
             ) : null}

@@ -1668,7 +1668,12 @@ export default async function NewFrameworkPage({
                         <strong>Pull Request</strong>
                         <span>Review the generated framework changes in GitHub.</span>
                       </div>
-                      <a className="primary-link" href={params.prUrl}>
+                      <a
+                        className="primary-link"
+                        href={params.prUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
                         Open PR
                       </a>
                     </article>
