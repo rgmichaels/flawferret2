@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 .turbo/
+apps/api/openapi.json
 
 .env
 .env.*
