@@ -148,7 +148,14 @@ export const getDefaultAcceptanceCriteria = (captureContext: CaptureContext | nu
       : null,
   ].filter((line): line is string => Boolean(line));
 
-  return criteria.join("\n");
+  const generated = criteria.join("\n");
+  const notes = captureContext.notes?.trim();
+
+  if (!notes) {
+    return generated;
+  }
+
+  return generated ? `${notes}\n\n${generated}` : notes;
 };
 
 export default async function NewJobPage({

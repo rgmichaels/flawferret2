@@ -48,6 +48,8 @@ type CaptureResult = {
 };
 
 const DEFAULT_FLAWFERRET2_BASE_URL = "http://localhost:3000";
+// Matches captureContextSchema.notes max length in @flawferret2/job-schemas.
+const FLAWFERRET2_NOTES_MAX_LENGTH = 4000;
 
 let lastRightClickedElement: Element | null = null;
 
@@ -1244,7 +1246,12 @@ function buildFlawFerret2CaptureContext(
 
   const trimmedNotes = notes.trim();
   if (trimmedNotes) {
-    captureContext.notes = trimmedNotes;
+    // The API caps captureContext.notes at 4000 chars; truncate here so an
+    // over-long scenario does not make the whole capture context unparseable.
+    captureContext.notes =
+      trimmedNotes.length > FLAWFERRET2_NOTES_MAX_LENGTH
+        ? `${trimmedNotes.slice(0, FLAWFERRET2_NOTES_MAX_LENGTH - 1).trimEnd()}…`
+        : trimmedNotes;
   }
 
   return Object.fromEntries(
