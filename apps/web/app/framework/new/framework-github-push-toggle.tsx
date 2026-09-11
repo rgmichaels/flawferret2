@@ -52,7 +52,7 @@ export function FrameworkGithubPushToggle({
   }
 
   return (
-    <details className="framework-command-copy framework-github-push-toggle" open={createGithubRepository}>
+    <details className="framework-github-push-toggle" open={createGithubRepository}>
       <summary>
         <label className="framework-overwrite-option">
           <input name="createGithubRepository" type="hidden" value="false" />
