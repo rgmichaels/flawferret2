@@ -5,7 +5,9 @@ import {
   type RepositoryResponse,
 } from "@flawferret2/job-schemas";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { AppShell } from "../../app-shell";
+import { CreateTestSubmitButton } from "./create-test-submit-button";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -82,7 +84,7 @@ async function queueJob(formData: FormData) {
   }
 
   revalidatePath("/");
-  revalidatePath("/jobs/new");
+  redirect("/");
 }
 
 const repositoryLabel = (repository: RepositoryResponse) =>
@@ -283,9 +285,7 @@ export default async function NewJobPage({
                 Create draft PR
               </label>
             </div>
-            <button type="submit" disabled={!selectedRepositoryId}>
-              Create Test
-            </button>
+            <CreateTestSubmitButton disabled={!selectedRepositoryId} />
           </form>
         </section>
       </section>
