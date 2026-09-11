@@ -40,6 +40,7 @@ import { hostname } from "node:os";
 import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
 import { config } from "./config.js";
 import { cleanupMergedPullRequestCheckout } from "./local-checkout-cleanup.js";
+import { nextLoopIteration, shouldPrioritizeQueuedClaim } from "./loop-fairness.js";
 import {
   buildAutoRetryRunMetadata,
   createDraftPullRequest,
@@ -59,6 +60,7 @@ const workerHostname = hostname();
 
 let shouldStop = false;
 let shutdownStarted = false;
+let loopIteration = 0;
 let lastHeartbeatAt = 0;
 let lastHeartbeatState: string | null = null;
 
@@ -305,6 +307,15 @@ while (!shouldStop) {
   await setWorkerState({
     status: "IDLE",
   });
+
+  loopIteration = nextLoopIteration(loopIteration, config.FERRET_RUNNER_QUEUED_CLAIM_FAIRNESS_N);
+
+  // Every Nth iteration the PR-lifecycle claim stands down so a job parked at
+  // PR_CREATED (waiting on a human) cannot starve queued jobs indefinitely.
+  const prioritizeQueuedClaim = shouldPrioritizeQueuedClaim(
+    loopIteration,
+    config.FERRET_RUNNER_QUEUED_CLAIM_FAIRNESS_N,
+  );
 
   const localTestRunClaim = await claimNextLocalTestRun(workerId);
 
@@ -1188,15 +1199,22 @@ while (!shouldStop) {
     }
   }
 
-  const prLifecycleClaimResult = await claimNextPrCreatedJob(workerId);
+  if (prioritizeQueuedClaim) {
+    log("Prioritizing the queued claim this iteration", {
+      fairnessN: config.FERRET_RUNNER_QUEUED_CLAIM_FAIRNESS_N,
+      loopIteration,
+    });
+  }
 
-  if (prLifecycleClaimResult.queuePaused) {
+  const prLifecycleClaimResult = prioritizeQueuedClaim ? null : await claimNextPrCreatedJob(workerId);
+
+  if (prLifecycleClaimResult?.queuePaused) {
     log("Queue is paused; skipping PR lifecycle claim");
     await sleep(config.WORKER_POLL_INTERVAL_MS);
     continue;
   }
 
-  if (prLifecycleClaimResult.job) {
+  if (prLifecycleClaimResult?.job) {
     const prJob = prLifecycleClaimResult.job;
     const latestRun = prJob.runs[0] ?? null;
     const runMetadata = getMetadataRecord(latestRun?.metadata);
@@ -1287,6 +1305,7 @@ while (!shouldStop) {
       await setWorkerState({
         status: "IDLE",
       });
+      await sleep(config.WORKER_POLL_INTERVAL_MS);
       continue;
     }
 
@@ -1471,6 +1490,7 @@ while (!shouldStop) {
           await setWorkerState({
             status: "IDLE",
           });
+          await sleep(config.WORKER_POLL_INTERVAL_MS);
           continue;
         }
 
@@ -1634,6 +1654,11 @@ while (!shouldStop) {
     await setWorkerState({
       status: "IDLE",
     });
+
+    if (!lifecycleChanged) {
+      await sleep(config.WORKER_POLL_INTERVAL_MS);
+    }
+
     continue;
   }
 
