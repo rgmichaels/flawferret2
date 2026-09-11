@@ -2206,6 +2206,18 @@ button {
   padding: 8px 10px;
 }
 
+/* Structural spacing only — the summary's label styling comes from
+   .framework-overwrite-option, same as the sibling auto-run toggle. */
+.framework-github-push-toggle {
+  margin-top: 6px;
+}
+
+/* Restores the hover affordance the summary had while it still used
+   .framework-command-copy, without that class's uppercase/blue/bold text. */
+.framework-github-push-toggle summary {
+  cursor: pointer;
+}
+
 .framework-overwrite-option {
   align-items: start;
   display: grid;
