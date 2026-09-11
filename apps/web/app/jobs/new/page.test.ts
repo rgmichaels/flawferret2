@@ -61,4 +61,81 @@ describe("new job capture context", () => {
       /Prefer locator getByRole\('button', \{ name: 'Sign in' \}\)\./
     );
   });
+
+  it("puts capture context notes above the generated acceptance criteria", () => {
+    const notes = [
+      "Scenario: Sign in with valid credentials",
+      "  Given I am on the login page",
+      "  Then I should see the dashboard",
+    ].join("\n");
+    const captureContext = parseCaptureContextValue(
+      JSON.stringify({
+        url: "https://example.test/login",
+        title: "Login",
+        elementKey: "button_sign_in",
+        name: "Sign in",
+        outerHTML: "<button>Sign in</button>",
+        selectors: ["getByRole('button', { name: 'Sign in' })"],
+        thenLine: 'Then the "button_sign_in" should be visible',
+        notes,
+      })
+    );
+
+    assert.ok(captureContext);
+    assert.equal(
+      getDefaultAcceptanceCriteria(captureContext),
+      [
+        notes,
+        "",
+        'Then the "button_sign_in" should be visible',
+        "Navigate to https://example.test/login.",
+        "Prefer locator getByRole('button', { name: 'Sign in' }).",
+        "Use the captured DOM snippet to keep the assertion focused.",
+      ].join("\n")
+    );
+  });
+
+  it("returns only the notes when no other capture context details are present", () => {
+    const captureContext = parseCaptureContextValue(
+      JSON.stringify({
+        notes: "Scenario: the user can sign out",
+      })
+    );
+
+    assert.ok(captureContext);
+    assert.equal(
+      getDefaultAcceptanceCriteria(captureContext),
+      "Scenario: the user can sign out"
+    );
+  });
+
+  it("leaves acceptance criteria unchanged when notes are missing or empty", () => {
+    const base = {
+      url: "https://example.test/login",
+      title: "Login",
+      elementKey: "button_sign_in",
+      name: "Sign in",
+      outerHTML: "<button>Sign in</button>",
+      selectors: ["getByRole('button', { name: 'Sign in' })"],
+      thenLine: 'Then the "button_sign_in" should be visible',
+    };
+    const expected = [
+      'Then the "button_sign_in" should be visible',
+      "Navigate to https://example.test/login.",
+      "Prefer locator getByRole('button', { name: 'Sign in' }).",
+      "Use the captured DOM snippet to keep the assertion focused.",
+    ].join("\n");
+
+    const withoutNotes = parseCaptureContextValue(JSON.stringify(base));
+    const withEmptyNotes = parseCaptureContextValue(JSON.stringify({ ...base, notes: "   " }));
+
+    assert.ok(withoutNotes);
+    assert.ok(withEmptyNotes);
+    assert.equal(getDefaultAcceptanceCriteria(withoutNotes), expected);
+    assert.equal(getDefaultAcceptanceCriteria(withEmptyNotes), expected);
+  });
+
+  it("returns an empty string without capture context", () => {
+    assert.equal(getDefaultAcceptanceCriteria(null), "");
+  });
 });

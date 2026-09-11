@@ -293,7 +293,7 @@ export const captureContextSchema = z
     selectors: z.array(z.string().trim().min(1)).default([]),
     locatorCandidates: z.array(locatorCandidateSchema).default([]),
     thenLine: z.string().trim().optional(),
-    notes: z.string().trim().optional(),
+    notes: z.string().trim().max(4000).optional(),
     captureRect: captureRectSchema.optional(),
     viewport: viewportSchema.optional(),
     devicePixelRatio: z.number().positive().optional(),

@@ -78,6 +78,17 @@ describe("job schemas", () => {
     assert.deepEqual(captureContext.networkEvents, []);
   });
 
+  it("caps capture context notes at 4000 characters", () => {
+    const atLimit = captureContextSchema.parse({ notes: "n".repeat(4000) });
+    assert.equal(atLimit.notes?.length, 4000);
+
+    assert.equal(captureContextSchema.safeParse({ notes: "n".repeat(4001) }).success, false);
+
+    // Trimming happens before the length check, so surrounding whitespace does not count.
+    const padded = captureContextSchema.parse({ notes: `  ${"n".repeat(4000)}  ` });
+    assert.equal(padded.notes?.length, 4000);
+  });
+
   it("accepts capture context on new ADD_PLAYWRIGHT_TEST jobs", () => {
     const request = createJobRequestSchema.parse({
       jobType: "ADD_PLAYWRIGHT_TEST",

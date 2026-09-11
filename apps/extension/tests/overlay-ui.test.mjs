@@ -38,3 +38,8 @@ test('overlay opens FlawFerret2 with captured Playwright context', () => {
   assert.match(source, /searchParams\.set\("captureContext"/);
   assert.match(source, /locatorCandidates:\s*meta\.selectors\.map/);
 });
+
+test('capture context notes are truncated to the API limit', () => {
+  assert.match(source, /FLAWFERRET2_NOTES_MAX_LENGTH\s*=\s*4000/);
+  assert.match(source, /trimmedNotes\.length\s*>\s*FLAWFERRET2_NOTES_MAX_LENGTH/);
+});
