@@ -405,7 +405,6 @@ export default async function Home({
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Milestone 3</p>
             <h1>Dashboard</h1>
           </div>
           <div className="topbar-actions">

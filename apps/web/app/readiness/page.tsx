@@ -80,7 +80,6 @@ export default async function ReadinessPage() {
         <section className="workspace">
           <header className="topbar">
             <div>
-              <p className="eyebrow">Milestone</p>
               <h1>Readiness</h1>
             </div>
           </header>
@@ -109,7 +108,6 @@ export default async function ReadinessPage() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Milestone</p>
             <h1>Readiness</h1>
           </div>
           <a className="primary-link" href={nextAction.href}>
