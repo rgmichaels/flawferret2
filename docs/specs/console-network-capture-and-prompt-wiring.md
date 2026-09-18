@@ -1,6 +1,6 @@
 # Console + Network Capture Wiring
 
-Status: Draft
+Status: Implemented
 Date: 2026-08-13
 
 ## Reconciling the two research bets

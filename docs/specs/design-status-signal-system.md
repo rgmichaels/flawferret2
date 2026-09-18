@@ -2,7 +2,7 @@
 
 Date: 2026-08-13
 
-Status: Draft
+Status: Implemented
 
 **Resolved (2026-08-13):** Open Question 4 (whether `#2563eb` → `--action` should apply app-wide vs. only Dashboard/Job Detail) is resolved as **app-wide** — the user confirmed one consistent action color everywhere is the intended outcome, superseding the original "scoped to two pages" instruction. Also extending this pass to migrate `.diagnostic-item`/`.validation-trust-card` (Job Detail) to signal tokens, closing the gap flagged in code review.
 
