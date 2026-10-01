@@ -97,15 +97,22 @@ export const parseFeatureFile = ({
     }
 
     if (line.startsWith("@")) {
-      pendingTags = line.split(/\s+/).filter((tag) => tag.startsWith("@"));
-      pendingTags.forEach((tag) => featureTags.add(tag));
+      const lineTags = line.split(/\s+/).filter((tag) => tag.startsWith("@"));
+      pendingTags = [...pendingTags, ...lineTags];
+      lineTags.forEach((tag) => featureTags.add(tag));
       return;
     }
 
     const featureMatch = line.match(/^Feature:\s*(.+)$/i);
     if (featureMatch) {
       feature = featureMatch[1].trim();
+      pendingTags = [];
       return;
+    }
+
+    // Tags above Rule/Background/Examples belong to that block, not the next scenario.
+    if (line.match(/^(Rule|Background|Examples|Scenarios):/i)) {
+      pendingTags = [];
     }
 
     const scenarioMatch = line.match(/^(Scenario(?: Outline)?|Example):\s*(.+)$/i);

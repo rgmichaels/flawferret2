@@ -72,6 +72,109 @@ describe("cucumber feature catalog", () => {
     assert.deepEqual(summary.scenarios[0].steps.map((step) => step.text), ["I am on the login page"]);
   });
 
+  it("accumulates consecutive tag lines above a scenario", () => {
+    const summary = parseFeatureFile({
+      content: [
+        "Feature: Login",
+        "",
+        "  @a",
+        "  @b @c",
+        "  Scenario: Valid password",
+        "    Given I am on the login page",
+      ].join("\n"),
+      modifiedAt: new Date("2026-07-20T12:00:00Z"),
+      relativePath: "features/login.feature",
+    });
+
+    assert.deepEqual(summary.scenarios[0].tags, ["@a", "@b", "@c"]);
+  });
+
+  it("does not leak tags above an Examples block onto the next scenario", () => {
+    const summary = parseFeatureFile({
+      content: [
+        "Feature: Login",
+        "",
+        "  @outline",
+        "  Scenario Outline: Locked account",
+        "    Given <user> is locked",
+        "",
+        "    @example-tag",
+        "    Examples:",
+        "      | user  |",
+        "      | alice |",
+        "",
+        "  Scenario: Valid password",
+        "    Given I am on the login page",
+      ].join("\n"),
+      modifiedAt: new Date("2026-07-20T12:00:00Z"),
+      relativePath: "features/login.feature",
+    });
+
+    assert.equal(summary.scenarioCount, 2);
+    assert.deepEqual(summary.scenarios[0].tags, ["@outline"]);
+    assert.deepEqual(summary.scenarios[1].tags, []);
+  });
+
+  it("does not leak tags above Rule or Background onto the next scenario", () => {
+    const summary = parseFeatureFile({
+      content: [
+        "Feature: Login",
+        "",
+        "  @background-tag",
+        "  Background:",
+        "    Given the app is running",
+        "",
+        "  @rule-tag",
+        "  Rule: Passwords",
+        "",
+        "    Scenario: Valid password",
+        "      Given I am on the login page",
+      ].join("\n"),
+      modifiedAt: new Date("2026-07-20T12:00:00Z"),
+      relativePath: "features/login.feature",
+    });
+
+    assert.equal(summary.scenarioCount, 1);
+    assert.deepEqual(summary.scenarios[0].tags, []);
+  });
+
+  it("keeps single-line scenario tags and does not attach feature tags to scenarios", () => {
+    const summary = parseFeatureFile({
+      content: [
+        "@smoke",
+        "Feature: Login",
+        "",
+        "  @happy",
+        "  Scenario: Valid password",
+        "    Given I am on the login page",
+        "",
+        "  @locked",
+        "  Scenario Outline: Locked account",
+        "    Given <user> is locked",
+      ].join("\n"),
+      modifiedAt: new Date("2026-07-20T12:00:00Z"),
+      relativePath: "features/login.feature",
+    });
+
+    assert.deepEqual(summary.scenarios[0].tags, ["@happy"]);
+    assert.equal(summary.scenarios[1].keyword, "Scenario Outline");
+    assert.deepEqual(summary.scenarios[1].tags, ["@locked"]);
+    assert.deepEqual(summary.tags, ["@happy", "@locked", "@smoke"]);
+  });
+
+  it("does not attach feature-level tags to an untagged first scenario", () => {
+    const summary = parseFeatureFile({
+      content: ["@smoke", "Feature: Login", "", "  Scenario: Valid password", "    Given I am on the login page"].join(
+        "\n",
+      ),
+      modifiedAt: new Date("2026-07-20T12:00:00Z"),
+      relativePath: "features/login.feature",
+    });
+
+    assert.deepEqual(summary.scenarios[0].tags, []);
+    assert.deepEqual(summary.tags, ["@smoke"]);
+  });
+
   it("builds a catalog from repository feature files", async () => {
     const { repository, root } = await createTempRepository();
     await writeFile(
