@@ -200,6 +200,10 @@ describe("job schemas", () => {
       scenarioCount: 1,
       scenarios: [
         {
+          fingerprint: "6f1ed002ab5595859014ebf0951522d9",
+          id: "ff-8f3a2c",
+          idConflict: true,
+          idSource: "tag" as const,
           keyword: "Scenario",
           line: 5,
           steps: [
@@ -223,6 +227,15 @@ describe("job schemas", () => {
     };
 
     const catalog = cucumberFeatureCatalogResponseSchema.parse({
+      duplicateScenarioIds: [
+        {
+          id: "ff-8f3a2c",
+          locations: [
+            { line: 5, path: "features/login.feature" },
+            { line: 9, path: "features/logout.feature" },
+          ],
+        },
+      ],
       features: [feature],
       localPath: "/tmp/example",
       repository,
@@ -243,7 +256,24 @@ describe("job schemas", () => {
     });
 
     assert.equal(catalog.features[0].feature, "Login");
+    assert.equal(catalog.features[0].scenarios[0].id, "ff-8f3a2c");
+    assert.equal(catalog.duplicateScenarioIds[0].locations.length, 2);
     assert.equal(detail.associatedFiles[0].kind, "feature");
+    assert.deepEqual(detail.duplicateScenarioIds, []);
+    assert.throws(() =>
+      cucumberFeatureCatalogResponseSchema.parse({
+        features: [
+          {
+            ...feature,
+            scenarios: [{ ...feature.scenarios[0], idSource: "line" }],
+          },
+        ],
+        localPath: "/tmp/example",
+        repository,
+        root: "features",
+        totalScenarios: 1,
+      }),
+    );
   });
 
   it("parses local test run responses", () => {
