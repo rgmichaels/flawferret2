@@ -1,6 +1,6 @@
 # Stable Scenario IDs (Cucumber tags)
 
-Status: Draft
+Status: Approved for Phase 1 (decisions 1, 3, 5, 6 resolved; 2 and 4 deferred to Phase 2)
 Date: 2026-10-01
 
 ## Problem
@@ -10,13 +10,13 @@ Scenarios have no stable identity. They are parsed on every request from `.featu
 Split into two phases. Phase 1 ships alone and writes nothing to user repos.
 
 ### Phase 1: read IDs, persist identity, no file writes
-- **Tag format**: `@ff-<6-8 lowercase hex>` (e.g. `@ff-8f3a2c`), random, not sequential, so concurrent branches do not collide. Matched by a pattern (see Open question 1); default `^@ff-[0-9a-f]{6,8}$`.
+- **Tag format**: `@ff-<6-8 lowercase hex>` (e.g. `@ff-8f3a2c`), random, not sequential, so concurrent branches do not collide. Matched by a per-repo pattern (Decision 1); default `^@ff-[0-9a-f]{6,8}$`. A repo may optionally set a short human-chosen namespace key (nullable `Repository.scenarioIdNamespace`, e.g. `chk` giving `@ff-chk-8f3a2c`); never the repository UUID, which does not survive re-registering the repo or forks. Namespace is only used by Phase 2 generation; Phase 1 reads whatever the pattern matches.
 - **Parser** (`apps/api/src/cucumber-features.ts`): read the ID tag from a scenario's own tags into a new nullable `CucumberScenario.id` in `cucumberScenarioSchema` (`packages/job-schemas/src/index.ts`). Add `idSource: "tag" | "fingerprint"` and a `fingerprint` string (see below) so the UI can distinguish. Duplicate IDs within a repo are reported, not merged: feature summary/catalog response gains `duplicateScenarioIds: { id, locations: {path, line}[] }[]`, and each affected scenario gets `idConflict: true`.
 - **Fingerprint fallback** for untagged scenarios: `sha1(path + "\0" + normalizedName)`, with a step-text hash used only to disambiguate when two scenarios in the same file share a name. Fingerprints are best-effort and change on rename; the UI must label them as "unstable".
 - **DB** (migration): new `Scenario` table, unique on `(repositoryId, scenarioId)`, storing `lastSeenPath`, `lastSeenLine`, `lastSeenName`, `contentHash`, `idSource`, `firstSeenAt`, `lastSeenAt`, `missingSince` (nullable). Upserted when the catalog/detail is built (or on a local test run create), never deleted automatically; scenarios no longer found get `missingSince` set so history survives a rename/move/delete. Add nullable `LocalTestRun.scenarioId` (+ index `repositoryId, scenarioId, createdAt`). Keep `scenarioLine`.
 - **API** (`apps/api/src/server.ts`): `POST /repositories/:id/features/local-test-runs` accepts optional `scenarioId` (tag ID or fingerprint) as an alternative to `scenarioLine`; the server resolves it against the current parse, returns 400 if not found or if the ID is duplicated (ambiguous). Stats/list endpoints accept `scenarioId` and add per-scenario stats (last status, run count, pass rate, lastRunAt; "never run" = zero rows).
 - **Runner** (`apps/ferret-runner/src/local-test-run.ts`): when the run has a tag-sourced `scenarioId`, invoke `npx cucumber-js <featurePath> --tags @ff-xxxx` instead of `featurePath:line`. Fingerprint-sourced and legacy runs keep `path:line`. Guard: if the ID is duplicated the API already refused the run, so the runner never executes two scenarios by accident.
-- **Backfill of existing `LocalTestRun` rows** (in the migration or a one-off script): `scenarioId` stays NULL for FEATURE-scope rows. For SCENARIO-scope rows, there is no historical file content, so resolve best-effort against the current checkout by `(featurePath, scenarioLine)`; if a scenario sits at that line now, set its current ID/fingerprint, otherwise leave NULL. Rows left NULL remain visible at feature level only. Backfill must be idempotent and must not fail the migration if a `localPath` is missing.
+- **Backfill of existing `LocalTestRun` rows**, in two parts. (a) A normal Prisma migration adds the `Scenario` table and the nullable `LocalTestRun.scenarioId` column; it contains no data changes and cannot depend on any checkout. (b) The data fill is an idempotent per-repository script/API task (not SQL, because identity comes from reading `.feature` files in each `Repository.localPath`). `scenarioId` stays NULL for FEATURE-scope rows. For SCENARIO-scope rows there is no historical file content, so resolve best-effort against the current checkout by `(featurePath, scenarioLine)`; if a scenario sits at that line now, set its current ID/fingerprint, otherwise leave NULL. It must skip repositories whose `localPath` is missing without failing, and be safe to re-run. Rows left NULL remain visible at feature level only.
 - **Web**: only what is needed to expose the data (scenario ID chip, "unstable ID" indicator, duplicate warning). The Scenario Explorer redesign itself is a separate spec (`docs/specs/design-*` / `graphic-designer`).
 
 ### Phase 2: "Assign IDs" via human-approved PR (separate spec, gated)
@@ -35,7 +35,7 @@ Tension to resolve: `JobType` has only `ADD_PLAYWRIGHT_TEST`, and the job lifecy
 - Given a run created with a tag-sourced `scenarioId`, then the runner command contains `--tags @ff-xxxx` and not `:<line>`.
 - Given a run created with only `scenarioLine` (existing behavior), then the command is unchanged (`path:line`) and existing tests in `apps/api/src/local-test-routes.test.ts` still pass.
 - Given a scenario with zero `LocalTestRun` rows, then per-scenario stats report "never run".
-- Given the migration runs on a DB with existing `LocalTestRun` rows, then it succeeds, FEATURE-scope rows have NULL `scenarioId`, and SCENARIO-scope rows are backfilled best-effort and idempotently.
+- Given the schema migration runs on a DB with existing `LocalTestRun` rows, then it succeeds with no data changes. Given the backfill script then runs, FEATURE-scope rows keep NULL `scenarioId`, SCENARIO-scope rows are filled best-effort, repos with a missing `localPath` are skipped, and a second run changes nothing.
 - Tests: unit tests for `parseFeatureFile` covering every edge case below; API route tests for `scenarioId` create/lookup/ambiguity; runner test for command construction. `pnpm test`, `pnpm typecheck` pass. OpenAPI docs test (`api-docs.test.ts`) updated for new params.
 
 ## Edge cases (Phase 1 behavior)
@@ -60,7 +60,15 @@ Tension to resolve: `JobType` has only `ADD_PLAYWRIGHT_TEST`, and the job lifecy
 - Sequential or human-readable IDs; cross-repo ID uniqueness.
 - Auto-deleting stale `Scenario` rows.
 
-## Open questions
+## Decisions
+1. **Prefix**: configurable per-repo pattern (`Repository.scenarioIdPattern`, nullable), default `@ff-[0-9a-f]{6,8}`; optional short namespace key (`scenarioIdNamespace`) for Phase 2 generation. Never the repo UUID.
+2. **Backfill of tags into files** (Phase 2): via human-approved PR, not direct write. Deferred; not blocking Phase 1.
+3. **API form**: `id` without the leading `@` (`ff-8f3a2c`); `tags` keep the `@`; the runner builds `--tags '@ff-8f3a2c'` (shell-quoted).
+4. **Phase 2 job type**: new `JobType`, decided in its own spec. Deferred.
+5. **`Scenario` upsert timing**: on catalog/detail read, accepting a write on a GET, so "never run" and rename tracking work without a run. Upsert must be best-effort: a write failure must not fail the GET.
+6. **Run-by-tag scoping (verified by code reading, not by executing cucumber-js)**: `buildLocalTestCommand` (`apps/ferret-runner/src/local-test-run.ts`) passes `--config <generated empty config>` (`module.exports = { default: {} }`), so the framework template's `cucumber.js` `paths: ["features/**/*.feature"]` is not applied; the positional `featurePath` is the only path. `featurePath` plus `--tags` therefore scopes to that file. Implementation must add a command-construction test and one real-run check.
+
+## Original open questions (resolved above, kept for history)
 1. **Fixed `@ff-` prefix vs per-repo configurable pattern.** Repos with an existing convention (e.g. `@TC-\d+`) should not receive a second ID. Recommendation: build the parser against a configurable regex from day one (stored on `Repository`, e.g. `scenarioIdPattern`, nullable), defaulting to `@ff-[0-9a-f]{6,8}`. Phase 1 can read any matching existing tag as the ID; only Phase 2 generation needs a template, and it should generate `@ff-` only when no pattern is configured. Caveat: externally managed IDs (`@TC-123`) are human-assigned and can collide or be non-unique by design; duplicate detection covers that.
 2. **Backfill via PR vs opt-in direct write to local checkout.** Recommendation: PR (Phase 2), per the human-approval principle. Direct write would modify a developer's working tree with uncommitted edits, risk conflicts with their branch, and bypass review. If direct write is ever wanted, it should be an explicit per-repo opt-in and out of this spec.
 3. **Canonical ID form in the API**: with or without the leading `@` (`ff-8f3a2c` vs `@ff-8f3a2c`)? Recommendation: without `@` in `id`, with it in `tags`; and `--tags` built by the runner.
