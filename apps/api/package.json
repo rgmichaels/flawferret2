@@ -9,6 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "docs:openapi": "tsx scripts/generate-openapi.ts",
     "lint": "tsc --noEmit",
+    "scenarios:backfill": "tsx scripts/backfill-scenario-ids.ts",
     "test": "tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

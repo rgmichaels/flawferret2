@@ -487,6 +487,24 @@ const listAssociatedFiles = async (localPath: string, featurePath: string): Prom
   }));
 };
 
+// Parses every feature file of a checkout for identity only (no step matching), with
+// duplicate IDs marked repo-wide. Throws if the checkout cannot be read.
+export const parseRepositoryFeatures = async ({
+  localPath,
+  scenarioIdPattern,
+}: {
+  localPath: string;
+  scenarioIdPattern?: ScenarioIdPattern;
+}) => {
+  const { features } = await listFeatureSummaries(resolve(localPath), [], scenarioIdPattern);
+  const duplicateScenarioIds = markDuplicateScenarioIds(features);
+
+  return {
+    duplicateScenarioIds,
+    features,
+  };
+};
+
 export const buildFeatureCatalog = async ({
   repository,
   scenarioIdPattern,
@@ -560,8 +578,13 @@ export const buildFeatureDetail = async ({
     scenarioIdPattern,
     stepDefinitions,
   });
-  // Detail only sees one file, so duplicates are detected within that file.
-  const duplicateScenarioIds = markDuplicateScenarioIds([feature]);
+  // Duplicates are detected repo-wide (without step matching, which identity does not need);
+  // only duplicates involving this file are reported, with every location.
+  const { features: repositoryFeatures } = await listFeatureSummaries(localPath, [], scenarioIdPattern);
+  const duplicateScenarioIds = markDuplicateScenarioIds([
+    feature,
+    ...repositoryFeatures.filter((candidate) => candidate.path !== feature.path),
+  ]).filter((duplicate) => duplicate.locations.some((location) => location.path === feature.path));
 
   return {
     associatedFiles,

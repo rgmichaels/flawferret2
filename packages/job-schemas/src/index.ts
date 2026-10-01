@@ -768,10 +768,17 @@ export const cucumberFeatureDetailResponseSchema = z.object({
   repository: repositoryResponseSchema,
 });
 
-export const createLocalTestRunRequestSchema = z.object({
-  featurePath: z.string().trim().min(1, "Feature path is required").max(500),
-  scenarioLine: z.number().int().positive().optional(),
-});
+export const createLocalTestRunRequestSchema = z
+  .object({
+    featurePath: z.string().trim().min(1, "Feature path is required").max(500),
+    // Tag ID (without "@") or fingerprint; an alternative to scenarioLine.
+    scenarioId: z.string().trim().min(1).max(200).optional(),
+    scenarioLine: z.number().int().positive().optional(),
+  })
+  .refine((request) => request.scenarioId === undefined || request.scenarioLine === undefined, {
+    message: "Provide either scenarioId or scenarioLine, not both.",
+    path: ["scenarioId"],
+  });
 
 export const localTestRunResponseSchema = z.object({
   command: z.string().nullable(),
@@ -784,6 +791,7 @@ export const localTestRunResponseSchema = z.object({
   id: z.string(),
   repository: repositoryResponseSchema,
   repositoryId: z.string(),
+  scenarioId: z.string().nullable(),
   scenarioLine: z.number().int().positive().nullable(),
   scope: localTestRunScopeSchema,
   startedAt: z.string().nullable(),
@@ -800,6 +808,9 @@ export const localTestRunStatsResponseSchema = z.object({
   completedRuns: z.number().int().nonnegative(),
   failedRuns: z.number().int().nonnegative(),
   failureRate: z.number().min(0).max(1).nullable(),
+  // Most recent run in scope; both null when it was never run (totalRuns === 0).
+  lastRunAt: z.string().nullable(),
+  lastStatus: localTestRunStatusSchema.nullable(),
   maxDurationMs: z.number().int().nonnegative().nullable(),
   minDurationMs: z.number().int().nonnegative().nullable(),
   passedRuns: z.number().int().nonnegative(),

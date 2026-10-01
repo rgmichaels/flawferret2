@@ -75,3 +75,12 @@ numbers:
   repository from a template, locally or as a new GitHub repository, with
   dependency install, smoke test, Git init, and repository registration.
 - **OpenAPI docs** — Zod schemas published at `/documentation`.
+- **Stable scenario IDs (Phase 1)** — scenarios read an ID from their own
+  `@ff-…` tag (or a per-repository `scenarioIdPattern`), with an "unstable"
+  fingerprint fallback and repo-wide duplicate detection. Catalog/detail
+  reads record identities in a `Scenario` table (best-effort; `missingSince`
+  tracks disappearances). Local test runs can target a `scenarioId`
+  (tag-sourced runs execute with `--tags`; duplicated IDs are refused), and
+  run list/stats filter by it. `pnpm --filter @flawferret2/api
+  scenarios:backfill` fills `scenarioId` on older scenario runs. No user
+  files are written; assigning IDs via PR is a later phase.

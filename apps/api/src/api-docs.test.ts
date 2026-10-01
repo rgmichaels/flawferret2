@@ -175,5 +175,25 @@ describe("api documentation", () => {
       ),
       "Expected local test run scenarioLine query parameter",
     );
+    ["/repositories/{id}/features/local-test-runs", "/repositories/{id}/features/local-test-runs/stats"].forEach(
+      (path) => {
+        assert.ok(
+          document.paths[path]?.get?.parameters?.some(
+            (parameter) => parameter.in === "query" && parameter.name === "scenarioId",
+          ),
+          `Expected ${path} scenarioId query parameter`,
+        );
+      },
+    );
+    assert.ok(schemas.CreateLocalTestRunRequest?.properties?.scenarioId);
+    assert.ok(schemas.LocalTestRunResponse?.properties?.scenarioId);
+    assert.ok(schemas.LocalTestRunResponse?.required?.includes("scenarioId"));
+    assert.ok(schemas.LocalTestRunStatsResponse?.properties?.lastStatus);
+    assert.ok(schemas.LocalTestRunStatsResponse?.properties?.lastRunAt);
+    assert.equal(
+      document.paths["/repositories/{id}/features/local-test-runs"]?.post?.requestBody?.content?.["application/json"]
+        ?.schema?.$ref,
+      "#/components/schemas/CreateLocalTestRunRequest",
+    );
   });
 });

@@ -202,6 +202,9 @@ model LocalTestRun {
   featurePath  String             @map("feature_path")
   scenarioLine Int?               @map("scenario_line")
   scenarioId   String?            @map("scenario_id")
+  // Exact ID tag (e.g. "@ff-8f3a2c") resolved at run creation; set only for tag-sourced
+  // scenario IDs so the runner can target `--tags` instead of `path:line`.
+  scenarioTag  String?            @map("scenario_tag")
   command      String?
   exitCode     Int?               @map("exit_code")
   stdoutPath   String?            @map("stdout_path")

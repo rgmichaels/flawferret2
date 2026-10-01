@@ -8,6 +8,7 @@ import {
   cucumberFeatureCatalogResponseSchema,
   cucumberFeatureDetailResponseSchema,
   createJobRequestSchema,
+  createLocalTestRunRequestSchema,
   createTrackerIntegrationRequestSchema,
   discoverCoverageDecisionSchema,
   discoverRunResponseSchema,
@@ -306,6 +307,7 @@ describe("job schemas", () => {
       id: "run-1",
       repository,
       repositoryId: "repo-1",
+      scenarioId: "ff-8f3a2c",
       scenarioLine: 5,
       scope: "SCENARIO",
       startedAt: null,
@@ -318,6 +320,26 @@ describe("job schemas", () => {
 
     assert.equal(run.scope, "SCENARIO");
     assert.equal(run.status, "QUEUED");
+    assert.equal(run.scenarioId, "ff-8f3a2c");
+  });
+
+  it("accepts scenarioId or scenarioLine for local test run requests, not both", () => {
+    assert.equal(
+      createLocalTestRunRequestSchema.parse({ featurePath: "features/login.feature", scenarioId: "ff-8f3a2c" })
+        .scenarioId,
+      "ff-8f3a2c",
+    );
+    assert.equal(
+      createLocalTestRunRequestSchema.parse({ featurePath: "features/login.feature", scenarioLine: 5 }).scenarioLine,
+      5,
+    );
+    assert.throws(() =>
+      createLocalTestRunRequestSchema.parse({
+        featurePath: "features/login.feature",
+        scenarioId: "ff-8f3a2c",
+        scenarioLine: 5,
+      }),
+    );
   });
 
   it("parses local test run stats responses", () => {
@@ -327,6 +349,8 @@ describe("job schemas", () => {
       completedRuns: 4,
       failedRuns: 1,
       failureRate: 0.25,
+      lastRunAt: "2026-10-01T10:00:00.000Z",
+      lastStatus: "PASSED",
       maxDurationMs: 1500,
       minDurationMs: 900,
       passedRuns: 3,
@@ -338,6 +362,7 @@ describe("job schemas", () => {
 
     assert.equal(stats.passRate, 0.75);
     assert.equal(stats.averageDurationMs, 1200);
+    assert.equal(stats.lastStatus, "PASSED");
   });
 
   it("parses local test run output responses", () => {
