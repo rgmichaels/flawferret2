@@ -9,6 +9,7 @@ import type {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "../app-shell";
+import { DuplicateScenarioIdsWarning, ScenarioIdBadge } from "./scenario-id-badge";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -628,6 +629,8 @@ export default async function FeaturesPage({
           </section>
         ) : null}
 
+        {catalog ? <DuplicateScenarioIdsWarning duplicates={catalog.duplicateScenarioIds} /> : null}
+
         {!selectedRepository ? (
           <section className="panel detail-empty">
             <h2>No repositories registered</h2>
@@ -729,6 +732,7 @@ export default async function FeaturesPage({
                           <span>
                             {scenario.keyword} on line {scenario.line}
                           </span>
+                          <ScenarioIdBadge scenario={scenario} />
                         </div>
                         {scenario.unmatchedStepCount > 0 ? (
                           <em>{scenario.unmatchedStepCount} unmatched</em>

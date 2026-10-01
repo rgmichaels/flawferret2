@@ -709,13 +709,30 @@ export const cucumberStepSchema = z.object({
   text: z.string(),
 });
 
+export const cucumberScenarioIdSourceSchema = z.enum(["tag", "fingerprint"]);
+
 export const cucumberScenarioSchema = z.object({
+  fingerprint: z.string(),
+  // Stable ID read from the scenario's own ID tag, without the leading "@" (e.g. "ff-8f3a2c").
+  id: z.string().nullable(),
+  idConflict: z.boolean(),
+  idSource: cucumberScenarioIdSourceSchema,
   keyword: z.string(),
   line: z.number().int().positive(),
   name: z.string(),
   steps: z.array(cucumberStepSchema),
   tags: z.array(z.string()),
   unmatchedStepCount: z.number().int().nonnegative(),
+});
+
+export const cucumberDuplicateScenarioIdSchema = z.object({
+  id: z.string(),
+  locations: z.array(
+    z.object({
+      line: z.number().int().positive(),
+      path: z.string(),
+    }),
+  ),
 });
 
 export const cucumberFeatureSummarySchema = z.object({
@@ -734,6 +751,7 @@ export const cucumberAssociatedFileSchema = z.object({
 });
 
 export const cucumberFeatureCatalogResponseSchema = z.object({
+  duplicateScenarioIds: z.array(cucumberDuplicateScenarioIdSchema).default([]),
   features: z.array(cucumberFeatureSummarySchema),
   localPath: z.string().nullable(),
   repository: repositoryResponseSchema,
@@ -744,15 +762,23 @@ export const cucumberFeatureCatalogResponseSchema = z.object({
 export const cucumberFeatureDetailResponseSchema = z.object({
   associatedFiles: z.array(cucumberAssociatedFileSchema),
   content: z.string(),
+  duplicateScenarioIds: z.array(cucumberDuplicateScenarioIdSchema).default([]),
   feature: cucumberFeatureSummarySchema,
   localPath: z.string().nullable(),
   repository: repositoryResponseSchema,
 });
 
-export const createLocalTestRunRequestSchema = z.object({
-  featurePath: z.string().trim().min(1, "Feature path is required").max(500),
-  scenarioLine: z.number().int().positive().optional(),
-});
+export const createLocalTestRunRequestSchema = z
+  .object({
+    featurePath: z.string().trim().min(1, "Feature path is required").max(500),
+    // Tag ID (without "@") or fingerprint; an alternative to scenarioLine.
+    scenarioId: z.string().trim().min(1).max(200).optional(),
+    scenarioLine: z.number().int().positive().optional(),
+  })
+  .refine((request) => request.scenarioId === undefined || request.scenarioLine === undefined, {
+    message: "Provide either scenarioId or scenarioLine, not both.",
+    path: ["scenarioId"],
+  });
 
 export const localTestRunResponseSchema = z.object({
   command: z.string().nullable(),
@@ -765,6 +791,7 @@ export const localTestRunResponseSchema = z.object({
   id: z.string(),
   repository: repositoryResponseSchema,
   repositoryId: z.string(),
+  scenarioId: z.string().nullable(),
   scenarioLine: z.number().int().positive().nullable(),
   scope: localTestRunScopeSchema,
   startedAt: z.string().nullable(),
@@ -781,6 +808,9 @@ export const localTestRunStatsResponseSchema = z.object({
   completedRuns: z.number().int().nonnegative(),
   failedRuns: z.number().int().nonnegative(),
   failureRate: z.number().min(0).max(1).nullable(),
+  // Most recent run in scope; both null when it was never run (totalRuns === 0).
+  lastRunAt: z.string().nullable(),
+  lastStatus: localTestRunStatusSchema.nullable(),
   maxDurationMs: z.number().int().nonnegative().nullable(),
   minDurationMs: z.number().int().nonnegative().nullable(),
   passedRuns: z.number().int().nonnegative(),
@@ -864,6 +894,8 @@ export type PaginatedJobsResponse = z.infer<typeof paginatedJobsResponseSchema>;
 export type JobEventResponse = z.infer<typeof jobEventResponseSchema>;
 export type JobDiffResponse = z.infer<typeof jobDiffResponseSchema>;
 export type CucumberScenario = z.infer<typeof cucumberScenarioSchema>;
+export type CucumberScenarioIdSource = z.infer<typeof cucumberScenarioIdSourceSchema>;
+export type CucumberDuplicateScenarioId = z.infer<typeof cucumberDuplicateScenarioIdSchema>;
 export type CucumberStep = z.infer<typeof cucumberStepSchema>;
 export type CucumberFeatureSummary = z.infer<typeof cucumberFeatureSummarySchema>;
 export type CucumberAssociatedFile = z.infer<typeof cucumberAssociatedFileSchema>;

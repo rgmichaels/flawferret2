@@ -32,6 +32,43 @@ describe("buildLocalTestCommand", () => {
     assert.match(command, /'features\/login\.feature:12'$/);
   });
 
+  it("targets a tag-sourced scenario ID with --tags instead of a line", () => {
+    const command = buildLocalTestCommand(
+      createRun({
+        scenarioId: "ff-8f3a2c",
+        scenarioLine: 12,
+        scenarioTag: "@ff-8f3a2c",
+      }),
+    );
+
+    assert.match(command, / --tags '@ff-8f3a2c' 'features\/login\.feature'$/);
+    assert.doesNotMatch(command, /:12/);
+  });
+
+  it("keeps path:line for fingerprint-sourced scenario IDs", () => {
+    const command = buildLocalTestCommand(
+      createRun({
+        scenarioId: "6f1ed002ab5595859014ebf0951522d9",
+        scenarioLine: 12,
+        scenarioTag: null,
+      }),
+    );
+
+    assert.match(command, /--format summary 'features\/login\.feature:12'$/);
+    assert.doesNotMatch(command, /--tags/);
+  });
+
+  it("shell-quotes and escapes custom tag IDs", () => {
+    const command = buildLocalTestCommand(
+      createRun({
+        scenarioLine: 3,
+        scenarioTag: "@TC-1(it's)",
+      }),
+    );
+
+    assert.match(command, / --tags '@TC-1\\\(it'\\''s\\\)' 'features\/login\.feature'$/);
+  });
+
   it("quotes feature paths for shell execution", () => {
     const command = buildLocalTestCommand(
       createRun({

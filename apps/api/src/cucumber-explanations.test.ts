@@ -6,6 +6,10 @@ describe("cucumber scenario explanations", () => {
   it("summarizes scenario intent without a model response", () => {
     const explanation = buildLocalScenarioExplanation({
       scenario: {
+        fingerprint: "fingerprint",
+        id: null,
+        idConflict: false,
+        idSource: "fingerprint",
         keyword: "Scenario",
         line: 4,
         name: "Context Menu loads and exercises expected behavior",
@@ -76,6 +80,10 @@ describe("cucumber scenario explanations", () => {
         },
       ],
       scenario: {
+        fingerprint: "fingerprint",
+        id: null,
+        idConflict: false,
+        idSource: "fingerprint",
         keyword: "Scenario",
         line: 4,
         name: "Context Menu loads and exercises expected behavior",
@@ -158,6 +166,10 @@ describe("cucumber scenario explanations", () => {
         },
       ],
       scenario: {
+        fingerprint: "fingerprint",
+        id: null,
+        idConflict: false,
+        idSource: "fingerprint",
         keyword: "Scenario",
         line: 4,
         name: "Context Menu loads and exercises expected behavior",
@@ -244,6 +256,10 @@ describe("cucumber scenario explanations", () => {
   it("calls out unmatched step definitions as repair work", () => {
     const explanation = buildLocalScenarioExplanation({
       scenario: {
+        fingerprint: "fingerprint",
+        id: null,
+        idConflict: false,
+        idSource: "fingerprint",
         keyword: "Scenario",
         line: 14,
         name: "Secure area rejects unauthenticated users",

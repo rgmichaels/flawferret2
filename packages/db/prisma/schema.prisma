@@ -142,6 +142,8 @@ model Repository {
   baseUrl              String?             @map("base_url")
   localPath            String?             @map("local_path")
   validationCommand    String?             @map("validation_command")
+  scenarioIdPattern    String?             @map("scenario_id_pattern")
+  scenarioIdNamespace  String?             @map("scenario_id_namespace")
   trackerIntegrationId String?             @map("tracker_integration_id") @db.Uuid
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
@@ -149,6 +151,7 @@ model Repository {
   discoverRuns         DiscoverRun[]
   frameworkBuilds      FrameworkBuild[]
   localTestRuns        LocalTestRun[]
+  scenarios            Scenario[]
   trackerIntegration   TrackerIntegration? @relation(fields: [trackerIntegrationId], references: [id], onDelete: SetNull)
 
   @@unique([provider, owner, name])
@@ -198,6 +201,10 @@ model LocalTestRun {
   status       LocalTestRunStatus @default(QUEUED)
   featurePath  String             @map("feature_path")
   scenarioLine Int?               @map("scenario_line")
+  scenarioId   String?            @map("scenario_id")
+  // Exact ID tag (e.g. "@ff-8f3a2c") resolved at run creation; set only for tag-sourced
+  // scenario IDs so the runner can target `--tags` instead of `path:line`.
+  scenarioTag  String?            @map("scenario_tag")
   command      String?
   exitCode     Int?               @map("exit_code")
   stdoutPath   String?            @map("stdout_path")
@@ -212,7 +219,27 @@ model LocalTestRun {
 
   @@index([status, createdAt])
   @@index([repositoryId, featurePath, createdAt])
+  @@index([repositoryId, scenarioId, createdAt])
   @@map("local_test_runs")
+}
+
+model Scenario {
+  id           String     @id @default(uuid()) @db.Uuid
+  repositoryId String     @map("repository_id") @db.Uuid
+  scenarioId   String     @map("scenario_id")
+  lastSeenPath String     @map("last_seen_path")
+  lastSeenLine Int        @map("last_seen_line")
+  lastSeenName String     @map("last_seen_name")
+  contentHash  String     @map("content_hash")
+  idSource     String     @map("id_source")
+  firstSeenAt  DateTime   @default(now()) @map("first_seen_at")
+  lastSeenAt   DateTime   @default(now()) @map("last_seen_at")
+  missingSince DateTime?  @map("missing_since")
+  repository   Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, scenarioId])
+  @@index([repositoryId, lastSeenAt])
+  @@map("scenarios")
 }
 
 model DiscoverRun {

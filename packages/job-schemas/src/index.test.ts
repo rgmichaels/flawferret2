@@ -8,6 +8,7 @@ import {
   cucumberFeatureCatalogResponseSchema,
   cucumberFeatureDetailResponseSchema,
   createJobRequestSchema,
+  createLocalTestRunRequestSchema,
   createTrackerIntegrationRequestSchema,
   discoverCoverageDecisionSchema,
   discoverRunResponseSchema,
@@ -200,6 +201,10 @@ describe("job schemas", () => {
       scenarioCount: 1,
       scenarios: [
         {
+          fingerprint: "6f1ed002ab5595859014ebf0951522d9",
+          id: "ff-8f3a2c",
+          idConflict: true,
+          idSource: "tag" as const,
           keyword: "Scenario",
           line: 5,
           steps: [
@@ -223,6 +228,15 @@ describe("job schemas", () => {
     };
 
     const catalog = cucumberFeatureCatalogResponseSchema.parse({
+      duplicateScenarioIds: [
+        {
+          id: "ff-8f3a2c",
+          locations: [
+            { line: 5, path: "features/login.feature" },
+            { line: 9, path: "features/logout.feature" },
+          ],
+        },
+      ],
       features: [feature],
       localPath: "/tmp/example",
       repository,
@@ -243,7 +257,24 @@ describe("job schemas", () => {
     });
 
     assert.equal(catalog.features[0].feature, "Login");
+    assert.equal(catalog.features[0].scenarios[0].id, "ff-8f3a2c");
+    assert.equal(catalog.duplicateScenarioIds[0].locations.length, 2);
     assert.equal(detail.associatedFiles[0].kind, "feature");
+    assert.deepEqual(detail.duplicateScenarioIds, []);
+    assert.throws(() =>
+      cucumberFeatureCatalogResponseSchema.parse({
+        features: [
+          {
+            ...feature,
+            scenarios: [{ ...feature.scenarios[0], idSource: "line" }],
+          },
+        ],
+        localPath: "/tmp/example",
+        repository,
+        root: "features",
+        totalScenarios: 1,
+      }),
+    );
   });
 
   it("parses local test run responses", () => {
@@ -276,6 +307,7 @@ describe("job schemas", () => {
       id: "run-1",
       repository,
       repositoryId: "repo-1",
+      scenarioId: "ff-8f3a2c",
       scenarioLine: 5,
       scope: "SCENARIO",
       startedAt: null,
@@ -288,6 +320,26 @@ describe("job schemas", () => {
 
     assert.equal(run.scope, "SCENARIO");
     assert.equal(run.status, "QUEUED");
+    assert.equal(run.scenarioId, "ff-8f3a2c");
+  });
+
+  it("accepts scenarioId or scenarioLine for local test run requests, not both", () => {
+    assert.equal(
+      createLocalTestRunRequestSchema.parse({ featurePath: "features/login.feature", scenarioId: "ff-8f3a2c" })
+        .scenarioId,
+      "ff-8f3a2c",
+    );
+    assert.equal(
+      createLocalTestRunRequestSchema.parse({ featurePath: "features/login.feature", scenarioLine: 5 }).scenarioLine,
+      5,
+    );
+    assert.throws(() =>
+      createLocalTestRunRequestSchema.parse({
+        featurePath: "features/login.feature",
+        scenarioId: "ff-8f3a2c",
+        scenarioLine: 5,
+      }),
+    );
   });
 
   it("parses local test run stats responses", () => {
@@ -297,6 +349,8 @@ describe("job schemas", () => {
       completedRuns: 4,
       failedRuns: 1,
       failureRate: 0.25,
+      lastRunAt: "2026-10-01T10:00:00.000Z",
+      lastStatus: "PASSED",
       maxDurationMs: 1500,
       minDurationMs: 900,
       passedRuns: 3,
@@ -308,6 +362,7 @@ describe("job schemas", () => {
 
     assert.equal(stats.passRate, 0.75);
     assert.equal(stats.averageDurationMs, 1200);
+    assert.equal(stats.lastStatus, "PASSED");
   });
 
   it("parses local test run output responses", () => {

@@ -7,6 +7,7 @@ import type {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { AppShell } from "../../../app-shell";
+import { DuplicateScenarioIdsWarning, ScenarioIdBadge } from "../../scenario-id-badge";
 import { ScenarioExplainer } from "./scenario-explainer";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -331,6 +332,7 @@ export default async function FeatureDetailPage({
                 </div>
                 <span>{detail.feature.scenarioCount} total</span>
               </div>
+              <DuplicateScenarioIdsWarning duplicates={detail.duplicateScenarioIds} />
               {detail.feature.scenarios.length === 0 ? (
                 <p className="empty">No scenarios found in this feature.</p>
               ) : (
@@ -345,6 +347,7 @@ export default async function FeatureDetailPage({
                           </span>
                         </div>
                         <div className="scenario-badges">
+                          <ScenarioIdBadge scenario={scenario} />
                           {scenario.unmatchedStepCount > 0 ? (
                             <span className="unmatched-step-badge">
                               {scenario.unmatchedStepCount} unmatched

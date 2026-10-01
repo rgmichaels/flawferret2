@@ -88,6 +88,7 @@ import {
   createFrameworkFiles,
 } from "./framework-template.js";
 import { installFrameworkDependencies, openFrameworkFolder, validateFrameworkSmokeTest } from "./framework-validation.js";
+import { recordScenarioSnapshots, resolveScenarioIdInFeature, scenarioIdentityOf } from "./scenario-identity.js";
 
 const execFileAsync = promisify(execFile);
 const DIFF_OUTPUT_LIMIT = 60_000;
@@ -317,6 +318,11 @@ const localTestRunsQueryOpenApiSchema = {
       default: 1,
       minimum: 1,
       type: "integer",
+    },
+    scenarioId: {
+      description: "Scenario tag ID (without @) or fingerprint.",
+      minLength: 1,
+      type: "string",
     },
     scenarioLine: {
       minimum: 1,
@@ -635,6 +641,7 @@ const toLocalTestRunResponse = (run: {
   id: string;
   repository: Parameters<typeof toRepositoryResponse>[0];
   repositoryId: string;
+  scenarioId: string | null;
   scenarioLine: number | null;
   scope: LocalTestRunResponse["scope"];
   startedAt: Date | null;
@@ -654,6 +661,7 @@ const toLocalTestRunResponse = (run: {
   id: run.id,
   repository: toRepositoryResponse(run.repository),
   repositoryId: run.repositoryId,
+  scenarioId: run.scenarioId,
   scenarioLine: run.scenarioLine,
   scope: run.scope,
   startedAt: run.startedAt?.toISOString() ?? null,
@@ -664,9 +672,11 @@ const toLocalTestRunResponse = (run: {
   workerId: run.workerId,
 });
 
+// `runs` must be ordered newest first; an empty list means "never run".
 const toLocalTestRunStatsResponse = (
   runs: Array<{
     completedAt: Date | null;
+    createdAt: Date;
     startedAt: Date | null;
     status: LocalTestRunResponse["status"];
   }>,
@@ -689,6 +699,8 @@ const toLocalTestRunStatsResponse = (
     completedRuns,
     failedRuns,
     failureRate: assertedRuns > 0 ? failedRuns / assertedRuns : null,
+    lastRunAt: runs[0]?.createdAt.toISOString() ?? null,
+    lastStatus: runs[0]?.status ?? null,
     maxDurationMs: durations.length > 0 ? Math.max(...durations) : null,
     minDurationMs: durations.length > 0 ? Math.min(...durations) : null,
     passedRuns,
@@ -2332,9 +2344,21 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     }
 
     try {
-      return await buildFeatureCatalog({
+      const catalog = await buildFeatureCatalog({
         repository: toRepositoryResponse(repository),
+        scenarioIdPattern: repository.scenarioIdPattern,
       });
+
+      if (catalog.localPath) {
+        await recordScenarioSnapshots({
+          features: catalog.features,
+          logger: server.log,
+          markMissing: true,
+          repositoryId: repository.id,
+        });
+      }
+
+      return catalog;
     } catch (error) {
       return reply.status(409).send({
         error: "FeatureCatalogUnavailable",
@@ -2381,6 +2405,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       const detail = await buildFeatureDetail({
         featurePath: query.path,
         repository: toRepositoryResponse(repository),
+        scenarioIdPattern: repository.scenarioIdPattern,
       });
 
       if (!detail) {
@@ -2389,6 +2414,13 @@ export const buildServer = async (): Promise<FastifyInstance> => {
           message: "Feature file not found.",
         });
       }
+
+      await recordScenarioSnapshots({
+        features: [detail.feature],
+        logger: server.log,
+        markMissing: false,
+        repositoryId: repository.id,
+      });
 
       return detail;
     } catch (error) {
@@ -2433,6 +2465,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       const detail = await buildFeatureDetail({
         featurePath: body.path,
         repository: toRepositoryResponse(repository),
+        scenarioIdPattern: repository.scenarioIdPattern,
       });
 
       if (!detail) {
@@ -2477,6 +2510,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         featurePath: z.string().trim().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(25).default(5),
         page: z.coerce.number().int().min(1).default(1),
+        scenarioId: z.string().trim().min(1).optional(),
       })
       .parse(request.query);
 
@@ -2496,6 +2530,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const where = {
       repositoryId: params.id,
       ...(query.featurePath ? { featurePath: query.featurePath } : {}),
+      ...(query.scenarioId ? { scenarioId: query.scenarioId } : {}),
     };
 
     const [runs, totalRuns] = await Promise.all([
@@ -2537,6 +2572,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
     const query = z
       .object({
         featurePath: z.string().trim().min(1).optional(),
+        scenarioId: z.string().trim().min(1).optional(),
         scenarioLine: z.coerce.number().int().positive().optional(),
       })
       .parse(request.query);
@@ -2560,12 +2596,14 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       },
       select: {
         completedAt: true,
+        createdAt: true,
         startedAt: true,
         status: true,
       },
       where: {
         repositoryId: params.id,
         ...(query.featurePath ? { featurePath: query.featurePath } : {}),
+        ...(query.scenarioId ? { scenarioId: query.scenarioId } : {}),
         ...(query.scenarioLine ? { scenarioLine: query.scenarioLine } : {}),
       },
     });
@@ -2609,6 +2647,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       detail = await buildFeatureDetail({
         featurePath: body.featurePath,
         repository: toRepositoryResponse(repository),
+        scenarioIdPattern: repository.scenarioIdPattern,
       });
     } catch (error) {
       return reply.status(409).send({
@@ -2631,12 +2670,62 @@ export const buildServer = async (): Promise<FastifyInstance> => {
       });
     }
 
+    let scenarioTarget: { scenarioId: string; scenarioLine: number; scenarioTag: string | null } | null = null;
+
+    if (body.scenarioId) {
+      // detail.feature carries repo-wide duplicate flags, so an ambiguous ID is refused here
+      // and the runner never targets two scenarios by accident.
+      const resolution = resolveScenarioIdInFeature(detail.feature, body.scenarioId);
+
+      if (resolution.status === "not_found") {
+        return reply.status(400).send({
+          error: "ScenarioNotFound",
+          message: `Scenario ID "${body.scenarioId}" was not found in ${detail.feature.path}.`,
+        });
+      }
+
+      if (resolution.status === "ambiguous") {
+        const locations = detail.duplicateScenarioIds.find((duplicate) => duplicate.id === body.scenarioId)?.locations;
+
+        return reply.status(400).send({
+          error: "AmbiguousScenarioId",
+          message: `Scenario ID "${body.scenarioId}" is ambiguous${
+            locations ? ` (found at ${locations.map((location) => `${location.path}:${location.line}`).join(", ")})` : ""
+          }. Give each scenario a unique ID tag, not reused on a Feature, Rule or Examples line, before running it by ID.`,
+        });
+      }
+
+      const { scenario } = resolution.match;
+      scenarioTarget = {
+        scenarioId: scenarioIdentityOf(scenario),
+        scenarioLine: scenario.line,
+        scenarioTag: scenario.idSource === "tag" && scenario.id ? `@${scenario.id}` : null,
+      };
+    }
+
+    await recordScenarioSnapshots({
+      features: [detail.feature],
+      logger: server.log,
+      markMissing: false,
+      repositoryId: repository.id,
+    });
+
+    const scenarioLine = scenarioTarget?.scenarioLine ?? body.scenarioLine ?? null;
+    // Line-targeted runs still execute `path:line`; they only record the scenario's current
+    // identity (when unambiguous) so per-scenario history accrues.
+    const lineScenario = body.scenarioLine
+      ? detail.feature.scenarios.find((scenario) => scenario.line === body.scenarioLine && !scenario.idConflict)
+      : undefined;
+    const scenarioId = scenarioTarget?.scenarioId ?? (lineScenario ? scenarioIdentityOf(lineScenario) : null);
+
     const run = await prisma.localTestRun.create({
       data: {
         featurePath: body.featurePath,
         repositoryId: params.id,
-        scenarioLine: body.scenarioLine ?? null,
-        scope: body.scenarioLine ? "SCENARIO" : "FEATURE",
+        scenarioId,
+        scenarioLine,
+        scenarioTag: scenarioTarget?.scenarioTag ?? null,
+        scope: scenarioLine ? "SCENARIO" : "FEATURE",
       },
       include: {
         repository: {

@@ -1,5 +1,6 @@
 import type {
   CucumberAssociatedFile,
+  CucumberDuplicateScenarioId,
   CucumberFeatureCatalogResponse,
   CucumberFeatureDetailResponse,
   CucumberFeatureSummary,
@@ -7,6 +8,7 @@ import type {
   CucumberStep,
   RepositoryResponse,
 } from "@flawferret2/job-schemas";
+import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -25,6 +27,7 @@ const ASSOCIATED_FILE_DIRS = [
 const MAX_FEATURE_BYTES = 400_000;
 const SKIPPED_DIRECTORIES = new Set([".git", "dist", "node_modules", "reports"]);
 const STEP_KEYWORDS = new Set(["Given", "When", "Then", "And", "But"]);
+export const DEFAULT_SCENARIO_ID_PATTERN = /^@ff-[0-9a-f]{6,8}$/;
 
 const normalizeRelativePath = (value: string) => value.split(sep).join("/");
 
@@ -71,23 +74,148 @@ const walkFiles = async (root: string): Promise<string[]> => {
   return nested.flat();
 };
 
+export type ScenarioIdPattern = RegExp | string | null | undefined;
+
+const MAX_SCENARIO_ID_PATTERN_LENGTH = 200;
+
+// String patterns (e.g. Repository.scenarioIdPattern) must match the whole tag; an
+// invalid, overlong, or not standalone-compilable string (e.g. `a)|(b`, which would escape
+// the anchors) falls back to the default so a bad setting cannot break the catalog.
+export const resolveScenarioIdPattern = (pattern: ScenarioIdPattern): RegExp => {
+  if (pattern instanceof RegExp) {
+    return new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, ""));
+  }
+
+  const source = pattern?.trim();
+  if (!source || source.length > MAX_SCENARIO_ID_PATTERN_LENGTH) {
+    return DEFAULT_SCENARIO_ID_PATTERN;
+  }
+
+  try {
+    new RegExp(source);
+    return new RegExp(`^(?:${source})$`);
+  } catch {
+    return DEFAULT_SCENARIO_ID_PATTERN;
+  }
+};
+
+// Patterns may be written with or without the leading "@"; `id` never carries it.
+const toScenarioId = (tag: string, pattern: RegExp) => {
+  const bareTag = tag.slice(1);
+
+  return pattern.test(tag) || (!bareTag.startsWith("@") && pattern.test(bareTag)) ? bareTag : null;
+};
+
+const sha1 = (value: string) => createHash("sha1").update(value).digest("hex");
+
+const normalizeScenarioName = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
+
+const stepTextHash = (scenario: CucumberScenario) =>
+  sha1(scenario.steps.map((step) => `${step.keyword} ${step.text.trim().replace(/\s+/g, " ")}`).join("\n"));
+
+const groupBy = <T>(items: T[], keyOf: (item: T) => string) => {
+  const groups = new Map<string, T[]>();
+  items.forEach((item) => {
+    const key = keyOf(item);
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  });
+  return groups;
+};
+
+// sha1(path + "\0" + normalizedName); same-name scenarios in one file are disambiguated
+// by a step-text hash, then by their order among identical scenarios as a last resort.
+const assignFingerprints = (relativePath: string, scenarios: CucumberScenario[]) => {
+  groupBy(scenarios, (scenario) => normalizeScenarioName(scenario.name)).forEach((sameName, normalizedName) => {
+    const base = `${relativePath}\0${normalizedName}`;
+
+    if (sameName.length === 1) {
+      sameName[0].fingerprint = sha1(base);
+      return;
+    }
+
+    groupBy(sameName, stepTextHash).forEach((sameSteps, stepHash) => {
+      sameSteps.forEach((scenario, orderIndex) => {
+        scenario.fingerprint =
+          sameSteps.length === 1 ? sha1(`${base}\0${stepHash}`) : sha1(`${base}\0${stepHash}\0${orderIndex}`);
+      });
+    });
+  });
+};
+
+const toScenarioIdentity = (tags: string[], pattern: RegExp) => {
+  const ids = [...new Set(tags.map((tag) => toScenarioId(tag, pattern)).filter((id) => id !== null))];
+
+  if (ids.length === 1) {
+    return { id: ids[0], idConflict: false, idSource: "tag" as const };
+  }
+
+  // Several different ID tags on one scenario: use none and flag it.
+  return { id: null, idConflict: ids.length > 1, idSource: "fingerprint" as const };
+};
+
+// Duplicate IDs are reported, never merged: every scenario sharing an ID is flagged.
+export const markDuplicateScenarioIds = (features: CucumberFeatureSummary[]): CucumberDuplicateScenarioId[] => {
+  const locationsById = new Map<string, CucumberScenario[]>();
+  const pathByScenario = new Map<CucumberScenario, string>();
+
+  features.forEach((feature) => {
+    feature.scenarios.forEach((scenario) => {
+      if (scenario.id) {
+        locationsById.set(scenario.id, [...(locationsById.get(scenario.id) ?? []), scenario]);
+        pathByScenario.set(scenario, feature.path);
+      }
+    });
+  });
+
+  return [...locationsById.entries()]
+    .filter(([, scenarios]) => scenarios.length > 1)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, scenarios]) => {
+      scenarios.forEach((scenario) => {
+        scenario.idConflict = true;
+      });
+
+      return {
+        id,
+        locations: scenarios.map((scenario) => ({
+          line: scenario.line,
+          path: pathByScenario.get(scenario) ?? "",
+        })),
+      };
+    });
+};
+
 export const parseFeatureFile = ({
   content,
   modifiedAt,
   relativePath,
+  scenarioIdPattern,
   stepDefinitions = [],
 }: {
   content: string;
   modifiedAt: Date;
   relativePath: string;
+  scenarioIdPattern?: ScenarioIdPattern;
   stepDefinitions?: StepDefinition[];
 }): CucumberFeatureSummary => {
+  const idPattern = resolveScenarioIdPattern(scenarioIdPattern);
   const lines = content.split(/\r?\n/);
   const scenarios: CucumberScenario[] = [];
   const featureTags = new Set<string>();
   let description: string | null = null;
   let feature = relativePath.split("/").pop()?.replace(/\.feature$/i, "") ?? relativePath;
   let pendingTags: string[] = [];
+  // ID-pattern tags on Feature/Rule/Examples lines are never scenario IDs, but cucumber's
+  // `--tags` honors them, so a scenario sharing one in this file cannot be targeted alone.
+  const nonScenarioIds = new Set<string>();
+  const collectNonScenarioIds = () => {
+    pendingTags.forEach((tag) => {
+      const id = toScenarioId(tag, idPattern);
+      if (id !== null) {
+        nonScenarioIds.add(id);
+      }
+    });
+  };
 
   lines.forEach((rawLine, index) => {
     const line = rawLine.trim();
@@ -97,20 +225,33 @@ export const parseFeatureFile = ({
     }
 
     if (line.startsWith("@")) {
-      pendingTags = line.split(/\s+/).filter((tag) => tag.startsWith("@"));
-      pendingTags.forEach((tag) => featureTags.add(tag));
+      const lineTags = line.split(/\s+/).filter((tag) => tag.startsWith("@"));
+      pendingTags = [...pendingTags, ...lineTags];
+      lineTags.forEach((tag) => featureTags.add(tag));
       return;
     }
 
     const featureMatch = line.match(/^Feature:\s*(.+)$/i);
     if (featureMatch) {
       feature = featureMatch[1].trim();
+      collectNonScenarioIds();
+      pendingTags = [];
       return;
+    }
+
+    // Tags above Rule/Background/Examples belong to that block, not the next scenario.
+    if (line.match(/^(Rule|Background|Examples|Scenarios):/i)) {
+      if (!line.match(/^Background:/i)) {
+        collectNonScenarioIds();
+      }
+      pendingTags = [];
     }
 
     const scenarioMatch = line.match(/^(Scenario(?: Outline)?|Example):\s*(.+)$/i);
     if (scenarioMatch) {
       scenarios.push({
+        ...toScenarioIdentity(pendingTags, idPattern),
+        fingerprint: "",
         keyword: scenarioMatch[1],
         line: index + 1,
         name: scenarioMatch[2].trim(),
@@ -150,6 +291,13 @@ export const parseFeatureFile = ({
     }
   });
 
+  scenarios.forEach((scenario) => {
+    if (scenario.id && nonScenarioIds.has(scenario.id)) {
+      scenario.idConflict = true;
+    }
+  });
+  assignFingerprints(relativePath, scenarios);
+
   return {
     description,
     feature,
@@ -177,7 +325,11 @@ const findFeatureRoot = async (localPath: string) => {
   return localPath;
 };
 
-const listFeatureSummaries = async (localPath: string, stepDefinitions: StepDefinition[] = []) => {
+const listFeatureSummaries = async (
+  localPath: string,
+  stepDefinitions: StepDefinition[] = [],
+  scenarioIdPattern?: ScenarioIdPattern,
+) => {
   const root = await findFeatureRoot(localPath);
   const files = (await walkFiles(root))
     .filter((file) => file.endsWith(".feature"))
@@ -190,6 +342,7 @@ const listFeatureSummaries = async (localPath: string, stepDefinitions: StepDefi
         content,
         modifiedAt: fileStat.mtime,
         relativePath: normalizeRelativePath(relative(localPath, file)),
+        scenarioIdPattern,
         stepDefinitions,
       });
     }),
@@ -358,13 +511,34 @@ const listAssociatedFiles = async (localPath: string, featurePath: string): Prom
   }));
 };
 
+// Parses every feature file of a checkout for identity only (no step matching), with
+// duplicate IDs marked repo-wide. Throws if the checkout cannot be read.
+export const parseRepositoryFeatures = async ({
+  localPath,
+  scenarioIdPattern,
+}: {
+  localPath: string;
+  scenarioIdPattern?: ScenarioIdPattern;
+}) => {
+  const { features } = await listFeatureSummaries(resolve(localPath), [], scenarioIdPattern);
+  const duplicateScenarioIds = markDuplicateScenarioIds(features);
+
+  return {
+    duplicateScenarioIds,
+    features,
+  };
+};
+
 export const buildFeatureCatalog = async ({
   repository,
+  scenarioIdPattern,
 }: {
   repository: RepositoryResponse;
+  scenarioIdPattern?: ScenarioIdPattern;
 }): Promise<CucumberFeatureCatalogResponse> => {
   if (!repository.localPath) {
     return {
+      duplicateScenarioIds: [],
       features: [],
       localPath: null,
       repository,
@@ -379,9 +553,11 @@ export const buildFeatureCatalog = async ({
     path,
   }));
   const stepDefinitions = await readStepDefinitions(localPath, associatedFiles);
-  const { features, root } = await listFeatureSummaries(localPath, stepDefinitions);
+  const { features, root } = await listFeatureSummaries(localPath, stepDefinitions, scenarioIdPattern);
+  const duplicateScenarioIds = markDuplicateScenarioIds(features);
 
   return {
+    duplicateScenarioIds,
     features,
     localPath,
     repository,
@@ -393,9 +569,11 @@ export const buildFeatureCatalog = async ({
 export const buildFeatureDetail = async ({
   featurePath,
   repository,
+  scenarioIdPattern,
 }: {
   featurePath: string;
   repository: RepositoryResponse;
+  scenarioIdPattern?: ScenarioIdPattern;
 }): Promise<CucumberFeatureDetailResponse | null> => {
   if (!repository.localPath || featurePath.length === 0 || featurePath.startsWith("/")) {
     return null;
@@ -417,16 +595,26 @@ export const buildFeatureDetail = async ({
   const content = await readFile(fullPath, "utf8");
   const associatedFiles = await listAssociatedFiles(localPath, normalizeRelativePath(relative(localPath, fullPath)));
   const stepDefinitions = await readStepDefinitions(localPath, associatedFiles);
+  const feature = parseFeatureFile({
+    content,
+    modifiedAt: fileStat.mtime,
+    relativePath: normalizeRelativePath(relative(localPath, fullPath)),
+    scenarioIdPattern,
+    stepDefinitions,
+  });
+  // Duplicates are detected repo-wide (without step matching, which identity does not need);
+  // only duplicates involving this file are reported, with every location.
+  const { features: repositoryFeatures } = await listFeatureSummaries(localPath, [], scenarioIdPattern);
+  const duplicateScenarioIds = markDuplicateScenarioIds([
+    feature,
+    ...repositoryFeatures.filter((candidate) => candidate.path !== feature.path),
+  ]).filter((duplicate) => duplicate.locations.some((location) => location.path === feature.path));
 
   return {
     associatedFiles,
     content,
-    feature: parseFeatureFile({
-      content,
-      modifiedAt: fileStat.mtime,
-      relativePath: normalizeRelativePath(relative(localPath, fullPath)),
-      stepDefinitions,
-    }),
+    duplicateScenarioIds,
+    feature,
     localPath,
     repository,
   };

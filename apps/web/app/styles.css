@@ -4058,6 +4058,38 @@ tr:has(.beacon--decision) {
   color: #dc2626;
 }
 
+.scenario-id-badge {
+  background: #eef2f7;
+  border-radius: 999px;
+  color: var(--ink);
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.scenario-id-badge.unstable {
+  background: #fef3c7;
+  color: var(--signal-decision);
+  font-family: var(--font-body);
+}
+
+.scenario-id-badge.conflict {
+  background: #fee2e2;
+  color: var(--signal-attention);
+}
+
+.scenario-id-warning {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  font-size: 13px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+}
+
 .scenario-step-list {
   display: grid;
   gap: 8px;
