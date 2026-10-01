@@ -10,6 +10,7 @@ import {
   buildFeatureDetail,
   markDuplicateScenarioIds,
   parseFeatureFile,
+  resolveScenarioIdPattern,
 } from "./cucumber-features.js";
 
 const tempRoots: string[] = [];
@@ -466,6 +467,18 @@ describe("cucumber scenario identity", () => {
     assert.equal(summary.scenarios[0].id, "ff-8f3a2c");
   });
 
+  it("falls back to the default pattern when a string pattern is overlong or escapes its anchors", () => {
+    assert.equal(resolveScenarioIdPattern(`@TC-${"\\d".repeat(100)}`), resolveScenarioIdPattern(null));
+    assert.equal(resolveScenarioIdPattern("a)|(b"), resolveScenarioIdPattern(null));
+    assert.equal(resolveScenarioIdPattern("@TC-\\d+").test("@TC-12"), true);
+
+    const summary = parse(["Feature: Login", "", "  @anything", "  Scenario: Escaped", "    Given a step"], {
+      scenarioIdPattern: "a)|(.*",
+    });
+
+    assert.equal(summary.scenarios[0].id, null);
+  });
+
   it("ignores an ID tag on the Feature line", () => {
     const summary = parse([
       "@ff-8f3a2c",
@@ -506,6 +519,96 @@ describe("cucumber scenario identity", () => {
     assert.equal(summary.scenarios[0].id, "ff-aaaaaa");
     assert.equal(summary.scenarios[1].id, null);
     assert.equal(summary.scenarios[2].id, null);
+  });
+
+  it("flags a scenario whose ID tag also sits on the Feature line of the same file", () => {
+    const summary = parse([
+      "@ff-8f3a2c",
+      "Feature: Login",
+      "",
+      "  @ff-8f3a2c",
+      "  Scenario: Tagged",
+      "    Given a step",
+      "",
+      "  @ff-111111",
+      "  Scenario: Other",
+      "    Given a step",
+    ]);
+
+    assert.equal(summary.scenarios[0].id, "ff-8f3a2c");
+    assert.equal(summary.scenarios[0].idConflict, true);
+    assert.equal(summary.scenarios[1].idConflict, false);
+    assert.deepEqual(summary.tags, ["@ff-111111", "@ff-8f3a2c"]);
+  });
+
+  it("flags a scenario whose ID tag also sits on a Rule line of the same file", () => {
+    const summary = parse([
+      "Feature: Login",
+      "",
+      "  @ff-cccccc",
+      "  Rule: Passwords",
+      "",
+      "    @ff-cccccc",
+      "    Example: Strong password",
+      "      Given a strong password",
+    ]);
+
+    assert.equal(summary.scenarios[0].id, "ff-cccccc");
+    assert.equal(summary.scenarios[0].idConflict, true);
+  });
+
+  it("flags a scenario whose ID tag also sits above another outline's Examples", () => {
+    const summary = parse([
+      "Feature: Login",
+      "",
+      "  @ff-aaaaaa",
+      "  Scenario Outline: Locked account",
+      "    Given <user> is locked",
+      "",
+      "    @ff-bbbbbb",
+      "    Examples:",
+      "      | user  |",
+      "      | alice |",
+      "",
+      "  @ff-bbbbbb",
+      "  Scenario: Valid password",
+      "    Given I am on the login page",
+    ]);
+
+    assert.equal(summary.scenarios[0].idConflict, false);
+    assert.equal(summary.scenarios[1].id, "ff-bbbbbb");
+    assert.equal(summary.scenarios[1].idConflict, true);
+  });
+
+  it("does not flag scenarios when Feature, Rule and Examples ID tags differ from theirs", () => {
+    const summary = parse([
+      "@ff-000001",
+      "Feature: Login",
+      "",
+      "  @ff-aaaaaa",
+      "  Scenario Outline: Locked account",
+      "    Given <user> is locked",
+      "",
+      "    @ff-000002",
+      "    Examples:",
+      "      | user  |",
+      "      | alice |",
+      "",
+      "  @ff-000003",
+      "  Rule: Passwords",
+      "",
+      "    @ff-cccccc",
+      "    Example: Strong password",
+      "      Given a strong password",
+    ]);
+
+    assert.deepEqual(
+      summary.scenarios.map((scenario) => [scenario.id, scenario.idConflict]),
+      [
+        ["ff-aaaaaa", false],
+        ["ff-cccccc", false],
+      ],
+    );
   });
 
   it("does not report duplicates from parsing alone", () => {

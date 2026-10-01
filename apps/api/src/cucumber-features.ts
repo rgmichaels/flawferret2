@@ -76,19 +76,23 @@ const walkFiles = async (root: string): Promise<string[]> => {
 
 export type ScenarioIdPattern = RegExp | string | null | undefined;
 
+const MAX_SCENARIO_ID_PATTERN_LENGTH = 200;
+
 // String patterns (e.g. Repository.scenarioIdPattern) must match the whole tag; an
-// invalid string falls back to the default so a bad setting cannot break the catalog.
+// invalid, overlong, or not standalone-compilable string (e.g. `a)|(b`, which would escape
+// the anchors) falls back to the default so a bad setting cannot break the catalog.
 export const resolveScenarioIdPattern = (pattern: ScenarioIdPattern): RegExp => {
   if (pattern instanceof RegExp) {
     return new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, ""));
   }
 
   const source = pattern?.trim();
-  if (!source) {
+  if (!source || source.length > MAX_SCENARIO_ID_PATTERN_LENGTH) {
     return DEFAULT_SCENARIO_ID_PATTERN;
   }
 
   try {
+    new RegExp(source);
     return new RegExp(`^(?:${source})$`);
   } catch {
     return DEFAULT_SCENARIO_ID_PATTERN;
@@ -201,6 +205,17 @@ export const parseFeatureFile = ({
   let description: string | null = null;
   let feature = relativePath.split("/").pop()?.replace(/\.feature$/i, "") ?? relativePath;
   let pendingTags: string[] = [];
+  // ID-pattern tags on Feature/Rule/Examples lines are never scenario IDs, but cucumber's
+  // `--tags` honors them, so a scenario sharing one in this file cannot be targeted alone.
+  const nonScenarioIds = new Set<string>();
+  const collectNonScenarioIds = () => {
+    pendingTags.forEach((tag) => {
+      const id = toScenarioId(tag, idPattern);
+      if (id !== null) {
+        nonScenarioIds.add(id);
+      }
+    });
+  };
 
   lines.forEach((rawLine, index) => {
     const line = rawLine.trim();
@@ -219,12 +234,16 @@ export const parseFeatureFile = ({
     const featureMatch = line.match(/^Feature:\s*(.+)$/i);
     if (featureMatch) {
       feature = featureMatch[1].trim();
+      collectNonScenarioIds();
       pendingTags = [];
       return;
     }
 
     // Tags above Rule/Background/Examples belong to that block, not the next scenario.
     if (line.match(/^(Rule|Background|Examples|Scenarios):/i)) {
+      if (!line.match(/^Background:/i)) {
+        collectNonScenarioIds();
+      }
       pendingTags = [];
     }
 
@@ -272,6 +291,11 @@ export const parseFeatureFile = ({
     }
   });
 
+  scenarios.forEach((scenario) => {
+    if (scenario.id && nonScenarioIds.has(scenario.id)) {
+      scenario.idConflict = true;
+    }
+  });
   assignFingerprints(relativePath, scenarios);
 
   return {

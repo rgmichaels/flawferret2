@@ -8,11 +8,11 @@ export function ScenarioIdBadge({ scenario }: { scenario: CucumberScenario }) {
         className="scenario-id-badge conflict"
         title={
           scenario.id
-            ? "This ID tag is used by more than one scenario; runs by ID are refused until it is unique."
+            ? "This ID tag is also used by another scenario, or by a Feature, Rule or Examples line in this file; runs by ID are refused until it is unique."
             : "This scenario has more than one ID tag, so none is used."
         }
       >
-        {scenario.id ? `Duplicate ID ${scenario.id}` : "Conflicting ID tags"}
+        {scenario.id ? `Conflicting ID ${scenario.id}` : "Conflicting ID tags"}
       </code>
     );
   }

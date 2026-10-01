@@ -50,7 +50,9 @@ export const toScenarioSnapshots = (features: CucumberFeatureSummary[]) => {
 /**
  * Best-effort `Scenario` upsert after a catalog/detail read (spec Decision 5).
  * A failure is logged and swallowed so the GET still succeeds. Only full-catalog
- * reads may mark unseen scenarios missing; a single-file read cannot tell.
+ * reads may mark unseen scenarios missing; a single-file read cannot tell. A full
+ * catalog with zero feature files (e.g. empty or wrong-branch checkout) never marks
+ * missing, so a transient bad checkout cannot flag the whole history.
  */
 export const recordScenarioSnapshots = async ({
   features,
@@ -69,7 +71,7 @@ export const recordScenarioSnapshots = async ({
     const { presentScenarioIds, scenarios } = toScenarioSnapshots(features);
 
     return await sync({
-      markMissing,
+      markMissing: markMissing && features.length > 0,
       presentScenarioIds,
       repositoryId,
       scenarios,

@@ -2691,7 +2691,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
           error: "AmbiguousScenarioId",
           message: `Scenario ID "${body.scenarioId}" is ambiguous${
             locations ? ` (found at ${locations.map((location) => `${location.path}:${location.line}`).join(", ")})` : ""
-          }. Give each scenario a unique ID tag before running it by ID.`,
+          }. Give each scenario a unique ID tag, not reused on a Feature, Rule or Examples line, before running it by ID.`,
         });
       }
 

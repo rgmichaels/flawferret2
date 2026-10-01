@@ -104,6 +104,28 @@ describe("scenario identity snapshots", () => {
 
     assert.deepEqual(calls, [{ markMissing: false, repositoryId: "repo-1", scenarioCount: 2 }]);
   });
+
+  it("never marks missing when a full catalog has no feature files", async () => {
+    const calls: Array<{ markMissing: boolean; scenarioCount: number }> = [];
+    const sync = async (input: { markMissing: boolean; scenarios: unknown[] }) => {
+      calls.push({ markMissing: input.markMissing, scenarioCount: input.scenarios.length });
+      return { markedMissing: 0, upserted: input.scenarios.length };
+    };
+
+    await recordScenarioSnapshots({ features: [], logger: silentLogger, markMissing: true, repositoryId: "repo-1", sync });
+    await recordScenarioSnapshots({
+      features: [checkout()],
+      logger: silentLogger,
+      markMissing: true,
+      repositoryId: "repo-1",
+      sync,
+    });
+
+    assert.deepEqual(calls, [
+      { markMissing: false, scenarioCount: 0 },
+      { markMissing: true, scenarioCount: 2 },
+    ]);
+  });
 });
 
 describe("scenario ID resolution", () => {

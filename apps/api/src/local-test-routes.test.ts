@@ -417,6 +417,43 @@ describe("local test run routes", () => {
     );
   });
 
+  it("refuses a scenario ID that is also a Feature-line tag in the same file and creates no run", async () => {
+    const { repository } = await createRepositoryWithFiles({
+      "features/checkout.feature": [
+        "@ff-8f3a2c",
+        "Feature: Checkout",
+        "",
+        "  @ff-8f3a2c",
+        "  Scenario: Pay by card",
+        "    Given I have items",
+        "",
+        "  Scenario: Pay by gift card",
+        "    Given I have a gift card",
+      ].join("\n"),
+    });
+
+    const response = await server.inject({
+      method: "POST",
+      payload: {
+        featurePath: "features/checkout.feature",
+        scenarioId: "ff-8f3a2c",
+      },
+      url: `/repositories/${repository.id}/features/local-test-runs`,
+    });
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error, "AmbiguousScenarioId");
+    assert.match(response.json().message, /ambiguous/);
+    assert.equal(
+      await prisma.localTestRun.count({
+        where: {
+          repositoryId: repository.id,
+        },
+      }),
+      0,
+    );
+  });
+
   it("rejects unknown scenario IDs and scenarioId combined with scenarioLine", async () => {
     const { repository } = await createRepositoryWithFiles({
       "features/checkout.feature": taggedCheckoutFeature,

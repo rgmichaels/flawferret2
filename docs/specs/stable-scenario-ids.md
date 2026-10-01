@@ -40,20 +40,20 @@ Tension to resolve: `JobType` has only `ADD_PLAYWRIGHT_TEST`, and the job lifecy
 
 ## Edge cases (Phase 1 behavior)
 - **Duplicates** (copy-paste of a tagged scenario): flagged, never merged; runs by that ID refused. Duplicates are detected repo-wide, not per file.
-- **Scenario Outline**: the ID tags the outline; example rows are `<id>#<rowIndex>` (1-based, order in file). Running an outline by ID runs all rows. Per-example tags (tags above `Examples:`) are ignored for identity.
+- **Scenario Outline**: the ID tags the outline, and the outline has exactly one ID. Running an outline by ID runs all rows. Per-row IDs (`<id>#<rowIndex>`) are deferred, not implemented in Phase 1 (see Out of scope). Per-example tags (tags above `Examples:`) are ignored for identity, but an ID-pattern tag there that equals a scenario's ID in the same file is a conflict (see below).
 - **Existing parser bug to fix as part of this work**: tags placed above an `Examples:` block currently stay in `pendingTags` and leak onto the next scenario (the `Examples:` line is not consumed), which could assign an ID to the wrong scenario. Likewise, multiple consecutive tag lines overwrite rather than accumulate (`pendingTags = ...`), so an `@ff-` tag on a line above another tag line would be lost. Both must be fixed with tests.
-- **ID tag on Feature vs Scenario**: only scenario-level tags (own line(s) directly above the scenario/outline) count as the ID. An `@ff-` tag on the `Feature:` line is ignored for scenario identity and reported as a warning (it would be inherited by every scenario and break `--tags` targeting). Note `featureTags` currently collects every tag in the file, not just feature-level ones; do not rely on it for this.
-- **Rule blocks**: `Rule:` is currently skipped without effect; scenarios under a `Rule` are parsed as normal and identity is unaffected by the Rule. Tags above a `Rule:` line are not scenario IDs (consume and discard so they do not leak).
+- **ID tag on Feature vs Scenario**: only scenario-level tags (own line(s) directly above the scenario/outline) count as the ID. ID-pattern tags on `Feature:`, `Rule:` and `Examples:`/`Scenarios:` lines are never scenario IDs. cucumber-js `--tags` does honor them (they are inherited), so if one equals a scenario's own ID in the same file, that scenario gets `idConflict: true` and runs by that ID are refused (400 `AmbiguousScenarioId`); otherwise they are ignored silently. Only the same file matters because the runner scopes `--tags` by `featurePath`. There is no `warnings` field; a separate warning for Feature-line ID tags is deferred. Note `featureTags` currently collects every tag in the file, not just feature-level ones; do not rely on it for this.
+- **Rule blocks**: `Rule:` is currently skipped without effect; scenarios under a `Rule` are parsed as normal and identity is unaffected by the Rule. Tags above a `Rule:` line are not scenario IDs (consume and discard so they do not leak), apart from the same-file conflict check above.
 - **Background**: has no ID; unchanged.
 - **Tags on Examples**: see Outline; also must not leak (bug above).
 - **Renamed/moved untagged scenarios**: fingerprint changes, so history is not carried over; the UI shows the unstable indicator. This is the accepted limitation until IDs are assigned.
 - **Malformed tag** (e.g. `@ff-XYZ`, wrong length): not treated as an ID; scenario falls back to fingerprint.
-- **Multiple ID tags on one scenario**: treat as conflict, use none, warn.
+- **Multiple ID tags on one scenario**: treat as conflict, use none; surfaced as `idConflict: true` (no separate warning).
 - **Two identical-name untagged scenarios in one file**: disambiguated by step hash, then by order index as last resort.
 
 ## Out of scope
 - Phase 2 file writes (Assign IDs PR flow, new job type, new events). Phase 1 never modifies user files.
-- Per-example (row-level) tag IDs.
+- Per-example (row-level) IDs, both tag IDs and derived `<id>#<rowIndex>` row IDs (deferred).
 - Storing scenarios' full content in the DB; parsing stays on-demand.
 - Scenario Explorer UI redesign (three-pane inspector, flat table, tag health board) and per-scenario run buttons beyond exposing the API.
 - Non-Cucumber test frameworks; Playwright `.spec.ts` test identity.
@@ -66,7 +66,14 @@ Tension to resolve: `JobType` has only `ADD_PLAYWRIGHT_TEST`, and the job lifecy
 3. **API form**: `id` without the leading `@` (`ff-8f3a2c`); `tags` keep the `@`; the runner builds `--tags '@ff-8f3a2c'` (shell-quoted).
 4. **Phase 2 job type**: new `JobType`, decided in its own spec. Deferred.
 5. **`Scenario` upsert timing**: on catalog/detail read, accepting a write on a GET, so "never run" and rename tracking work without a run. Upsert must be best-effort: a write failure must not fail the GET.
-6. **Run-by-tag scoping (verified by code reading, not by executing cucumber-js)**: `buildLocalTestCommand` (`apps/ferret-runner/src/local-test-run.ts`) passes `--config <generated empty config>` (`module.exports = { default: {} }`), so the framework template's `cucumber.js` `paths: ["features/**/*.feature"]` is not applied; the positional `featurePath` is the only path. `featurePath` plus `--tags` therefore scopes to that file. Implementation must add a command-construction test and one real-run check.
+6. **Run-by-tag scoping**: `buildLocalTestCommand` (`apps/ferret-runner/src/local-test-run.ts`) passes `--config <generated empty config>` (`module.exports = { default: {} }`), so the framework template's `cucumber.js` `paths: ["features/**/*.feature"]` is not applied; the positional `featurePath` is the only path. `featurePath` plus `--tags` therefore scopes to that file. Covered by a command-construction test. Verified by a real cucumber-js v11 run in a throwaway project during the Phase 1 implementation (part 2): `--tags '@ff-8f3a2c' 'features/a.feature'` ran only the tagged scenario in `a.feature`, not the same-tagged scenario in `b.feature`. No artifact of that check is kept in the repo.
+
+## Known follow-ups
+- `Repository.scenarioIdPattern` has no route or UI to set it yet (latent). When one is added, validate it with Zod and cap its length (the parser already falls back to the default for patterns over 200 characters or that do not compile standalone).
+- Feature detail and run creation re-parse the whole repository per request for repo-wide duplicate detection; consider mtime-based caching.
+- Concurrent multi-row `Scenario` upserts could in theory deadlock; low risk because rows are written in a consistent order.
+- `featureTags` still collects every tag in a file, not just Feature-level tags.
+- The tag-parsing fix changed which tags the first scenario gets: tags above the `Feature:` line are no longer carried onto the first scenario (they were previously left in the pending tags), so its `tags` no longer include Feature-level tags.
 
 ## Original open questions (resolved above, kept for history)
 1. **Fixed `@ff-` prefix vs per-repo configurable pattern.** Repos with an existing convention (e.g. `@TC-\d+`) should not receive a second ID. Recommendation: build the parser against a configurable regex from day one (stored on `Repository`, e.g. `scenarioIdPattern`, nullable), defaulting to `@ff-[0-9a-f]{6,8}`. Phase 1 can read any matching existing tag as the ID; only Phase 2 generation needs a template, and it should generate `@ff-` only when no pattern is configured. Caveat: externally managed IDs (`@TC-123`) are human-assigned and can collide or be non-unique by design; duplicate detection covers that.
