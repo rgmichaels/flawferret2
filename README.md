@@ -138,7 +138,9 @@ tags, and acceptance criteria. Keep/hide decisions are saved as a
 Browses the Cucumber features and scenarios in a registered checkout,
 explains a scenario in plain language with AI, and runs a single feature or
 scenario locally (`LocalTestRun`) with captured stdout/stderr and pass-rate
-stats.
+stats. Scenarios carry a stable ID from an `@ff-…` tag (or an "unstable"
+fingerprint when untagged); runs and stats can be scoped to a scenario ID,
+and duplicated IDs are flagged and cannot be run by ID.
 
 ### Tracker (Jira) integrations (`/integrations`)
 

@@ -89,6 +89,7 @@ describe("discover coverage matching", () => {
   it("summarizes related feature catalog scenarios for a page", () => {
     const coverage = summarizeRelatedCoverage({
       catalog: {
+        duplicateScenarioIds: [],
         features: [
           {
             description: "",
@@ -98,6 +99,10 @@ describe("discover coverage matching", () => {
             scenarioCount: 1,
             scenarios: [
               {
+                fingerprint: "fingerprint",
+                id: null,
+                idConflict: false,
+                idSource: "fingerprint",
                 keyword: "Scenario",
                 line: 4,
                 name: "Login page loads",

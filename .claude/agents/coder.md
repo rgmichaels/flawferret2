@@ -19,11 +19,17 @@ trail and it should keep pointing at the technical role, not the alias.
 
 - **Workspace**: pnpm monorepo (`pnpm-workspace.yaml`). Packages import each other via `@flawferret2/*` workspace protocol. Run package-scoped commands with `pnpm --filter @flawferret2/<pkg> <script>` from repo root, or `pnpm <script>` from inside the package directory.
 - **apps/api** — Fastify + Zod. Routes currently live in `apps/api/src/server.ts` (large file — when adding routes, group them near related existing routes and follow the existing pattern: Zod schema for body/params, then a handler). Config is validated in `apps/api/src/config.ts` via a Zod env schema — add new env vars there, not as raw `process.env` reads.
-- **packages/db** — Prisma schema at `packages/db/prisma/schema.prisma`. Any model/enum change needs a new migration: `pnpm --filter @flawferret2/db db:migrate`. This project uses **event sourcing** for job state — the `JobEvent` enum lists every lifecycle transition. If your change adds a new state transition, add a new `JobEventType` value and emit it, rather than only mutating `Job.status`.
+- **packages/db** — Prisma schema at `packages/db/prisma/schema.prisma`. Any model/enum change needs a new migration file under `packages/db/prisma/migrations/` — write it without touching a database (hand-written SQL matching the existing migrations' style, or offline via `prisma migrate diff --from-schema-datamodel <old schema> --to-schema-datamodel prisma/schema.prisma --script`). See "Database safety" below: you never apply it. This project uses **event sourcing** for job state — the `JobEvent` enum lists every lifecycle transition. If your change adds a new state transition, add a new `JobEventType` value and emit it, rather than only mutating `Job.status`.
 - **packages/job-schemas** — shared Zod request/response schemas used by both `apps/api` and `apps/web`. Add new API contracts here first so both sides import the same types.
 - **apps/web** — Next.js 16 App Router, React 19. Pages read `NEXT_PUBLIC_API_URL` with a fallback of `http://localhost:4000` (see existing pages for the pattern). No global state library — data is fetched per-page.
 - **apps/ferret-runner** — the worker process. Long-running spawn/child_process logic already exists in `codex-invocation.ts`, `validation.ts`, `pull-request.ts`, `local-test-run.ts` — match their patterns (write stdout/stderr to per-run log files under a sanitized path, use `spawn` with explicit `cwd`, honor timeouts).
 - **apps/extension** — vanilla TypeScript MV3 extension, no framework. Keep it dependency-free unless there's a strong reason not to.
+
+## Database safety
+
+The `DATABASE_URL` in `.env` is a **shared Neon database**, not a disposable local one. You must never run anything that changes its schema or data outside normal test fixtures: no `db:migrate`, `prisma migrate dev`, `prisma migrate deploy`, `prisma migrate reset`, `prisma db push`, `prisma migrate resolve`, or raw DDL/SQL against it. Read-only checks like `prisma migrate status` or `db:validate` are fine.
+
+If tests fail because your new migration hasn't been applied (e.g. "column ... does not exist"), **stop and report it** — say which migration needs applying and which tests are blocked. Migrations are applied only by the main orchestrating session, so they're visible to the user in the main conversation; it will apply it and re-invoke you. Don't work around it by pointing tests at a different database either.
 
 ## Testing
 

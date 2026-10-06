@@ -8,7 +8,14 @@ loadEnv({
   path: resolve(process.cwd(), "../../.env"),
 });
 
-const { DEFAULT_QUEUE_CONTROL_ID, prisma, queueAutomaticCodexRetry } = await import("./index.js");
+const {
+  DEFAULT_QUEUE_CONTROL_ID,
+  assignLocalTestRunScenarioId,
+  listLocalTestRunTargetsWithoutScenarioId,
+  prisma,
+  queueAutomaticCodexRetry,
+  syncRepositoryScenarios,
+} = await import("./index.js");
 
 describe("db exports", () => {
   it("uses a stable default queue control id", () => {
@@ -184,5 +191,127 @@ describe("queueAutomaticCodexRetry", () => {
     assert.equal(untouchedJob.status, "BLOCKED");
     assert.equal(untouchedJob.autoRetryCount, 0);
     assert.equal(untouchedRun.status, "PR_CREATED");
+  });
+});
+
+describe("scenario identity helpers", () => {
+  const repositoryIds: string[] = [];
+
+  afterEach(async () => {
+    await prisma.repository.deleteMany({
+      where: {
+        id: {
+          in: repositoryIds.splice(0),
+        },
+      },
+    });
+  });
+
+  const createRepository = async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const repository = await prisma.repository.create({
+      data: {
+        cloneUrl: `https://github.com/rgmichaels/scenarios-${suffix}.git`,
+        defaultBranch: "main",
+        name: `scenarios-${suffix}`,
+        owner: "rgmichaels",
+        webUrl: `https://github.com/rgmichaels/scenarios-${suffix}`,
+      },
+    });
+    repositoryIds.push(repository.id);
+
+    return repository;
+  };
+
+  const snapshot = (scenarioId: string, lastSeenLine: number) => ({
+    contentHash: `hash-${scenarioId}-${lastSeenLine}`,
+    idSource: "tag" as const,
+    lastSeenLine,
+    lastSeenName: `Scenario ${scenarioId}`,
+    lastSeenPath: "features/a.feature",
+    scenarioId,
+  });
+
+  it("upserts scenarios, keeps present IDs, marks the rest missing and clears it on reappearance", async () => {
+    const repository = await createRepository();
+    const firstSeenAt = new Date("2026-10-01T10:00:00.000Z");
+
+    const first = await syncRepositoryScenarios({
+      markMissing: true,
+      repositoryId: repository.id,
+      scenarios: [snapshot("ff-aaaaaa", 3), snapshot("ff-bbbbbb", 8), snapshot("ff-aaaaaa", 3)],
+      seenAt: firstSeenAt,
+    });
+    assert.deepEqual(first, { markedMissing: 0, upserted: 2 });
+
+    const second = await syncRepositoryScenarios({
+      markMissing: true,
+      presentScenarioIds: ["ff-aaaaaa", "ff-cccccc"],
+      repositoryId: repository.id,
+      scenarios: [snapshot("ff-aaaaaa", 5)],
+      seenAt: new Date("2026-10-02T10:00:00.000Z"),
+    });
+    assert.deepEqual(second, { markedMissing: 1, upserted: 1 });
+
+    const rows = await prisma.scenario.findMany({
+      orderBy: { scenarioId: "asc" },
+      where: { repositoryId: repository.id },
+    });
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].lastSeenLine, 5);
+    assert.equal(rows[0].firstSeenAt.toISOString(), firstSeenAt.toISOString());
+    assert.equal(rows[0].lastSeenAt.toISOString(), "2026-10-02T10:00:00.000Z");
+    assert.equal(rows[1].missingSince?.toISOString(), "2026-10-02T10:00:00.000Z");
+
+    // Detail-style syncs never mark missing; reappearance clears missingSince.
+    await syncRepositoryScenarios({
+      markMissing: false,
+      repositoryId: repository.id,
+      scenarios: [snapshot("ff-bbbbbb", 9)],
+    });
+    const reappeared = await prisma.scenario.findUniqueOrThrow({
+      where: { repositoryId_scenarioId: { repositoryId: repository.id, scenarioId: "ff-bbbbbb" } },
+    });
+    assert.equal(reappeared.missingSince, null);
+    assert.equal(
+      (
+        await prisma.scenario.findUniqueOrThrow({
+          where: { repositoryId_scenarioId: { repositoryId: repository.id, scenarioId: "ff-aaaaaa" } },
+        })
+      ).missingSince,
+      null,
+    );
+  });
+
+  it("lists and fills scenario runs that have no scenario ID", async () => {
+    const repository = await createRepository();
+    await prisma.localTestRun.createMany({
+      data: [
+        { featurePath: "features/a.feature", repositoryId: repository.id, scenarioLine: 3, scope: "SCENARIO" },
+        { featurePath: "features/a.feature", repositoryId: repository.id, scenarioLine: 3, scope: "SCENARIO" },
+        { featurePath: "features/a.feature", repositoryId: repository.id, scope: "FEATURE" },
+        {
+          featurePath: "features/a.feature",
+          repositoryId: repository.id,
+          scenarioId: "ff-aaaaaa",
+          scenarioLine: 8,
+          scope: "SCENARIO",
+        },
+      ],
+    });
+
+    assert.deepEqual(await listLocalTestRunTargetsWithoutScenarioId({ repositoryId: repository.id }), [
+      { featurePath: "features/a.feature", scenarioLine: 3 },
+    ]);
+    assert.equal(
+      await assignLocalTestRunScenarioId({
+        featurePath: "features/a.feature",
+        repositoryId: repository.id,
+        scenarioId: "ff-bbbbbb",
+        scenarioLine: 3,
+      }),
+      2,
+    );
+    assert.deepEqual(await listLocalTestRunTargetsWithoutScenarioId({ repositoryId: repository.id }), []);
   });
 });

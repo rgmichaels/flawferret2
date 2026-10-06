@@ -13,8 +13,18 @@ const normalizeCommandPath = (value: string) => value.split(sep).join("/");
 const getLocalTestRunLogDir = (logDir: string, runId: string) =>
   resolve(logDir, "local-test-runs", sanitizePathPart(runId));
 
+// Cucumber tag expressions treat parentheses and backslashes as syntax.
+const escapeTagExpression = (tag: string) => tag.replace(/[\\()]/g, "\\$&");
+
+// Runs with a tag-sourced scenario ID (scenarioTag, resolved by the API at creation) are
+// targeted by `--tags` within their feature file so line shifts cannot retarget them;
+// fingerprint-sourced and legacy runs keep `path:line`.
 export const buildLocalTestCommand = (run: ClaimedLocalTestRun, configPath = "/dev/null") => {
-  const target = run.scenarioLine ? `${run.featurePath}:${run.scenarioLine}` : run.featurePath;
+  const target = run.scenarioTag
+    ? run.featurePath
+    : run.scenarioLine
+      ? `${run.featurePath}:${run.scenarioLine}`
+      : run.featurePath;
 
   return [
     "npx cucumber-js",
@@ -24,6 +34,7 @@ export const buildLocalTestCommand = (run: ClaimedLocalTestRun, configPath = "/d
     "--require 'src/steps/**/*.ts'",
     "--format progress-bar",
     "--format summary",
+    ...(run.scenarioTag ? [`--tags ${shellQuote(escapeTagExpression(run.scenarioTag))}`] : []),
     shellQuote(target),
   ].join(" ");
 };

@@ -28,6 +28,7 @@ You review code changes in the flawferret2 monorepo. You do not fix issues — y
 - Don't relitigate architecture decisions already reflected in the codebase (e.g. `server.ts` being one large file) unless the diff makes it materially worse.
 - Don't flag style nits that a formatter/linter would catch.
 - Don't report a finding you haven't verified against the actual file content — quote the specific line(s).
+- Never run anything that changes the shared Neon database in `.env` (`db:migrate`, `prisma migrate dev/deploy/reset/resolve`, `prisma db push`, raw DDL/SQL). Read-only checks like `prisma migrate status` are fine. If a diff's migration isn't applied and that blocks tests, report it — migrations are applied only by the main orchestrating session, so they're visible to the user.
 
 ## Output
 

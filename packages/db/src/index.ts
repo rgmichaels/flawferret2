@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
@@ -10,7 +11,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
-export type { Job, LocalTestRun, Prisma, Repository, Run, Worker } from "@prisma/client";
+export type { Job, LocalTestRun, Prisma, Repository, Run, Scenario, Worker } from "@prisma/client";
 
 export type ClaimNextQueuedJobResult = Awaited<ReturnType<typeof claimNextQueuedJob>>;
 export type ClaimedJob = NonNullable<ClaimNextQueuedJobResult["job"]>;
@@ -600,6 +601,149 @@ export const markLocalTestRunFailed = async ({
       repository: true,
     },
   });
+
+export type ScenarioSnapshot = {
+  contentHash: string;
+  idSource: "tag" | "fingerprint";
+  lastSeenLine: number;
+  lastSeenName: string;
+  lastSeenPath: string;
+  scenarioId: string;
+};
+
+const SCENARIO_UPSERT_BATCH_SIZE = 500;
+
+/**
+ * Records the scenarios seen in a parse of a repository checkout. One
+ * `INSERT ... ON CONFLICT` per batch keeps this to a handful of statements
+ * regardless of catalog size. Seen rows get `missingSince` cleared. When
+ * `markMissing` is set (full-catalog parses only), existing rows of the
+ * repository whose ID is not in `presentScenarioIds` (defaults to the upserted
+ * IDs) get `missingSince` set. Rows are never deleted.
+ */
+export const syncRepositoryScenarios = async ({
+  markMissing,
+  presentScenarioIds,
+  repositoryId,
+  scenarios,
+  seenAt = new Date(),
+}: {
+  markMissing: boolean;
+  presentScenarioIds?: string[];
+  repositoryId: string;
+  scenarios: ScenarioSnapshot[];
+  seenAt?: Date;
+}) => {
+  const uniqueScenarios = [...new Map(scenarios.map((scenario) => [scenario.scenarioId, scenario])).values()];
+  const batches: ScenarioSnapshot[][] = [];
+  for (let index = 0; index < uniqueScenarios.length; index += SCENARIO_UPSERT_BATCH_SIZE) {
+    batches.push(uniqueScenarios.slice(index, index + SCENARIO_UPSERT_BATCH_SIZE));
+  }
+
+  return prisma.$transaction(async (tx) => {
+    let upserted = 0;
+
+    for (const batch of batches) {
+      const values = batch.map(
+        (scenario) => Prisma.sql`(
+          ${randomUUID()}::uuid,
+          ${repositoryId}::uuid,
+          ${scenario.scenarioId},
+          ${scenario.lastSeenPath},
+          ${scenario.lastSeenLine},
+          ${scenario.lastSeenName},
+          ${scenario.contentHash},
+          ${scenario.idSource},
+          ${seenAt},
+          ${seenAt}
+        )`,
+      );
+
+      upserted += await tx.$executeRaw`
+        INSERT INTO scenarios (
+          id, repository_id, scenario_id, last_seen_path, last_seen_line, last_seen_name,
+          content_hash, id_source, first_seen_at, last_seen_at
+        )
+        VALUES ${Prisma.join(values)}
+        ON CONFLICT (repository_id, scenario_id) DO UPDATE SET
+          last_seen_path = EXCLUDED.last_seen_path,
+          last_seen_line = EXCLUDED.last_seen_line,
+          last_seen_name = EXCLUDED.last_seen_name,
+          content_hash = EXCLUDED.content_hash,
+          id_source = EXCLUDED.id_source,
+          last_seen_at = EXCLUDED.last_seen_at,
+          missing_since = NULL
+      `;
+    }
+
+    const markedMissing = markMissing
+      ? (
+          await tx.scenario.updateMany({
+            data: {
+              missingSince: seenAt,
+            },
+            where: {
+              missingSince: null,
+              repositoryId,
+              scenarioId: {
+                notIn: presentScenarioIds ?? uniqueScenarios.map((scenario) => scenario.scenarioId),
+              },
+            },
+          })
+        ).count
+      : 0;
+
+    return {
+      markedMissing,
+      upserted,
+    };
+  });
+};
+
+/** Distinct (featurePath, scenarioLine) targets of SCENARIO runs that predate scenario IDs. */
+export const listLocalTestRunTargetsWithoutScenarioId = async ({ repositoryId }: { repositoryId: string }) =>
+  (
+    await prisma.localTestRun.groupBy({
+      by: ["featurePath", "scenarioLine"],
+      orderBy: [{ featurePath: "asc" }, { scenarioLine: "asc" }],
+      where: {
+        repositoryId,
+        scenarioId: null,
+        scenarioLine: {
+          not: null,
+        },
+        scope: "SCENARIO",
+      },
+    })
+  ).flatMap((target) =>
+    target.scenarioLine === null ? [] : [{ featurePath: target.featurePath, scenarioLine: target.scenarioLine }],
+  );
+
+export const assignLocalTestRunScenarioId = async ({
+  featurePath,
+  repositoryId,
+  scenarioId,
+  scenarioLine,
+}: {
+  featurePath: string;
+  repositoryId: string;
+  scenarioId: string;
+  scenarioLine: number;
+}) =>
+  (
+    await prisma.localTestRun.updateMany({
+      data: {
+        scenarioId,
+      },
+      where: {
+        featurePath,
+        repositoryId,
+        scenarioId: null,
+        scenarioLine,
+        scope: "SCENARIO",
+      },
+    })
+  ).count;
 
 export const markJobRunning = async ({
   jobId,

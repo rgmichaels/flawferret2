@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario Explorer Mockups</title>
+<style>
+:root{
+  --ink:#12161f;--paper:#e9ecf2;--surface:#fff;--border:#d7dce6;--action:#2f4d8f;--muted:#5b6472;
+  --ok:#2f7d4f;--warn:#b8791c;--bad:#b3402d;--active:#1c7c86;--idle:#9aa2b1;--soft:#f4f6fa;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{--ink:#e8ebf2;--paper:#0f131b;--surface:#171c27;--border:#2a3242;--action:#8fa9e6;--muted:#9aa4b6;--soft:#1d2330;--ok:#5fb582;--warn:#e0a24a;--bad:#e5806d;--active:#5cc0cb;--idle:#6b7385}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/21px system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}.lede{color:var(--muted);margin:0 0 20px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.tabs label{padding:8px 14px;border:1px solid var(--border);background:var(--surface);border-radius:8px;cursor:pointer;font-weight:600}
+input[name=t]{position:absolute;opacity:0}
+#a:checked~.tabs label[for=a],#b:checked~.tabs label[for=b],#c:checked~.tabs label[for=c]{background:var(--action);color:#fff;border-color:var(--action)}
+@media (prefers-color-scheme:dark){#a:checked~.tabs label[for=a],#b:checked~.tabs label[for=b],#c:checked~.tabs label[for=c]{color:#0f131b}}
+.view{display:none}
+#a:checked~.v-a,#b:checked~.v-b,#c:checked~.v-c{display:block}
+.note{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--action);padding:10px 14px;border-radius:6px;margin-bottom:14px}
+.note b{display:block}
+.frame{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--soft)}
+.bar input{flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--ink)}
+.chip{padding:3px 10px;border:1px solid var(--border);border-radius:99px;font-size:12px;background:var(--surface);color:var(--muted)}
+.chip.on{background:var(--action);border-color:var(--action);color:#fff}
+@media (prefers-color-scheme:dark){.chip.on{color:#0f131b}}
+.mono{font-family:var(--mono);font-size:12px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.ok{background:var(--ok)}.bad{background:var(--bad)}.warn{background:var(--warn)}.idle{background:var(--idle)}.act{background:var(--active)}
+.tag{font-size:11px;padding:1px 7px;border-radius:4px;background:var(--soft);border:1px solid var(--border);color:var(--muted);margin-right:4px;font-family:var(--mono)}
+small,.muted{color:var(--muted)}
+button{font:inherit;font-weight:600;padding:6px 12px;border-radius:6px;border:1px solid var(--action);background:var(--action);color:#fff}
+@media (prefers-color-scheme:dark){button{color:#0f131b}}
+button.ghost{background:transparent;color:var(--action)}
+/* A */
+.a-grid{display:grid;grid-template-columns:220px 1fr 340px;min-height:520px}
+.a-grid>div{padding:12px 14px;border-right:1px solid var(--border)}.a-grid>div:last-child{border:0}
+.tree div{padding:3px 0}.tree .ind{margin-left:14px}.tree .sel{background:var(--soft);border-radius:4px;padding:3px 6px;font-weight:600}
+.srow{padding:10px 8px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:14px 1fr auto;gap:8px}
+.srow.sel{background:var(--soft);border-left:3px solid var(--action)}
+.step{display:grid;grid-template-columns:52px 1fr;gap:6px;padding:5px 0;border-bottom:1px dashed var(--border)}
+.step .k{color:var(--action);font-weight:600}
+.spark{display:inline-flex;gap:2px;vertical-align:middle}.spark i{width:5px;height:14px;border-radius:1px;display:block}
+@media(max-width:900px){.a-grid{grid-template-columns:1fr}.a-grid>div{border-right:0;border-bottom:1px solid var(--border)}}
+/* B */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border)}
+td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+tr.open td{background:var(--soft)}
+.drawer{padding:12px 16px 16px 40px;background:var(--soft);border-bottom:1px solid var(--border)}
+.tblscroll{overflow-x:auto}
+.tblscroll table{min-width:760px}
+@media(max-width:700px){.tblscroll table{min-width:0}.tblscroll tr:not(:has(.drawer)) :is(th,td):nth-child(3),.tblscroll tr:not(:has(.drawer)) :is(th,td):nth-child(4),.tblscroll tr:not(:has(.drawer)) :is(th,td):nth-child(5),.tblscroll tr:not(:has(.drawer)) :is(th,td):nth-child(7){display:none}.drawer{padding-left:16px}}
+/* C */
+.c-top{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px}
+.kpi{border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--surface)}
+.kpi b{font-size:22px;display:block}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 14px 14px}
+.col{background:var(--soft);border:1px solid var(--border);border-radius:8px;padding:10px}
+.col h3{margin:0 0 8px;font-size:13px;display:flex;justify-content:space-between}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px}
+.card strong{display:block;font-size:13px;line-height:18px}
+.bar-h{height:6px;border-radius:3px;background:var(--border);overflow:hidden;display:flex;margin:6px 0 2px}
+.bar-h i{display:block;height:100%}
+@media(max-width:900px){.c-top{grid-template-columns:1fr 1fr}.cols{grid-template-columns:1fr}}
+.foot{margin-top:16px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Scenario Explorer — redesign mockups</h1>
+<p class="lede">Three directions for <code>/features</code>. Sample data is invented; every element maps to fields that exist today (see "Data needed" under each).</p>
+
+<input type="radio" name="t" id="a" checked><input type="radio" name="t" id="b"><input type="radio" name="t" id="c">
+<div class="tabs">
+  <label for="a">A · Three-pane inspector</label>
+  <label for="b">B · Scenario table</label>
+  <label for="c">C · Tag health board</label>
+</div>
+
+<!-- ============ A ============ -->
+<div class="view v-a">
+<div class="note"><b>Scenario becomes the unit, not the feature.</b>Tree on the left, scenarios of the selected file in the middle, a full inspector (steps → step-definition links, run history, explain, run-this-scenario) on the right. Today scenarios are capped at 8 in the preview and the run button is feature-only.</div>
+<div class="frame">
+  <div class="bar"><input placeholder="Search feature, scenario, step, tag, file…"><span class="chip on">All</span><span class="chip">@smoke</span><span class="chip">@checkout</span><span class="chip">Unmatched only</span><span class="chip">Failing</span></div>
+  <div class="a-grid">
+    <div class="tree">
+      <small>FEATURES · 14 files · 63 scenarios</small>
+      <div>▾ features</div>
+      <div class="ind">▾ auth</div>
+      <div class="ind"><div class="ind sel">login.feature <small>6</small></div><div class="ind">signup.feature <small>4</small></div></div>
+      <div class="ind">▾ checkout</div>
+      <div class="ind"><div class="ind">cart.feature <small>9</small></div><div class="ind">payment.feature <small>7 · <span style="color:var(--bad)">2 unmatched</span></small></div></div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div><strong style="font-size:16px">Login</strong><br><small class="mono">features/auth/login.feature</small></div><button>▶ Run feature</button></div>
+      <div class="srow sel"><span class="dot ok"></span><div><strong>Valid credentials sign in</strong><br><span class="tag">@smoke</span><span class="tag">@auth</span></div><small>L12 · 2.1s</small></div>
+      <div class="srow"><span class="dot bad"></span><div><strong>Locked account shows error</strong><br><span class="tag">@auth</span></div><small>L24 · failed 2h ago</small></div>
+      <div class="srow"><span class="dot warn"></span><div><strong>Password reset email is sent</strong><br><span class="tag">@email</span> <small style="color:var(--bad)">1 unmatched step</small></div><small>L37 · never run</small></div>
+      <div class="srow"><span class="dot ok"></span><div><strong>Remember me persists session</strong></div><small>L49 · 1.8s</small></div>
+      <div class="srow"><span class="dot idle"></span><div><strong>Outline: invalid emails rejected</strong> <small>(Scenario Outline · 5 examples)</small></div><small>L58</small></div>
+      <div class="srow"><span class="dot ok"></span><div><strong>SSO redirect round-trips</strong><br><span class="tag">@sso</span></div><small>L71 · 4.4s</small></div>
+    </div>
+    <div>
+      <small>SCENARIO · line 12</small>
+      <h3 style="margin:2px 0 8px">Valid credentials sign in</h3>
+      <div style="display:flex;gap:6px;margin-bottom:12px"><button>▶ Run scenario</button><button class="ghost">Explain</button><button class="ghost">Open source</button></div>
+      <div class="step"><span class="k">Given</span><span>I am on the login page<br><code class="mono muted">steps/nav.ts:14</code></span></div>
+      <div class="step"><span class="k">When</span><span>I sign in as "standard_user"<br><code class="mono muted">steps/auth.ts:8</code></span></div>
+      <div class="step"><span class="k">Then</span><span>I see the inventory page<br><code class="mono muted">steps/assert.ts:31</code></span></div>
+      <p style="margin:14px 0 4px"><strong>Recent runs</strong></p>
+      <div class="spark"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="bad"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i></div>
+      <small> 7 / 8 passed · avg 2.0s</small>
+    </div>
+  </div>
+</div>
+<p class="foot"><b>Data needed:</b> all present — <code>CucumberScenario</code> (name/line/tags/steps/matchedDefinition) plus <code>LocalTestRun</code> filtered by <code>scenarioLine</code>. New work: a per-scenario run-stats endpoint (current stats are per feature) and a "Run scenario" button (API already accepts <code>scenarioLine</code>). Scenario Outline example counts would need a parser tweak.</p>
+</div>
+
+<!-- ============ B ============ -->
+<div class="view v-b">
+<div class="note"><b>Flat, sortable, cross-feature.</b>Answers "which scenarios are failing / unmatched / never run, anywhere?" without walking a tree. Row expands in place to show steps. Best for large suites.</div>
+<div class="frame">
+  <div class="bar"><input placeholder="Search…"><span class="chip on">Group: none</span><span class="chip">Group: feature</span><span class="chip">Group: tag</span><span class="chip">Status ▾</span><span class="chip">Tag ▾</span><span class="chip">Feature ▾</span></div>
+  <div class="tblscroll"><table>
+    <tr><th></th><th>Scenario</th><th>Feature</th><th>Tags</th><th>Steps</th><th>Last run</th><th>Pass rate</th><th></th></tr>
+    <tr><td><span class="dot bad"></span></td><td><strong>Locked account shows error</strong></td><td class="muted">Login</td><td><span class="tag">@auth</span></td><td>4/4</td><td>2h ago</td><td style="color:var(--bad)">62%</td><td><button class="ghost">▶</button></td></tr>
+    <tr><td><span class="dot warn"></span></td><td><strong>Password reset email is sent</strong></td><td class="muted">Login</td><td><span class="tag">@email</span></td><td style="color:var(--bad)">3/4</td><td class="muted">never</td><td class="muted">—</td><td><button class="ghost">▶</button></td></tr>
+    <tr class="open"><td><span class="dot ok"></span></td><td><strong>Valid credentials sign in ▾</strong></td><td class="muted">Login</td><td><span class="tag">@smoke</span><span class="tag">@auth</span></td><td>3/3</td><td>1d ago</td><td style="color:var(--ok)">88%</td><td><button class="ghost">▶</button></td></tr>
+    <tr><td colspan="8" style="padding:0"><div class="drawer">
+      <div class="step"><span class="k">Given</span><span>I am on the login page <code class="mono muted">steps/nav.ts:14</code></span></div>
+      <div class="step"><span class="k">When</span><span>I sign in as "standard_user" <code class="mono muted">steps/auth.ts:8</code></span></div>
+      <div class="step"><span class="k">Then</span><span>I see the inventory page <code class="mono muted">steps/assert.ts:31</code></span></div>
+      <div style="margin-top:8px"><button class="ghost">Explain</button> <button class="ghost">Open feature</button></div>
+    </div></td></tr>
+    <tr><td><span class="dot idle"></span></td><td><strong>Add item to cart</strong></td><td class="muted">Cart</td><td><span class="tag">@checkout</span></td><td>3/3</td><td class="muted">never</td><td class="muted">—</td><td><button class="ghost">▶</button></td></tr>
+    <tr><td><span class="dot warn"></span></td><td><strong>Card declined message</strong></td><td class="muted">Payment</td><td><span class="tag">@payment</span></td><td style="color:var(--bad)">2/5</td><td class="muted">never</td><td class="muted">—</td><td><button class="ghost">▶</button></td></tr>
+  </table></div>
+  <div class="bar" style="border-top:1px solid var(--border);border-bottom:0"><small>Showing 5 of 63 scenarios</small><span style="flex:1"></span><button class="ghost">Run 3 selected</button></div>
+</div>
+<p class="foot"><b>Data needed:</b> catalog already returns every scenario; sorting/filtering can be server-side on the existing page. Pass rate / last run need a per-scenario aggregate over <code>local_test_runs</code> (group by <code>feature_path, scenario_line</code>). Note: results are keyed by line number, so edits that shift lines orphan history — see the storage note.</p>
+</div>
+
+<!-- ============ C ============ -->
+<div class="view v-c">
+<div class="note"><b>Coverage-first overview.</b>Lead with health (matched steps, untested, failing), then slice scenarios by tag/area as columns. Aimed at "where are the gaps?" and feeds the Discover/ADD_PLAYWRIGHT_TEST flow with a "Create test" action on gaps.</div>
+<div class="frame">
+  <div class="c-top">
+    <div class="kpi"><small>Scenarios</small><b>63</b></div>
+    <div class="kpi"><small>Never run</small><b style="color:var(--warn)">21</b></div>
+    <div class="kpi"><small>Failing</small><b style="color:var(--bad)">3</b></div>
+    <div class="kpi"><small>Unmatched steps</small><b style="color:var(--bad)">5</b></div>
+  </div>
+  <div class="bar"><input placeholder="Search…"><span class="chip on">Group by tag</span><span class="chip">Group by folder</span><span class="chip">Hide healthy</span></div>
+  <div style="height:14px"></div>
+  <div class="cols">
+    <div class="col"><h3>@auth <small>12</small></h3>
+      <div class="bar-h"><i class="ok" style="width:66%"></i><i class="bad" style="width:17%"></i><i class="idle" style="width:17%"></i></div><small>8 pass · 2 fail · 2 never run</small>
+      <div style="height:8px"></div>
+      <div class="card"><span class="dot bad"></span><strong style="display:inline">Locked account shows error</strong><br><small>login.feature · L24</small></div>
+      <div class="card"><span class="dot bad"></span><strong style="display:inline">MFA code expires</strong><br><small>mfa.feature · L9</small></div>
+    </div>
+    <div class="col"><h3>@checkout <small>18</small></h3>
+      <div class="bar-h"><i class="ok" style="width:40%"></i><i class="warn" style="width:15%"></i><i class="idle" style="width:45%"></i></div><small>7 pass · 3 unmatched · 8 never run</small>
+      <div style="height:8px"></div>
+      <div class="card"><span class="dot warn"></span><strong style="display:inline">Card declined message</strong><br><small>payment.feature · 3 steps unmatched</small></div>
+      <div class="card"><span class="dot idle"></span><strong style="display:inline">Apply promo code</strong><br><small>cart.feature · never run</small> <button class="ghost" style="padding:1px 8px;font-size:12px">Create test</button></div>
+    </div>
+    <div class="col"><h3>Untagged <small>9</small></h3>
+      <div class="bar-h"><i class="idle" style="width:100%"></i></div><small>0 pass · 9 never run</small>
+      <div style="height:8px"></div>
+      <div class="card"><span class="dot idle"></span><strong style="display:inline">Footer links resolve</strong><br><small>site.feature · never run</small></div>
+      <div class="card"><small>+ 8 more</small></div>
+    </div>
+  </div>
+</div>
+<p class="foot"><b>Data needed:</b> tags, unmatched counts and scenario counts exist now. "Never run / failing" needs the same per-scenario run aggregate as B. A tag with zero scenarios can't be shown — tags only exist on parsed scenarios.</p>
+</div>
+
+</div>
+</body>
+</html>
