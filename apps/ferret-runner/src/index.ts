@@ -59,7 +59,11 @@ import {
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
 import { validateGeneratedWork } from "./validation.js";
-import { createJobWorktree, runWorktreeSweep } from "./worktree.js";
+import {
+  createJobWorktree,
+  resetJobWorktreeForFreshStart,
+  runWorktreeSweep,
+} from "./worktree.js";
 import { buildLocalTestCommand, prepareLocalTestCommand, runLocalTest } from "./local-test-run.js";
 
 const workerId = config.WORKER_ID ?? randomUUID();
@@ -2009,6 +2013,71 @@ while (!shouldStop) {
       worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
     },
   });
+
+  const worktreeReset = await resetJobWorktreeForFreshStart({
+    jobId: runningJob.id,
+    repositoryId: checkoutValidation.metadata.repositoryId,
+    repositoryLocalPath: checkoutValidation.metadata.localPath,
+    worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
+  });
+
+  if (worktreeReset.action === "removed") {
+    await appendJobEvent({
+      jobId: runningJob.id,
+      eventType: "WORKTREE_REMOVED",
+      message: "ferret-runner removed this job's previous worktree so the requeued job can start fresh.",
+      metadata: {
+        ...worktreeReset.removal,
+        runId: run.id,
+        workerId,
+      },
+    });
+  }
+
+  if (worktreeReset.action === "failed") {
+    await markRunFailed({
+      runId: run.id,
+    });
+
+    const blockedJob = await markJobBlocked({
+      jobId: runningJob.id,
+      workerId,
+    });
+
+    await appendJobEvent({
+      jobId: blockedJob.id,
+      eventType: "WORKTREE_REMOVAL_FAILED",
+      message: worktreeReset.message,
+      metadata: {
+        ...worktreeReset.metadata,
+        reason: "requeue-reset",
+        runId: run.id,
+        workerId,
+      },
+    });
+
+    await appendJobEvent({
+      jobId: blockedJob.id,
+      eventType: "JOB_BLOCKED",
+      message: worktreeReset.message,
+      metadata: {
+        ...worktreeReset.metadata,
+        runId: run.id,
+        workerId,
+      },
+    });
+
+    log("Blocked job while resetting the previous attempt's worktree", {
+      jobId: blockedJob.id,
+      reason: worktreeReset.message,
+      runId: run.id,
+    });
+
+    await setWorkerState({
+      status: "IDLE",
+    });
+    continue;
+  }
 
   const worktreeCreation = await createJobWorktree({
     jobId: runningJob.id,

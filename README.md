@@ -73,8 +73,11 @@ real checkout.
   `~/.flawferret/worktrees/<repositoryId>/job-<jobId>`), outside your
   checkout. Inside it the runner creates a local-only
   `flawferret/job-<jobId>` branch (full job id). Codex, dependency install,
-  validation, commit/push, and PR creation all run in the worktree. It
-  refuses to reuse an existing worktree directory or branch for the same job.
+  validation, commit/push, and PR creation all run in the worktree. Requeuing
+  a blocked job (`/requeue`) clears that job's previous worktree and branch
+  and starts fresh, but refuses (and stays `BLOCKED`) if the branch has
+  commits that aren't on any remote. Retrying a stage (`/retry-stage`) reuses
+  the retained worktree.
 - **Codex approval gate** — the job stops at `READY_FOR_CODEX` and waits for
   a manual approval (`POST /jobs/:id/approve-codex`). With
   `FERRET_RUNNER_ENABLE_CODEX=false` (default) approved jobs only record the
@@ -106,6 +109,10 @@ real checkout.
   at startup and every `FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS` (default 1
   hour) removes expired worktrees, plus orphaned worktrees whose job no longer
   exists. Worktrees of jobs completed without a PR are never swept.
+  Jobs started before worktrees shipped have no `worktreePath`. After their
+  PR merges, the runner can't delete the `flawferret/job-*` branch while it is
+  checked out in your local checkout. That cleanup is recorded as failed, and
+  you can delete the branch by hand.
 - **Readiness view** — `GET /readiness` and the dashboard readiness page
   summarize queue state, runner health, blocked jobs, pending approvals, and
   a single suggested next action.

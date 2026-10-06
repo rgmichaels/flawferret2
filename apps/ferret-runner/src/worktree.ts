@@ -276,7 +276,11 @@ export const createJobWorktree = async ({
   }
 };
 
-export type WorktreeRemovalReason = "orphan-sweep" | "pr-merged" | "retention-expired";
+export type WorktreeRemovalReason =
+  | "orphan-sweep"
+  | "pr-merged"
+  | "requeue-reset"
+  | "retention-expired";
 
 export type WorktreeRemovalResult = {
   deletedBranch: boolean;
@@ -377,6 +381,105 @@ export const removeJobWorktree = async ({
     ...(errors.length > 0 ? { error: errors.join("\n") } : {}),
     ok: errors.length === 0,
   };
+};
+
+export type FreshStartResetResult =
+  | { action: "none" }
+  | { action: "removed"; removal: WorktreeRemovalResult }
+  | {
+      action: "failed";
+      message: string;
+      metadata: Record<string, unknown>;
+      removal: WorktreeRemovalResult | null;
+    };
+
+// A requeued job starts from scratch, but its previous attempt's worktree and branch
+// (same job id) are still on disk from the retention window. Clear them so the fresh
+// attempt can recreate them. Only the fresh-start claim path calls this; retry-stage
+// resumes in the retained worktree and never comes through here.
+//
+// Uncommitted files in the dead worktree are discarded (that is what a fresh start
+// means), but committed work is never lost: if the branch has commits that are not on
+// any remote, the reset refuses and the job stays blocked.
+export const resetJobWorktreeForFreshStart = async ({
+  git = runGit,
+  jobId,
+  repositoryId,
+  repositoryLocalPath,
+  worktreeRoot,
+}: {
+  git?: GitRunner;
+  jobId: string;
+  repositoryId: string;
+  repositoryLocalPath: string;
+  worktreeRoot: string;
+}): Promise<FreshStartResetResult> => {
+  const workBranch = buildWorkBranchName(jobId);
+  const worktreePath = buildWorktreePath({ jobId, repositoryId, worktreeRoot });
+  const worktreeExists = await pathExists(worktreePath);
+  const branchExists = await gitSucceeds(git, repositoryLocalPath, [
+    "show-ref",
+    "--verify",
+    "--quiet",
+    `refs/heads/${workBranch}`,
+  ]);
+
+  if (!worktreeExists && !branchExists) {
+    return { action: "none" };
+  }
+
+  if (branchExists) {
+    let unpushedCommitCount: number;
+
+    try {
+      unpushedCommitCount = Number(
+        await git(repositoryLocalPath, [
+          "rev-list",
+          "--count",
+          `refs/heads/${workBranch}`,
+          "--not",
+          "--remotes",
+        ]),
+      );
+    } catch (error) {
+      return {
+        action: "failed",
+        message: "Could not inspect the previous attempt's work branch before resetting it.",
+        metadata: { error: errorMessage(error), workBranch, worktreePath },
+        removal: null,
+      };
+    }
+
+    if (!Number.isFinite(unpushedCommitCount) || unpushedCommitCount > 0) {
+      return {
+        action: "failed",
+        message:
+          "The previous attempt's work branch has commits that are not on any remote; refusing to delete it. Push or delete the branch manually, then requeue.",
+        metadata: { unpushedCommitCount, workBranch, worktreePath },
+        removal: null,
+      };
+    }
+  }
+
+  const removal = await removeJobWorktree({
+    git,
+    reason: "requeue-reset",
+    repositoryLocalPath,
+    workBranch,
+    worktreePath,
+    worktreeRoot,
+  });
+
+  if (!removal.ok) {
+    return {
+      action: "failed",
+      message: "Could not remove the previous attempt's worktree for this requeued job.",
+      metadata: { error: removal.error ?? null, workBranch, worktreePath },
+      removal,
+    };
+  }
+
+  return { action: "removed", removal };
 };
 
 export type ListedWorktree = {

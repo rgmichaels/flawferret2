@@ -15,6 +15,7 @@ import {
   parseWorktreeJobId,
   parseWorktreeListPorcelain,
   removeJobWorktree,
+  resetJobWorktreeForFreshStart,
   runWorktreeSweep,
   type SweepJob,
 } from "./worktree.js";
@@ -349,6 +350,130 @@ describe("job worktrees against a real git repository", () => {
 
     assert.equal(removal.ok, true, removal.error ?? "removal failed");
     assert.equal(removal.deletedBranch, true);
+  });
+
+  describe("fresh-start reset for requeued jobs", () => {
+    const createFor = (jobId: string) =>
+      createJobWorktree({
+        jobId,
+        repositoryId,
+        repositoryLocalPath: checkoutPath,
+        targetBranch: "main",
+        worktreeRoot,
+      });
+    const resetFor = (jobId: string, gitRunner?: (cwd: string, args: string[]) => Promise<string>) =>
+      resetJobWorktreeForFreshStart({
+        ...(gitRunner ? { git: gitRunner } : {}),
+        jobId,
+        repositoryId,
+        repositoryLocalPath: checkoutPath,
+        worktreeRoot,
+      });
+
+    it("does nothing when the job has no previous attempt", async () => {
+      assert.deepEqual(await resetFor(randomUUID()), { action: "none" });
+    });
+
+    it("recreates the worktree when a BLOCKED job is requeued", async () => {
+      const jobId = randomUUID();
+      const first = await createFor(jobId);
+      assert.ok(first.ok);
+      // The dead attempt left uncommitted Codex output behind.
+      await writeFile(join(first.metadata.worktreePath, "stale.spec.ts"), "stale\n");
+
+      // Without a reset the fresh start is refused, which is what re-blocked requeues.
+      const refused = await createFor(jobId);
+      assert.ok(!refused.ok);
+      assert.equal(refused.reason, "already-exists");
+
+      const reset = await resetFor(jobId);
+      assert.equal(reset.action, "removed");
+      assert.ok(reset.action === "removed");
+      assert.equal(reset.removal.reason, "requeue-reset");
+      assert.equal(reset.removal.removedWorktree, true);
+      assert.equal(reset.removal.deletedBranch, true);
+
+      const recreated = await createFor(jobId);
+      assert.ok(recreated.ok);
+      assert.equal(await exists(join(recreated.metadata.worktreePath, "stale.spec.ts")), false);
+    });
+
+    it("leaves the retained worktree intact when no reset runs (retry-stage path)", async () => {
+      const jobId = randomUUID();
+      const created = await createFor(jobId);
+      assert.ok(created.ok);
+      await writeFile(join(created.metadata.worktreePath, "generated.spec.ts"), "keep me\n");
+
+      // Retry-stage resumes from the run's recorded worktreePath and never calls the
+      // fresh-start reset; creation on its own must not disturb the retained worktree.
+      const again = await createFor(jobId);
+      assert.ok(!again.ok);
+      assert.equal(again.reason, "already-exists");
+      assert.equal(await exists(join(created.metadata.worktreePath, "generated.spec.ts")), true);
+      assert.equal(
+        await git(created.metadata.worktreePath, "branch", "--show-current"),
+        created.metadata.workBranch,
+      );
+    });
+
+    it("resets a branch whose commits were already pushed (closed PR)", async () => {
+      const jobId = randomUUID();
+      const created = await createFor(jobId);
+      assert.ok(created.ok);
+      await git(created.metadata.worktreePath, "config", "user.email", "ferret@example.com");
+      await git(created.metadata.worktreePath, "config", "user.name", "Ferret Test");
+      await writeFile(join(created.metadata.worktreePath, "pushed.spec.ts"), "pushed\n");
+      await git(created.metadata.worktreePath, "add", "pushed.spec.ts");
+      await git(created.metadata.worktreePath, "commit", "-m", "Generated test");
+      await git(created.metadata.worktreePath, "push", "-u", "origin", created.metadata.workBranch);
+
+      const reset = await resetFor(jobId);
+
+      assert.equal(reset.action, "removed");
+      assert.ok((await createFor(jobId)).ok);
+    });
+
+    it("refuses and keeps everything when the branch has unpushed commits", async () => {
+      const jobId = randomUUID();
+      const created = await createFor(jobId);
+      assert.ok(created.ok);
+      await git(created.metadata.worktreePath, "config", "user.email", "ferret@example.com");
+      await git(created.metadata.worktreePath, "config", "user.name", "Ferret Test");
+      await writeFile(join(created.metadata.worktreePath, "local-only.spec.ts"), "local\n");
+      await git(created.metadata.worktreePath, "add", "local-only.spec.ts");
+      await git(created.metadata.worktreePath, "commit", "-m", "Unpushed generated test");
+
+      const reset = await resetFor(jobId);
+
+      assert.equal(reset.action, "failed");
+      assert.ok(reset.action === "failed");
+      assert.match(reset.message, /not on any remote/);
+      assert.equal(reset.metadata.unpushedCommitCount, 1);
+      assert.equal(await exists(join(created.metadata.worktreePath, "local-only.spec.ts")), true);
+      assert.notEqual(await git(checkoutPath, "branch", "--list", created.metadata.workBranch), "");
+    });
+
+    it("fails (so the job blocks) when the previous worktree cannot be removed", async () => {
+      const jobId = randomUUID();
+      const created = await createFor(jobId);
+      assert.ok(created.ok);
+      const failingGit = async (cwd: string, args: string[]) => {
+        if (args[0] === "worktree" && args[1] === "remove") {
+          throw new Error("worktree is locked");
+        }
+
+        return git(cwd, ...args);
+      };
+
+      const reset = await resetFor(jobId, failingGit);
+
+      assert.equal(reset.action, "failed");
+      assert.ok(reset.action === "failed");
+      assert.match(reset.message, /Could not remove the previous attempt's worktree/);
+      assert.equal(reset.removal?.ok, false);
+      assert.match(String(reset.metadata.error), /worktree is locked/);
+      assert.equal(await exists(created.metadata.worktreePath), true);
+    });
   });
 
   it("sweeps orphans and expired worktrees but keeps in-flight and retained ones", async () => {
