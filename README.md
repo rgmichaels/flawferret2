@@ -64,11 +64,17 @@ real checkout.
   (`QueueControl`).
 - **Local checkout validation** — the runner does **not** clone. A
   repository must point at an existing local Git work tree with a matching
-  `origin`, a clean tree, and the target branch available. Invalid checkouts
-  move the job to `BLOCKED`.
-- **Work branch** — the runner checks out the target branch and creates a
-  local-only `flawferret/job-<short-id>` branch. It refuses to overwrite an
-  existing branch.
+  `origin` and the target branch available locally or on `origin`.
+  Uncommitted changes in that checkout are fine — the runner never switches,
+  stashes, resets, or cleans it. Invalid checkouts move the job to `BLOCKED`.
+- **Isolated job worktrees** — each job gets its own `git worktree`, created
+  from `origin/<target>` (falling back to the local target branch) under
+  `FERRET_RUNNER_WORKTREE_DIR` (default
+  `~/.flawferret/worktrees/<repositoryId>/job-<jobId>`), outside your
+  checkout. Inside it the runner creates a local-only
+  `flawferret/job-<jobId>` branch (full job id). Codex, dependency install,
+  validation, commit/push, and PR creation all run in the worktree. It
+  refuses to reuse an existing worktree directory or branch for the same job.
 - **Codex approval gate** — the job stops at `READY_FOR_CODEX` and waits for
   a manual approval (`POST /jobs/:id/approve-codex`). With
   `FERRET_RUNNER_ENABLE_CODEX=false` (default) approved jobs only record the
@@ -77,7 +83,12 @@ real checkout.
   `FERRET_RUNNER_VALIDATION_COMMAND` global override, then a focused command
   suggested in Codex's final response, then the repository's configured
   `validationCommand`. With none configured, validation only checks that
-  Codex left changed files.
+  Codex left changed files. Before validating, the runner installs
+  dependencies in the worktree using the repository's `installCommand`, then
+  `FERRET_RUNNER_INSTALL_COMMAND`, then `pnpm install --frozen-lockfile` when
+  a `pnpm-lock.yaml` is present (otherwise the step is skipped).
+  A failed install is recorded (`DEPENDENCY_INSTALL_*` events) and
+  validation decides the outcome.
 - **PR approval gate** — the job stops at `REVIEW` and waits for
   `POST /jobs/:id/approve-pr`. With `FERRET_RUNNER_ENABLE_PR_CREATION=false`
   (default) no branch is pushed and no PR is created. When enabled, the
@@ -86,8 +97,15 @@ real checkout.
   job for a bounded number of automatic retries
   (`autoRetryCount`, `FERRET_RUNNER_MAX_AUTO_RETRIES`, default 2) with
   race-safe queuing.
-- **Local checkout cleanup** — the runner restores the checkout to its base
-  branch afterward and records cleanup success or failure.
+- **Worktree cleanup** — when the PR is merged the runner removes the job
+  worktree and its branch. It fast-forwards your base branch
+  (`git pull --ff-only`) only when that branch is checked out and your tree is
+  clean, otherwise it records why it skipped. Worktrees from `BLOCKED`,
+  `FAILED`, `CANCELED`, or closed-PR jobs are kept for
+  `FERRET_RUNNER_WORKTREE_RETENTION_HOURS` (default 24) for debugging. A sweep
+  at startup and every `FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS` (default 1
+  hour) removes expired worktrees, plus orphaned worktrees whose job no longer
+  exists. Worktrees of jobs completed without a PR are never swept.
 - **Readiness view** — `GET /readiness` and the dashboard readiness page
   summarize queue state, runner health, blocked jobs, pending approvals, and
   a single suggested next action.

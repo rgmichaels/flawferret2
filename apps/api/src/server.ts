@@ -460,6 +460,7 @@ const toRepositoryResponse = (repository: {
   baseUrl: string | null;
   localPath: string | null;
   validationCommand: string | null;
+  installCommand: string | null;
   trackerIntegration:
     | {
         id: string;
@@ -482,6 +483,7 @@ const toRepositoryResponse = (repository: {
   baseUrl: repository.baseUrl,
   localPath: repository.localPath,
   validationCommand: repository.validationCommand,
+  installCommand: repository.installCommand,
   trackerIntegration: repository.trackerIntegration
     ? {
         id: repository.trackerIntegration.id,
@@ -747,6 +749,7 @@ const toJobResponseWithRepository = (job: {
         baseUrl: string | null;
         localPath: string | null;
         validationCommand: string | null;
+        installCommand: string | null;
         trackerIntegration:
           | {
               id: string;
@@ -2169,6 +2172,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         baseUrl: optionalText(body.baseUrl),
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
+        installCommand: optionalText(body.installCommand),
         trackerIntegrationId: body.trackerIntegrationId ?? null,
       },
       update: {
@@ -2178,6 +2182,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         baseUrl: optionalText(body.baseUrl),
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
+        installCommand: optionalText(body.installCommand),
         trackerIntegrationId: body.trackerIntegrationId ?? null,
       },
       include: {
@@ -2259,6 +2264,7 @@ export const buildServer = async (): Promise<FastifyInstance> => {
         baseUrl: optionalText(body.baseUrl),
         localPath: body.localPath,
         validationCommand: optionalText(body.validationCommand),
+        installCommand: optionalText(body.installCommand),
         trackerIntegrationId: body.trackerIntegrationId ?? null,
       },
       include: {

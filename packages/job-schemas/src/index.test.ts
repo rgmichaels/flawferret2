@@ -39,6 +39,20 @@ describe("job schemas", () => {
     assert.equal(jobEventTypeSchema.parse("LOCAL_CHECKOUT_CLEANUP_COMPLETED"), "LOCAL_CHECKOUT_CLEANUP_COMPLETED");
   });
 
+  it("accepts worktree and dependency install event types", () => {
+    for (const eventType of [
+      "WORKTREE_CREATED",
+      "WORKTREE_CREATION_FAILED",
+      "WORKTREE_REMOVED",
+      "WORKTREE_REMOVAL_FAILED",
+      "DEPENDENCY_INSTALL_STARTED",
+      "DEPENDENCY_INSTALL_COMPLETED",
+      "DEPENDENCY_INSTALL_FAILED",
+    ]) {
+      assert.equal(jobEventTypeSchema.parse(eventType), eventType);
+    }
+  });
+
   it("trims retry feedback", () => {
     assert.deepEqual(retryStageRequestSchema.parse({ feedback: "  try the empty state  " }), {
       feedback: "try the empty state",
@@ -189,6 +203,7 @@ describe("job schemas", () => {
       trackerIntegrationId: null,
       updatedAt: new Date().toISOString(),
       validationCommand: "pnpm test",
+      installCommand: null,
       webUrl: "https://github.com/rgmichaels/example",
       baseUrl: null,
     };
@@ -261,6 +276,7 @@ describe("job schemas", () => {
       trackerIntegrationId: null,
       updatedAt: now,
       validationCommand: "pnpm test",
+      installCommand: null,
       webUrl: "https://github.com/rgmichaels/example",
       baseUrl: null,
     };
@@ -438,6 +454,7 @@ describe("job schemas", () => {
         trackerIntegrationId: null,
         updatedAt: new Date().toISOString(),
         validationCommand: "pnpm test",
+        installCommand: null,
         webUrl: "https://github.com/rgmichaels/example",
         baseUrl: null,
       },
@@ -671,6 +688,7 @@ describe("job schemas", () => {
         baseUrl: null,
         localPath: "/tmp/qa-framework",
         validationCommand: "pnpm test",
+        installCommand: null,
         trackerIntegration: null,
         trackerIntegrationId: null,
         createdAt: "2026-08-01T12:00:00.000Z",

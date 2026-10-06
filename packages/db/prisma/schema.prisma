@@ -119,6 +119,13 @@ enum JobEventType {
   JIRA_TICKET_CREATION_FAILED
   JIRA_TICKET_CREATION_SKIPPED
   PR_CHECKS_AUTO_RETRY_QUEUED
+  WORKTREE_CREATED
+  WORKTREE_CREATION_FAILED
+  WORKTREE_REMOVED
+  WORKTREE_REMOVAL_FAILED
+  DEPENDENCY_INSTALL_STARTED
+  DEPENDENCY_INSTALL_COMPLETED
+  DEPENDENCY_INSTALL_FAILED
 }
 
 model QueueControl {
@@ -142,6 +149,7 @@ model Repository {
   baseUrl              String?             @map("base_url")
   localPath            String?             @map("local_path")
   validationCommand    String?             @map("validation_command")
+  installCommand       String?             @map("install_command")
   trackerIntegrationId String?             @map("tracker_integration_id") @db.Uuid
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")

@@ -32,6 +32,7 @@ const repositoryPayloadFromForm = (formData: FormData) => {
     provider: "GITHUB",
     trackerIntegrationId: String(formData.get("trackerIntegrationId") ?? "") || null,
     validationCommand: formData.get("validationCommand"),
+    installCommand: formData.get("installCommand"),
   };
 };
 
@@ -193,6 +194,14 @@ export default async function RepositoriesPage() {
                             )}
                           </span>
                           <span>
+                            Install:{" "}
+                            {repository.installCommand ? (
+                              <code>{repository.installCommand}</code>
+                            ) : (
+                              "Runner default"
+                            )}
+                          </span>
+                          <span>
                             Tracker:{" "}
                             {repository.trackerIntegration
                               ? `${repository.trackerIntegration.name} (${repository.trackerIntegration.projectKey})`
@@ -218,6 +227,17 @@ export default async function RepositoriesPage() {
                         <label>
                           Validation Command
                           <input name="validationCommand" defaultValue={repository.validationCommand ?? ""} />
+                        </label>
+                        <label>
+                          Install Command
+                          <input
+                            name="installCommand"
+                            defaultValue={repository.installCommand ?? ""}
+                            placeholder="pnpm install --frozen-lockfile"
+                          />
+                          <span className="field-hint">
+                            Runs in each job&apos;s worktree before validation. Leave blank to use the runner default.
+                          </span>
                         </label>
                         <label>
                           Base URL
@@ -294,6 +314,13 @@ export default async function RepositoriesPage() {
                 />
                 <span className="field-hint">
                   Defaults to Playwright. Edit or clear it if this repo needs a different check.
+                </span>
+              </label>
+              <label>
+                Install Command
+                <input name="installCommand" placeholder="pnpm install --frozen-lockfile" />
+                <span className="field-hint">
+                  Runs in each job&apos;s worktree before validation. Leave blank to use the runner default.
                 </span>
               </label>
               <label>

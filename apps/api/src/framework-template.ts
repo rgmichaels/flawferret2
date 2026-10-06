@@ -99,6 +99,7 @@ const toRepositoryResponse = (repository: {
   baseUrl: string | null;
   localPath: string | null;
   validationCommand: string | null;
+  installCommand: string | null;
   trackerIntegration:
     | {
         id: string;
@@ -121,6 +122,7 @@ const toRepositoryResponse = (repository: {
   baseUrl: repository.baseUrl,
   localPath: repository.localPath,
   validationCommand: repository.validationCommand,
+  installCommand: repository.installCommand,
   trackerIntegration: repository.trackerIntegration
     ? {
         id: repository.trackerIntegration.id,

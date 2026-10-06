@@ -1,23 +1,81 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cleanupMergedPullRequestCheckout } from "./local-checkout-cleanup.js";
+import { cleanupMergedPullRequestCheckout, decideBaseFastForward } from "./local-checkout-cleanup.js";
 
-const localPath = "/tmp/flawferret-checkout";
+const repositoryLocalPath = "/tmp/flawferret-checkout";
+const worktreeRoot = "/tmp/flawferret-worktrees";
+const worktreePath = `${worktreeRoot}/repo-1/job-abc123`;
+const headBranch = "flawferret/job-abc123";
 
 type GitCall = {
   args: string[];
-  localPath: string;
+  cwd: string;
 };
 
-const createGitSpy = (responses: string[] = []) => {
+const createGitSpy = ({
+  currentBranch = "main",
+  failOn,
+  status = "",
+}: {
+  currentBranch?: string;
+  failOn?: string;
+  status?: string;
+} = {}) => {
   const calls: GitCall[] = [];
-  const git = async (path: string, args: string[]) => {
-    calls.push({ args, localPath: path });
-    return responses.shift() ?? "";
+  const git = async (cwd: string, args: string[]) => {
+    calls.push({ args, cwd });
+
+    if (failOn && args.join(" ").startsWith(failOn)) {
+      throw new Error(`${failOn} failed`);
+    }
+
+    if (args[0] === "branch" && args[1] === "--show-current") {
+      return currentBranch;
+    }
+
+    if (args[0] === "status") {
+      return status;
+    }
+
+    if (args[0] === "branch" && args[1] === "--list") {
+      return args[2] ?? "";
+    }
+
+    return "";
   };
 
   return { calls, git };
 };
+
+describe("decideBaseFastForward", () => {
+  it("fast-forwards only on a clean base branch", () => {
+    assert.deepEqual(
+      decideBaseFastForward({ baseBranch: "main", currentBranch: "main", statusPorcelain: "" }),
+      { fastForward: true },
+    );
+  });
+
+  it("skips when the user is on a different branch", () => {
+    assert.deepEqual(
+      decideBaseFastForward({ baseBranch: "main", currentBranch: "feature/x", statusPorcelain: "" }),
+      { fastForward: false, reason: "wrong-branch" },
+    );
+  });
+
+  it("skips when the user has a detached HEAD", () => {
+    assert.deepEqual(
+      decideBaseFastForward({ baseBranch: "main", currentBranch: null, statusPorcelain: "" }),
+      { fastForward: false, reason: "wrong-branch" },
+    );
+  });
+
+  it("skips when the base branch has uncommitted changes", () => {
+    assert.deepEqual(
+      decideBaseFastForward({ baseBranch: "main", currentBranch: "main", statusPorcelain: " M src/app.ts" }),
+      { fastForward: false, reason: "dirty-tree" },
+    );
+  });
+});
 
 describe("cleanupMergedPullRequestCheckout", () => {
   it("returns an error without running git when branch metadata is missing", async () => {
@@ -26,8 +84,10 @@ describe("cleanupMergedPullRequestCheckout", () => {
     const result = await cleanupMergedPullRequestCheckout({
       baseBranch: null,
       git,
-      headBranch: "flawferret/job-abc123",
-      localPath,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath,
+      worktreeRoot,
     });
 
     assert.equal(result.ok, false);
@@ -42,7 +102,9 @@ describe("cleanupMergedPullRequestCheckout", () => {
       baseBranch: "main",
       git,
       headBranch: "feature/customer-login",
-      localPath,
+      repositoryLocalPath,
+      worktreePath,
+      worktreeRoot,
     });
 
     assert.equal(result.ok, false);
@@ -50,93 +112,134 @@ describe("cleanupMergedPullRequestCheckout", () => {
     assert.deepEqual(calls, []);
   });
 
-  it("treats an already absent generated branch as cleaned up", async () => {
-    const { calls, git } = createGitSpy(["", "", "", ""]);
+  it("fast-forwards a clean base branch, then removes the worktree and work branch", async () => {
+    const { calls, git } = createGitSpy();
 
     const result = await cleanupMergedPullRequestCheckout({
       baseBranch: "main",
       git,
-      headBranch: "flawferret/job-abc123",
-      localPath,
-    });
-
-    assert.deepEqual(result, {
-      baseBranch: "main",
-      deletedBranch: true,
-      headBranch: "flawferret/job-abc123",
-      localPath,
-      ok: true,
-      pruned: true,
-      switchedToBase: true,
-      updatedBase: true,
-    });
-    assert.deepEqual(
-      calls.map((call) => call.args),
-      [
-        ["switch", "main"],
-        ["pull", "--ff-only"],
-        ["fetch", "--prune"],
-        ["branch", "--list", "flawferret/job-abc123"],
-      ],
-    );
-  });
-
-  it("deletes a matching local generated branch after updating and pruning", async () => {
-    const { calls, git } = createGitSpy(["", "", "", "flawferret/job-abc123", ""]);
-
-    const result = await cleanupMergedPullRequestCheckout({
-      baseBranch: "main",
-      git,
-      headBranch: "flawferret/job-abc123",
-      localPath,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath,
+      worktreeRoot,
     });
 
     assert.equal(result.ok, true);
-    assert.equal(result.deletedBranch, true);
+    assert.deepEqual(result.fastForward, {
+      attempted: true,
+      currentBranch: "main",
+      ok: true,
+      skipped: false,
+    });
+    assert.equal(result.worktree?.removedWorktree, true);
+    assert.equal(result.worktree?.deletedBranch, true);
+    assert.equal(result.worktree?.reason, "pr-merged");
     assert.deepEqual(
       calls.map((call) => call.args),
       [
-        ["switch", "main"],
+        ["branch", "--show-current"],
+        ["status", "--porcelain"],
         ["pull", "--ff-only"],
-        ["fetch", "--prune"],
-        ["branch", "--list", "flawferret/job-abc123"],
-        ["branch", "-d", "flawferret/job-abc123"],
+        ["worktree", "remove", "--force", worktreePath],
+        ["worktree", "prune"],
+        ["show-ref", "--verify", "--quiet", `refs/heads/${headBranch}`],
+        ["branch", "-D", headBranch],
       ],
     );
+    assert.ok(calls.every((call) => call.cwd === repositoryLocalPath));
   });
 
-  it("returns partial progress when a git command fails", async () => {
-    const calls: GitCall[] = [];
-    const git = async (path: string, args: string[]) => {
-      calls.push({ args, localPath: path });
-
-      if (args[0] === "fetch") {
-        throw new Error("fetch failed");
-      }
-
-      return "";
-    };
+  it("skips the fast-forward on a dirty tree but still removes the worktree", async () => {
+    const { calls, git } = createGitSpy({ status: " M notes.txt" });
 
     const result = await cleanupMergedPullRequestCheckout({
       baseBranch: "main",
       git,
-      headBranch: "flawferret/job-abc123",
-      localPath,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath,
+      worktreeRoot,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.fastForward?.skipped, true);
+    assert.equal(result.fastForward?.reason, "dirty-tree");
+    assert.equal(result.fastForward?.attempted, false);
+    assert.equal(result.worktree?.ok, true);
+    const commands = calls.map((call) => call.args.join(" "));
+    assert.ok(!commands.includes("pull --ff-only"));
+    assert.ok(!commands.some((command) => /^(switch|checkout|stash|reset|clean)\b/.test(command)));
+  });
+
+  it("skips the fast-forward when the user is on another branch", async () => {
+    const { calls, git } = createGitSpy({ currentBranch: "feature/mine" });
+
+    const result = await cleanupMergedPullRequestCheckout({
+      baseBranch: "main",
+      git,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath,
+      worktreeRoot,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.fastForward?.reason, "wrong-branch");
+    assert.ok(!calls.some((call) => call.args[0] === "pull"));
+  });
+
+  it("records a failed fast-forward but still removes the worktree", async () => {
+    const { git } = createGitSpy({ failOn: "pull" });
+
+    const result = await cleanupMergedPullRequestCheckout({
+      baseBranch: "main",
+      git,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath,
+      worktreeRoot,
     });
 
     assert.equal(result.ok, false);
-    assert.equal(result.switchedToBase, true);
-    assert.equal(result.updatedBase, true);
-    assert.equal(result.pruned, false);
-    assert.equal(result.deletedBranch, false);
-    assert.equal(result.error, "fetch failed");
-    assert.deepEqual(
-      calls.map((call) => call.args),
-      [
-        ["switch", "main"],
-        ["pull", "--ff-only"],
-        ["fetch", "--prune"],
-      ],
-    );
+    assert.equal(result.fastForward?.ok, false);
+    assert.equal(result.error, "pull failed");
+    assert.equal(result.worktree?.ok, true);
+  });
+
+  it("refuses to remove a worktree path outside the worktree directory", async () => {
+    const { calls, git } = createGitSpy();
+
+    const result = await cleanupMergedPullRequestCheckout({
+      baseBranch: "main",
+      git,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath: repositoryLocalPath,
+      worktreeRoot,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.worktree?.removedWorktree, false);
+    assert.ok(!calls.some((call) => call.args[0] === "worktree"));
+  });
+
+  it("only deletes the work branch with a non-forcing delete for runs without a worktree", async () => {
+    const { calls, git } = createGitSpy();
+
+    const result = await cleanupMergedPullRequestCheckout({
+      baseBranch: "main",
+      git,
+      headBranch,
+      repositoryLocalPath,
+      worktreePath: null,
+      worktreeRoot,
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.worktree, null);
+    assert.deepEqual(calls.slice(-2).map((call) => call.args), [
+      ["branch", "--list", headBranch],
+      ["branch", "-d", headBranch],
+    ]);
   });
 });

@@ -21,6 +21,7 @@ const createTempRepository = async () => {
     createdAt: new Date().toISOString(),
     defaultBranch: "main",
     id: "repo-1",
+    installCommand: null,
     localPath: root,
     name: "example",
     owner: "rgmichaels",

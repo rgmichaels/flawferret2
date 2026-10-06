@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 // `config.ts` parses `process.env` as a module-level side effect, so each scenario here
@@ -42,5 +44,57 @@ describe("FERRET_RUNNER_MAX_AUTO_RETRIES", () => {
     await assert.rejects(() => importConfig());
 
     delete process.env.FERRET_RUNNER_MAX_AUTO_RETRIES;
+  });
+});
+
+describe("worktree and install settings", () => {
+  it("defaults the worktree directory to ~/.flawferret/worktrees", async () => {
+    delete process.env.FERRET_RUNNER_WORKTREE_DIR;
+
+    const { config } = await importConfig();
+
+    assert.equal(config.FERRET_RUNNER_WORKTREE_DIR, join(homedir(), ".flawferret", "worktrees"));
+  });
+
+  it("treats an empty worktree directory as unset", async () => {
+    process.env.FERRET_RUNNER_WORKTREE_DIR = "  ";
+
+    const { config } = await importConfig();
+
+    assert.equal(config.FERRET_RUNNER_WORKTREE_DIR, join(homedir(), ".flawferret", "worktrees"));
+
+    delete process.env.FERRET_RUNNER_WORKTREE_DIR;
+  });
+
+  it("expands a leading ~ in a configured worktree directory", async () => {
+    process.env.FERRET_RUNNER_WORKTREE_DIR = "~/ff-worktrees";
+
+    const { config } = await importConfig();
+
+    assert.equal(config.FERRET_RUNNER_WORKTREE_DIR, join(homedir(), "ff-worktrees"));
+
+    delete process.env.FERRET_RUNNER_WORKTREE_DIR;
+  });
+
+  it("defaults retention to 24 hours, the sweep to 1 hour, and install timeout to 5 minutes", async () => {
+    delete process.env.FERRET_RUNNER_WORKTREE_RETENTION_HOURS;
+    delete process.env.FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS;
+    delete process.env.FERRET_RUNNER_INSTALL_TIMEOUT_MS;
+    delete process.env.FERRET_RUNNER_INSTALL_COMMAND;
+
+    const { config } = await importConfig();
+
+    assert.equal(config.FERRET_RUNNER_WORKTREE_RETENTION_HOURS, 24);
+    assert.equal(config.FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS, 60 * 60 * 1000);
+    assert.equal(config.FERRET_RUNNER_INSTALL_TIMEOUT_MS, 5 * 60 * 1000);
+    assert.equal(config.FERRET_RUNNER_INSTALL_COMMAND, undefined);
+  });
+
+  it("rejects a non-positive retention window", async () => {
+    process.env.FERRET_RUNNER_WORKTREE_RETENTION_HOURS = "0";
+
+    await assert.rejects(() => importConfig());
+
+    delete process.env.FERRET_RUNNER_WORKTREE_RETENTION_HOURS;
   });
 });

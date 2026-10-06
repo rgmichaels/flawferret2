@@ -12,6 +12,7 @@ export type CheckoutValidationResult =
         branchRef: string;
         localPath: string;
         remoteUrl: string;
+        repositoryId: string;
       };
     }
   | {
@@ -133,18 +134,8 @@ export const validateRepositoryCheckout = async ({
       };
     }
 
-    const status = await runGit(localPath, ["status", "--porcelain"]);
-
-    if (status.length > 0) {
-      return {
-        ok: false,
-        message: "Configured local checkout has uncommitted changes.",
-        metadata: {
-          localPath,
-        },
-      };
-    }
-
+    // Uncommitted changes in the user's checkout are fine: jobs run in their own
+    // worktree and never touch this working tree.
     await runGit(localPath, ["fetch", "--prune", "origin"]);
 
     const branchRef = await runGit(localPath, [
@@ -162,6 +153,7 @@ export const validateRepositoryCheckout = async ({
         branchRef,
         localPath,
         remoteUrl,
+        repositoryId: repository.id,
       },
     };
   } catch (error) {

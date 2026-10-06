@@ -85,6 +85,13 @@ export const jobEventTypeSchema = z.enum([
   "JIRA_TICKET_CREATION_FAILED",
   "JIRA_TICKET_CREATION_SKIPPED",
   "PR_CHECKS_AUTO_RETRY_QUEUED",
+  "WORKTREE_CREATED",
+  "WORKTREE_CREATION_FAILED",
+  "WORKTREE_REMOVED",
+  "WORKTREE_REMOVAL_FAILED",
+  "DEPENDENCY_INSTALL_STARTED",
+  "DEPENDENCY_INSTALL_COMPLETED",
+  "DEPENDENCY_INSTALL_FAILED",
 ]);
 
 export const createRepositoryRequestSchema = z.object({
@@ -102,6 +109,7 @@ export const createRepositoryRequestSchema = z.object({
   defaultBranch: z.string().trim().min(1, "Default branch is required").default("main"),
   localPath: z.string().trim().min(1, "Local checkout path is required"),
   validationCommand: z.string().trim().optional(),
+  installCommand: z.string().trim().optional(),
   baseUrl: z.string().trim().url("Base URL must be a valid URL").optional(),
   trackerIntegrationId: z.string().uuid("Tracker integration must be valid").nullable().optional(),
 });
@@ -117,6 +125,7 @@ export const repositoryResponseSchema = z.object({
   baseUrl: z.string().nullable(),
   localPath: z.string().nullable(),
   validationCommand: z.string().nullable(),
+  installCommand: z.string().nullable(),
   trackerIntegration: z
     .object({
       id: z.string(),

@@ -123,6 +123,7 @@ describe("discover coverage matching", () => {
           createdAt: new Date().toISOString(),
           defaultBranch: "main",
           id: "repo-1",
+          installCommand: null,
           localPath: "/tmp/repo",
           name: "example",
           owner: "rgmichaels",

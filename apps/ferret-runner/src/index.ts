@@ -7,7 +7,9 @@ import {
   claimNextReviewJob,
   claimNextValidatingJob,
   createJobRun,
+  findJobsForWorktreeSweep,
   heartbeatWorker,
+  listRepositoriesWithLocalPath,
   markJobBlocked,
   markJobCompleted,
   markJobPrCreated,
@@ -39,6 +41,11 @@ import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { buildCodexInvocationPlan, runCodexInvocation } from "./codex-invocation.js";
 import { config } from "./config.js";
+import {
+  resolveInstallCommand,
+  runDependencyInstall,
+  type DependencyInstallResult,
+} from "./dependency-install.js";
 import { cleanupMergedPullRequestCheckout } from "./local-checkout-cleanup.js";
 import { nextLoopIteration, shouldPrioritizeQueuedClaim } from "./loop-fairness.js";
 import {
@@ -52,7 +59,7 @@ import {
 import { validateRepositoryCheckout } from "./repository-checkout.js";
 import { sleep } from "./sleep.js";
 import { validateGeneratedWork } from "./validation.js";
-import { prepareWorkBranch } from "./work-branch.js";
+import { createJobWorktree, runWorktreeSweep } from "./worktree.js";
 import { buildLocalTestCommand, prepareLocalTestCommand, runLocalTest } from "./local-test-run.js";
 
 const workerId = config.WORKER_ID ?? randomUUID();
@@ -63,6 +70,9 @@ let shutdownStarted = false;
 let loopIteration = 0;
 let lastHeartbeatAt = 0;
 let lastHeartbeatState: string | null = null;
+let lastWorktreeSweepAt: number | null = null;
+
+const worktreeRetentionMs = config.FERRET_RUNNER_WORKTREE_RETENTION_HOURS * 60 * 60 * 1000;
 
 const log = (message: string, metadata?: Record<string, unknown>) => {
   const entry = {
@@ -269,6 +279,167 @@ const setWorkerState = async ({
   lastHeartbeatState = stateKey;
 };
 
+// Runs once at startup (first loop iteration) and then every
+// FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS. Expired retained worktrees and true orphans
+// (no job row) are removed; in-flight jobs are never touched.
+const sweepWorktreesIfDue = async () => {
+  const now = Date.now();
+
+  if (
+    lastWorktreeSweepAt !== null &&
+    now - lastWorktreeSweepAt < config.FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS
+  ) {
+    return;
+  }
+
+  lastWorktreeSweepAt = now;
+
+  try {
+    const removals = await runWorktreeSweep({
+      findJobs: findJobsForWorktreeSweep,
+      listRepositories: listRepositoriesWithLocalPath,
+      onRemoval: async (removal, jobExists) => {
+        log(removal.ok ? "Removed job worktree during sweep" : "Failed to remove job worktree during sweep", {
+          ...removal,
+        });
+
+        if (!jobExists) {
+          return;
+        }
+
+        await appendJobEvent({
+          jobId: removal.jobId,
+          eventType: removal.ok ? "WORKTREE_REMOVED" : "WORKTREE_REMOVAL_FAILED",
+          message: removal.ok
+            ? "ferret-runner removed the retained job worktree after its retention window expired."
+            : "ferret-runner could not remove the retained job worktree.",
+          metadata: {
+            ...removal,
+            workerId,
+          },
+        });
+      },
+      onRepositoryError: (repositoryId, error) => {
+        log("Worktree sweep failed for repository", {
+          error,
+          repositoryId,
+        });
+      },
+      retentionMs: worktreeRetentionMs,
+      worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
+    });
+
+    log("Worktree sweep completed", {
+      removedCount: removals.length,
+      worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
+    });
+  } catch (error) {
+    log("Worktree sweep failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+type DependencyInstallMetadata =
+  | {
+      reason: string;
+      skipped: true;
+      source?: "none";
+    }
+  | (DependencyInstallResult & {
+      skipped: false;
+      source: "environment" | "lockfile" | "repository";
+    });
+
+// A failed install is recorded but does not block on its own: validation still runs and
+// decides the outcome, since some repositories genuinely don't need an install step.
+const runDependencyInstallStep = async ({
+  jobId,
+  repositoryInstallCommand,
+  runId,
+  worktreePath,
+}: {
+  jobId: string;
+  repositoryInstallCommand: string | null | undefined;
+  runId: string;
+  worktreePath: string | null;
+}): Promise<DependencyInstallMetadata> => {
+  if (!worktreePath) {
+    return {
+      reason: "Run was prepared without a job worktree; skipping install to avoid touching the local checkout.",
+      skipped: true,
+    };
+  }
+
+  const resolution = await resolveInstallCommand({
+    environmentCommand: config.FERRET_RUNNER_INSTALL_COMMAND,
+    repositoryCommand: repositoryInstallCommand,
+    worktreePath,
+  });
+
+  if (resolution.command === null) {
+    return {
+      reason: resolution.reason,
+      skipped: true,
+      source: resolution.source,
+    };
+  }
+
+  await appendJobEvent({
+    jobId,
+    eventType: "DEPENDENCY_INSTALL_STARTED",
+    message: "ferret-runner started installing dependencies in the job worktree.",
+    metadata: {
+      command: resolution.command,
+      runId,
+      source: resolution.source,
+      timeoutMs: config.FERRET_RUNNER_INSTALL_TIMEOUT_MS,
+      workerId,
+      worktreePath,
+    },
+  });
+
+  const installResult = await runDependencyInstall({
+    command: resolution.command,
+    jobId,
+    logDir: config.FERRET_RUNNER_LOG_DIR,
+    runId,
+    timeoutMs: config.FERRET_RUNNER_INSTALL_TIMEOUT_MS,
+    worktreePath,
+  });
+  const installMetadata: DependencyInstallMetadata = {
+    ...installResult,
+    skipped: false,
+    source: resolution.source,
+  };
+
+  await appendJobEvent({
+    jobId,
+    eventType: installResult.ok ? "DEPENDENCY_INSTALL_COMPLETED" : "DEPENDENCY_INSTALL_FAILED",
+    message: installResult.ok
+      ? "Dependency install completed in the job worktree."
+      : installResult.timedOut
+        ? "Dependency install timed out; continuing to validation."
+        : "Dependency install failed; continuing to validation.",
+    metadata: {
+      ...installMetadata,
+      runId,
+      workerId,
+      worktreePath,
+    },
+  });
+
+  log("Dependency install finished", {
+    exitCode: installResult.exitCode,
+    jobId,
+    ok: installResult.ok,
+    runId,
+    timedOut: installResult.timedOut,
+  });
+
+  return installMetadata;
+};
+
 const shutdown = async () => {
   if (shutdownStarted) {
     return;
@@ -301,12 +472,17 @@ log("Worker starting", {
   heartbeatIntervalMs: config.WORKER_HEARTBEAT_INTERVAL_MS,
   pollIntervalMs: config.WORKER_POLL_INTERVAL_MS,
   simulatedWorkMs: config.WORKER_SIMULATED_WORK_MS,
+  worktreeRetentionHours: config.FERRET_RUNNER_WORKTREE_RETENTION_HOURS,
+  worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
+  worktreeSweepIntervalMs: config.FERRET_RUNNER_WORKTREE_SWEEP_INTERVAL_MS,
 });
 
 while (!shouldStop) {
   await setWorkerState({
     status: "IDLE",
   });
+
+  await sweepWorktreesIfDue();
 
   loopIteration = nextLoopIteration(loopIteration, config.FERRET_RUNNER_QUEUED_CLAIM_FAIRNESS_N);
 
@@ -827,6 +1003,13 @@ while (!shouldStop) {
         : "repository"
       : "changed_files";
 
+    const dependencyInstall = await runDependencyInstallStep({
+      jobId: validationJob.id,
+      repositoryInstallCommand: validationJob.repository?.installCommand,
+      runId: latestRun.id,
+      worktreePath: getMetadataString(latestRun.metadata, "worktreePath"),
+    });
+
     await appendJobEvent({
       jobId: validationJob.id,
       eventType: "VALIDATION_STARTED",
@@ -834,6 +1017,7 @@ while (!shouldStop) {
       metadata: {
         command: validationCommand ?? null,
         commandSource: validationCommandSource,
+        dependencyInstall,
         focusedValidationCommand: focusedValidationCommand ?? null,
         localPath,
         runAffectedTests,
@@ -858,6 +1042,7 @@ while (!shouldStop) {
 
     const validationMetadata = {
       ...getMetadataRecord(latestRun.metadata),
+      dependencyInstall,
       validation: {
         ...validationResult.metadata,
         commandSource: validationCommandSource,
@@ -889,6 +1074,7 @@ while (!shouldStop) {
         metadata: {
           ...validationResult.metadata,
           commandSource: validationCommandSource,
+          dependencyInstall,
           focusedValidationCommand: focusedValidationCommand ?? null,
           runId: latestRun.id,
           workerId,
@@ -1222,6 +1408,8 @@ while (!shouldStop) {
     const lifecycleMetadata = getMetadataRecord(pullRequestMetadata.lifecycle);
     const previousLifecycleState = getMetadataString(lifecycleMetadata, "lifecycleState");
     const localPath = getMetadataString(runMetadata, "localPath");
+    const repositoryLocalPath = getMetadataString(runMetadata, "repositoryLocalPath") ?? localPath;
+    const worktreePath = getMetadataString(runMetadata, "worktreePath");
     const prUrl = getMetadataString(pullRequestMetadata, "prUrl");
     const baseBranch = getMetadataString(pullRequestMetadata, "baseBranch");
     const headBranch = getMetadataString(pullRequestMetadata, "headBranch");
@@ -1326,7 +1514,9 @@ while (!shouldStop) {
       const cleanupResult = await cleanupMergedPullRequestCheckout({
         baseBranch,
         headBranch,
-        localPath,
+        repositoryLocalPath: repositoryLocalPath ?? localPath,
+        worktreePath,
+        worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
       });
       const mergedRunMetadata = {
         ...lifecycleRunMetadata,
@@ -1376,6 +1566,21 @@ while (!shouldStop) {
           workerId,
         },
       });
+
+      if (cleanupResult.worktree) {
+        await appendJobEvent({
+          jobId: completedJob.id,
+          eventType: cleanupResult.worktree.ok ? "WORKTREE_REMOVED" : "WORKTREE_REMOVAL_FAILED",
+          message: cleanupResult.worktree.ok
+            ? "ferret-runner removed the job worktree after PR merge."
+            : "ferret-runner could not remove the job worktree after PR merge.",
+          metadata: {
+            ...cleanupResult.worktree,
+            runId: latestRun.id,
+            workerId,
+          },
+        });
+      }
 
       await sendRunnerSlackMilestone({
         headline: "merged",
@@ -1767,8 +1972,8 @@ while (!shouldStop) {
   const runMetadata = {
     checkoutBranchRef: checkoutValidation.metadata.branchRef,
     hostname: workerHostname,
-    localPath: checkoutValidation.metadata.localPath,
     remoteUrl: checkoutValidation.metadata.remoteUrl,
+    repositoryLocalPath: checkoutValidation.metadata.localPath,
     repository: runningJob.repository
       ? `${runningJob.repository.owner}/${runningJob.repository.name}`
       : null,
@@ -1795,22 +2000,25 @@ while (!shouldStop) {
   await appendJobEvent({
     jobId: runningJob.id,
     eventType: "WORK_BRANCH_PREPARATION_STARTED",
-    message: "ferret-runner is preparing a generated work branch.",
+    message: "ferret-runner is creating an isolated worktree and generated work branch.",
     metadata: {
-      localPath: checkoutValidation.metadata.localPath,
+      repositoryLocalPath: checkoutValidation.metadata.localPath,
       runId: run.id,
       targetBranch: getTargetBranch(runningJob.payload),
       workerId,
+      worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
     },
   });
 
-  const workBranchPreparation = await prepareWorkBranch({
+  const worktreeCreation = await createJobWorktree({
     jobId: runningJob.id,
-    localPath: checkoutValidation.metadata.localPath,
+    repositoryId: checkoutValidation.metadata.repositoryId,
+    repositoryLocalPath: checkoutValidation.metadata.localPath,
     targetBranch: getTargetBranch(runningJob.payload),
+    worktreeRoot: config.FERRET_RUNNER_WORKTREE_DIR,
   });
 
-  if (!workBranchPreparation.ok) {
+  if (!worktreeCreation.ok) {
     await markRunFailed({
       runId: run.id,
     });
@@ -1820,20 +2028,34 @@ while (!shouldStop) {
       workerId,
     });
 
+    if (worktreeCreation.reason === "worktree-add-failed") {
+      await appendJobEvent({
+        jobId: blockedJob.id,
+        eventType: "WORKTREE_CREATION_FAILED",
+        message: worktreeCreation.message,
+        metadata: {
+          ...worktreeCreation.metadata,
+          runId: run.id,
+          workerId,
+        },
+      });
+    }
+
     await appendJobEvent({
       jobId: blockedJob.id,
       eventType: "JOB_BLOCKED",
-      message: workBranchPreparation.message,
+      message: worktreeCreation.message,
       metadata: {
-        ...workBranchPreparation.metadata,
+        ...worktreeCreation.metadata,
+        reason: worktreeCreation.reason,
         runId: run.id,
         workerId,
       },
     });
 
-    log("Blocked job during work branch preparation", {
+    log("Blocked job during worktree preparation", {
       jobId: blockedJob.id,
-      reason: workBranchPreparation.message,
+      reason: worktreeCreation.message,
       runId: run.id,
     });
 
@@ -1847,34 +2069,50 @@ while (!shouldStop) {
     runId: run.id,
     metadata: {
       ...runMetadata,
-      ...workBranchPreparation.metadata,
+      ...worktreeCreation.metadata,
     },
   });
 
   await appendJobEvent({
     jobId: runningJob.id,
     eventType: "TARGET_BRANCH_CHECKED_OUT",
-    message: "ferret-runner checked out the target branch base.",
+    message: "ferret-runner checked out the target branch base in a new job worktree.",
     metadata: {
-      baseCommit: workBranchPreparation.metadata.baseCommit,
-      baseRef: workBranchPreparation.metadata.baseRef,
-      localPath: workBranchPreparation.metadata.localPath,
+      baseCommit: worktreeCreation.metadata.baseCommit,
+      baseRef: worktreeCreation.metadata.baseRef,
+      localPath: worktreeCreation.metadata.localPath,
       runId: run.id,
-      targetBranch: workBranchPreparation.metadata.targetBranch,
+      targetBranch: worktreeCreation.metadata.targetBranch,
       workerId,
+      worktreePath: worktreeCreation.metadata.worktreePath,
     },
   });
 
   await appendJobEvent({
     jobId: runningJob.id,
     eventType: "WORK_BRANCH_CREATED",
-    message: "ferret-runner created the generated work branch.",
+    message: "ferret-runner created the generated work branch inside the job worktree.",
     metadata: {
-      baseCommit: workBranchPreparation.metadata.baseCommit,
-      localPath: workBranchPreparation.metadata.localPath,
+      baseCommit: worktreeCreation.metadata.baseCommit,
+      localPath: worktreeCreation.metadata.localPath,
       runId: run.id,
-      workBranch: workBranchPreparation.metadata.workBranch,
+      workBranch: worktreeCreation.metadata.workBranch,
       workerId,
+      worktreePath: worktreeCreation.metadata.worktreePath,
+    },
+  });
+
+  await appendJobEvent({
+    jobId: runningJob.id,
+    eventType: "WORKTREE_CREATED",
+    message: "ferret-runner created an isolated worktree for this job.",
+    metadata: {
+      baseCommit: worktreeCreation.metadata.baseCommit,
+      repositoryLocalPath: worktreeCreation.metadata.repositoryLocalPath,
+      runId: run.id,
+      workBranch: worktreeCreation.metadata.workBranch,
+      workerId,
+      worktreePath: worktreeCreation.metadata.worktreePath,
     },
   });
 
