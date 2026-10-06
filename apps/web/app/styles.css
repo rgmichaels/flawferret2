@@ -539,21 +539,6 @@ button {
   min-width: 0;
 }
 
-/* ── Framework Builder create flow ──────────────────────────────────────────────────────────────
-   Page-scoped restyle, see docs/specs/framework-builder-visual-restyle.md. The block below
-   re-points the existing --font-display token at Source Serif 4 (loaded per-route in
-   app/framework/new/framework-builder-theme.ts) for this subtree only: same token name the rest of
-   the app reads, no :root value changed, and swapping the face later is a one-block edit.
-
-   Serif covers the short fixed strings a user reads once — page title, section labels and
-   descriptions, field labels, toggle captions, chip text, the CTA. Typed input values, the file
-   list, and the build bar's dt/dd data cells stay sans/mono on purpose: those are the text a user
-   verifies character-by-character, and serif costs real legibility at 13-14px. --action stays the
-   existing indigo; no accent or surface token is overridden here. */
-.framework-builder-page {
-  --font-display: var(--font-serif-display), ui-serif, Georgia, serif;
-}
-
 .framework-builder-page .topbar h1 {
   font: 600 42px/1.1 var(--font-display);
   letter-spacing: -0.01em;
@@ -741,7 +726,7 @@ button {
   font: 700 10px/1 var(--font-body);
 }
 
-/* After building: short fixed captions are serif, longer helper copy stays sans. */
+/* After building: short fixed captions use the display face, longer helper copy stays body. */
 .framework-builder-page .framework-overwrite-option strong {
   font: 500 14px/1.3 var(--font-display);
 }
