@@ -77,7 +77,14 @@ export const appendJobEvent = async ({
     | "JIRA_TICKET_CREATED"
     | "JIRA_TICKET_CREATION_FAILED"
     | "JIRA_TICKET_CREATION_SKIPPED"
-    | "PR_CHECKS_AUTO_RETRY_QUEUED";
+    | "PR_CHECKS_AUTO_RETRY_QUEUED"
+    | "WORKTREE_CREATED"
+    | "WORKTREE_CREATION_FAILED"
+    | "WORKTREE_REMOVED"
+    | "WORKTREE_REMOVAL_FAILED"
+    | "DEPENDENCY_INSTALL_STARTED"
+    | "DEPENDENCY_INSTALL_COMPLETED"
+    | "DEPENDENCY_INSTALL_FAILED";
   message: string;
   metadata?: Prisma.InputJsonValue;
 }) =>
@@ -1188,3 +1195,31 @@ export const markSimulatedWorkSucceeded = async ({
     };
   });
 };
+
+export const listRepositoriesWithLocalPath = async () =>
+  prisma.repository.findMany({
+    select: {
+      id: true,
+      localPath: true,
+    },
+    where: {
+      localPath: {
+        not: null,
+      },
+    },
+  });
+
+export const findJobsForWorktreeSweep = async (jobIds: string[]) =>
+  prisma.job.findMany({
+    select: {
+      completedAt: true,
+      id: true,
+      status: true,
+      updatedAt: true,
+    },
+    where: {
+      id: {
+        in: jobIds,
+      },
+    },
+  });
