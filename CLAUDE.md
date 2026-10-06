@@ -79,6 +79,12 @@ the full list (ferret-runner, Codex, GitHub, and worker-tuning variables).
 New env vars belong in the Zod schema in `apps/api/src/config.ts`, not raw
 `process.env` reads.
 
+**`DATABASE_URL` is a shared Neon database.** Subagents never apply
+migrations or otherwise change its schema (`db:migrate`, `prisma migrate
+dev/deploy/reset/resolve`, `prisma db push`, raw DDL) — they write migration
+files and report when one needs applying. Only the main orchestrating session
+applies migrations, so they happen visibly in the main conversation.
+
 ## Subagent pipeline
 
 Defined in `.claude/agents/*.md` — read those files directly for full detail
